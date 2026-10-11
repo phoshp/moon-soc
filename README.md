@@ -163,6 +163,12 @@ In simulation, `tb/sv/tb_moon_core.sv` monitors writes to physical memory addres
 
 ---
 
+## Contributing
+
+Contributions are warmly welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for details on code style, testing workflows, and the pull request process. Community interactions are governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
