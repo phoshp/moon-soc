@@ -1,0 +1,16 @@
+# Simulation and build artifacts
+obj_dir/
+sim_build/
+tb/cocotb/sim_build/
+results.xml
+tb/cocotb/results.xml
+*.vcd
+*.fst
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Intermediate object files
+*.o
