@@ -11,15 +11,17 @@ Moon-SoC is a 64-bit RISC-V (RV64IMA) processor core implementation in SystemVer
 The project uses `cocotb`, Python, and Verilator for RTL simulation and verification.
 
 ### Cocotb Simulation
-- **Run default test suite**: `make test` (or `make sim`, `make all`). Runs `python3 tb/cocotb/run_test.py sw/tests/asm/test_rv64_all.hex`.
-- **Run with verbose cycle trace**: `make verbose-test` (prints cycle-by-cycle PC and instruction traces).
-- **Run via pytest**: `make pytest` or `pytest tb/cocotb/run_test.py`.
+- **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/cocotb/run_test.py sw/tests/asm/test_rv64_all.hex`.
+- **Run full suite (core + SoC)**: `make all`.
+- **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/cocotb/soc/run_soc_test.py` with `test_rv64_all.hex`).
+- **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC).
+- **Run with verbose cycle trace**: `make verbose-test`.
+- **Run via pytest**: `make pytest` (runs both core and SoC regression testbenches).
 - **Run a specific firmware test**:
   `python3 tb/cocotb/run_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
-- **Run using cocotb Makefile**:
-  `make -C tb/cocotb SIM=verilator [TEST_HEX=<path_to_hex_file>]`
-- **Legacy raw C++ Verilator runner**: `make legacy-test` (builds and runs `tb/verilator/tb_core_runner.cpp`).
-- **Clean build artifacts**: `make clean` (deletes `sim_build/`, `obj_dir/`, `results.xml`, caches).
+  or for SoC top-level:
+  `python3 tb/cocotb/soc/run_soc_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
+- **Clean build artifacts**: `make clean` (deletes `sim_build/`, `sim_build_soc/`, `obj_dir/`, caches).
 
 ### Test Assembly & Hex Conversion
 Software tests are assembled into raw flat binaries and converted to little-endian hex files:
@@ -79,8 +81,25 @@ The core is structured across five sequential pipeline stages connected through 
 - Handles trap entry and vectoring via `mtvec` (default `0x00001000`) and return via `mret`.
 - Supports timer, software (IPI), and external interrupt inputs.
 
+### SoC Subsystems & Infrastructure (`rtl/soc/`)
+- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates `moon_core`, 64-bit AXI4 crossbar, AXI-to-APB bridge, Boot ROM, On-Chip SRAM, CLINT, PLIC, UART 16550, and external AXI memory port.
+- **Interconnect (`rtl/soc/interconnect/`)**:
+  - `axi_pkg.sv`: AXI4 and APB4 signal definitions, transaction structs, and burst/response codes.
+  - `axi_crossbar.sv`: Multi-master, multi-slave 64-bit crossbar switch (M0: Fetch, M1: Data; S0: Boot ROM, S1: SRAM, S2: APB Bridge, S3: External RAM).
+  - `axi_to_apb_bridge.sv`: 64-bit AXI4 to 32-bit APB4 transaction converter.
+  - `apb_crossbar.sv`: Address decoder demultiplexing APB peripheral requests (CLINT, PLIC, UART).
+- **Core AXI Adapter (`rtl/soc/adapter/moon_core_axi_adapter.sv`)**: Converts `moon_core`'s `imem` and `dmem` interfaces to AXI4 master channels with prefetch buffering.
+- **Memory Subsystem (`rtl/soc/memory/`)**:
+  - `moon_bootrom.sv`: 32 KB Boot ROM at `0x0000_1000`.
+  - `moon_sram_ctrl.sv`: 128 KB On-Chip SRAM controller at `0x7000_0000`.
+- **Peripherals Subsystem (`rtl/soc/periph/`)**:
+  - `moon_clint.sv`: Core-Local Interruptor (`mtime`, `mtimecmp`, `msip`) at `0x0200_0000`.
+  - `moon_plic.sv`: Platform-Level Interrupt Controller at `0x0C00_0000`.
+  - `moon_uart.sv`: 16550 UART console controller at `0x1000_0000`.
+
 ### Testbench Hierarchy
-- `tb/sv/tb_moon_core.sv`: SystemVerilog testbench wrapping `moon_core` with 256 KB memory space supporting ROM (`0x00001000`+) and RAM (`0x80000000`+), loading firmware via `$value$plusargs("hex_file=%s", ...)`.
-- `tb/cocotb/test_moon_core.py`: Python cocotb test driving clock and reset, monitoring `test_passed`, `test_failed`, and cycle execution.
-- `tb/cocotb/run_test.py`: Standalone Python runner using `cocotb_tools.runner`, supporting CLI arguments and `pytest`.
+- `tb/sv/tb_moon_core.sv`: Standalone core memory harness.
+- `tb/sv/soc/tb_moon_soc.sv`: Full SoC simulation harness integrating Boot ROM, external AXI RAM model, and UART sink.
+- `tb/cocotb/test_moon_core.py` & `tb/cocotb/run_test.py`: Standalone core testbench runner.
+- `tb/cocotb/soc/test_moon_soc.py` & `tb/cocotb/soc/run_soc_test.py`: Full SoC testbench runner.
 - `tb/cocotb/Makefile`: Standard cocotb Makefile integrating `Makefile.sim`.

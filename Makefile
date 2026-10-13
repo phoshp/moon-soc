@@ -7,15 +7,23 @@ SIM ?= verilator
 TEST_HEX ?= $(PWD)/sw/tests/asm/test_rv64_all.hex
 SIM_BUILD ?= sim_build
 
-.PHONY: all test sim verbose-test pytest clean
+.PHONY: all test sim verbose-test pytest soc-test soc-periph-test clean
 
-all: test
+all: test soc-test
 
-# Run simulation using cocotb runner
+# Run simulation using cocotb runner (core-level)
 test:
 	$(PYTHON) tb/cocotb/run_test.py $(TEST_HEX)
 
 sim: test
+
+# Run SoC Top-Level simulation test
+soc-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(TEST_HEX)
+
+# Run SoC Peripherals verification test
+soc-periph-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_soc_periphs.hex
 
 # Run simulation with verbose cycle trace
 verbose-test:
@@ -23,8 +31,8 @@ verbose-test:
 
 # Run simulation via pytest
 pytest:
-	pytest tb/cocotb/run_test.py
+	pytest tb/cocotb/run_test.py tb/cocotb/soc/run_soc_test.py
 
 clean:
-	rm -rf $(SIM_BUILD) obj_dir results.xml tb/cocotb/sim_build tb/cocotb/results.xml
-	rm -rf .pytest_cache tb/cocotb/__pycache__
+	rm -rf $(SIM_BUILD) sim_build_soc obj_dir results.xml tb/cocotb/sim_build tb/cocotb/results.xml
+	rm -rf .pytest_cache tb/cocotb/__pycache__ tb/cocotb/soc/__pycache__

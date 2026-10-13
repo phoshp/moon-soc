@@ -16,6 +16,9 @@ module moon_mem_stage
   input  logic             clk_i,
   input  logic             rst_ni,
 
+  // Pipeline Flow Control
+  input  logic             stall_mem_i,
+
   // Inputs from EX Stage (EX/MEM Register)
   input  logic             ex_mem_valid_i,
   input  logic [XLEN-1:0]  ex_mem_pc_i,
@@ -161,6 +164,7 @@ module moon_mem_stage
   moon_amo u_amo (
     .clk_i        (clk_i),
     .rst_ni       (rst_ni),
+    .stall_i      (stall_mem_i),
     .amo_op_i     (ex_mem_amo_op_i),
     .is_word_i    (is_amo_word),
     .mem_data_i   (aligned_load_data),
@@ -219,7 +223,7 @@ module moon_mem_stage
       mem_wb_is_ebreak_o  <= 1'b0;
       mem_wb_sc_success_o <= 1'b0;
       mem_wb_is_sc_o      <= 1'b0;
-    end else begin
+    end else if (!stall_mem_i) begin
       mem_wb_valid_o      <= ex_mem_valid_i;
       mem_wb_pc_o         <= ex_mem_pc_i;
       mem_wb_rd_o         <= ex_mem_rd_i;

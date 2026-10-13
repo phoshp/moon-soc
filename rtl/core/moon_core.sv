@@ -397,6 +397,7 @@ module moon_core
   moon_mem_stage u_mem_stage (
     .clk_i               (clk_i),
     .rst_ni              (rst_ni),
+    .stall_mem_i         (stall_mem),
     .ex_mem_valid_i      (ex_mem_valid),
     .ex_mem_pc_i         (ex_mem_pc),
     .ex_mem_link_pc_i    (ex_mem_link_pc),
@@ -507,7 +508,7 @@ module moon_core
     .branch_taken_i     (branch_taken),
     .trap_flush_i       (trap_enter || ex_mem_is_mret),
     .busy_div_i         (busy_div),
-    .busy_mem_i         (1'b0),
+    .busy_mem_i         ((imem_req_o && !imem_valid_i) || (dmem_req_o && !dmem_valid_i)),
     .fwd_a_o            (fwd_a),
     .fwd_b_o            (fwd_b),
     .stall_if_o         (stall_if),

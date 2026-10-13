@@ -1,0 +1,138 @@
+// ============================================================================
+// File: rtl/soc/memory/moon_bootrom.sv
+// Description: 32 KB AXI4 Boot ROM containing primary reset vector (0x0000_1000)
+//              and initial firmware image.
+// ============================================================================
+
+`ifndef MOON_BOOTROM_SV
+`define MOON_BOOTROM_SV
+
+`include "axi_pkg.sv"
+
+module moon_bootrom
+  import axi_pkg::*;
+#(
+  parameter int ROM_SIZE_BYTES = 32768, // 32 KB
+  parameter logic [AXI_ADDR_WIDTH-1:0] BASE_ADDR = 64'h0000_1000
+)(
+  input  logic clk_i,
+  input  logic rst_ni,
+
+  // AXI4 Slave Interface
+  input  axi_ar_t s_ar_i,
+  output logic    s_ar_ready_o,
+  output axi_r_t  s_r_o,
+  input  logic    s_r_ready_i,
+
+  input  axi_aw_t s_aw_i,
+  output logic    s_aw_ready_o,
+  input  axi_w_t  s_w_i,
+  output logic    s_w_ready_o,
+  output axi_b_t  s_b_o,
+  input  logic    s_b_ready_i
+);
+
+  localparam int NUM_WORDS = ROM_SIZE_BYTES / 4; // 32-bit words
+  logic [31:0] rom_mem [0:NUM_WORDS-1];
+
+  // Optional simulation firmware load
+  initial begin
+    string hex_file;
+    if ($value$plusargs("bootrom_hex=%s", hex_file)) begin
+      $readmemh(hex_file, rom_mem);
+    end else if ($value$plusargs("hex_file=%s", hex_file)) begin
+      $readmemh(hex_file, rom_mem);
+    end else begin
+      // Default: jump to self loop (addi x0, x0, 0 / jal x0, 0)
+      for (int i = 0; i < NUM_WORDS; i++) begin
+        rom_mem[i] = 32'h0000_0013; // nop
+      end
+    end
+  end
+
+  // Read state machine
+  typedef enum logic [1:0] {
+    R_IDLE = 2'd0,
+    R_READ = 2'd1,
+    R_RESP = 2'd2
+  } r_state_e;
+
+  r_state_e r_state_q, r_state_d;
+  logic [AXI_ID_WIDTH-1:0]   r_id_q,   r_id_d;
+  logic [AXI_ADDR_WIDTH-1:0] r_addr_q, r_addr_d;
+  logic [AXI_DATA_WIDTH-1:0] r_data_q, r_data_d;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      r_state_q <= R_IDLE;
+      r_id_q    <= '0;
+      r_addr_q  <= '0;
+      r_data_q  <= '0;
+    end else begin
+      r_state_q <= r_state_d;
+      r_id_q    <= r_id_d;
+      r_addr_q  <= r_addr_d;
+      r_data_q  <= r_data_d;
+    end
+  end
+
+  // Address offset calculation
+  logic [AXI_ADDR_WIDTH-1:0] rel_addr;
+  assign rel_addr = r_addr_q - BASE_ADDR;
+  wire [14:0] word_idx_lo = rel_addr[14:2];
+  wire [14:0] word_idx_hi = word_idx_lo + 15'd1;
+
+  always_comb begin
+    r_state_d    = r_state_q;
+    r_id_d       = r_id_q;
+    r_addr_d     = r_addr_q;
+    r_data_d     = r_data_q;
+    s_ar_ready_o = 1'b0;
+    s_r_o        = '0;
+
+    case (r_state_q)
+      R_IDLE: begin
+        s_ar_ready_o = 1'b1;
+        if (s_ar_i.valid) begin
+          r_id_d   = s_ar_i.id;
+          r_addr_d = s_ar_i.addr;
+          r_state_d= R_READ;
+        end
+      end
+
+      R_READ: begin
+        // Read 64 bits (two 32-bit words) from ROM
+        logic [31:0] lo_word, hi_word;
+        lo_word = (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo] : 32'h0;
+        hi_word = (word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi] : 32'h0;
+        r_data_d  = {hi_word, lo_word};
+        r_state_d = R_RESP;
+      end
+
+      R_RESP: begin
+        s_r_o.valid = 1'b1;
+        s_r_o.id    = r_id_q;
+        s_r_o.data  = r_data_q;
+        s_r_o.resp  = AXI_RESP_OKAY;
+        s_r_o.last  = 1'b1;
+        if (s_r_ready_i) begin
+          r_state_d = R_IDLE;
+        end
+      end
+
+      default: r_state_d = R_IDLE;
+    endcase
+  end
+
+  // ROM is read-only: reject writes with SLVERR
+  always_comb begin
+    s_aw_ready_o = s_aw_i.valid;
+    s_w_ready_o  = s_w_i.valid;
+    s_b_o.valid  = s_aw_i.valid && s_w_i.valid;
+    s_b_o.id     = s_aw_i.id;
+    s_b_o.resp   = AXI_RESP_SLVERR;
+  end
+
+endmodule : moon_bootrom
+
+`endif // MOON_BOOTROM_SV

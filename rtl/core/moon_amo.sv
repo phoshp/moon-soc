@@ -14,6 +14,7 @@ module moon_amo
 (
   input  logic             clk_i,
   input  logic             rst_ni,
+  input  logic             stall_i,
 
   // AMO Arithmetic Control
   input  amo_op_e          amo_op_i,
@@ -112,10 +113,10 @@ module moon_amo
       res_valid_q <= 1'b0;
       res_tag_q   <= '0;
     end else begin
-      if (lr_valid_i) begin
+      if (lr_valid_i && !stall_i) begin
         res_valid_q <= 1'b1;
         res_tag_q   <= lr_addr_i[XLEN-1:6];
-      end else if (sc_valid_i || (inv_valid_i && match_inv)) begin
+      end else if ((sc_valid_i && !stall_i) || (inv_valid_i && match_inv)) begin
         res_valid_q <= 1'b0;
       end
     end
