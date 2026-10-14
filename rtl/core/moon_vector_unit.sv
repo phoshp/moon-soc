@@ -34,6 +34,23 @@ module moon_vector_unit (
   logic         is_vminmax;
   logic [4:0]   vd, vs1, vs2;
 
+  function automatic logic [63:0] vector_addsub(
+    input logic [63:0] operand_a,
+    input logic [63:0] operand_b,
+    input logic [2:0] sew,
+    input logic       subtract
+  );
+    case (sew)
+      3'b000: vector_addsub = subtract ? {56'd0, (operand_a[7:0] - operand_b[7:0])} :
+                                        {56'd0, (operand_a[7:0] + operand_b[7:0])};
+      3'b001: vector_addsub = subtract ? {48'd0, (operand_a[15:0] - operand_b[15:0])} :
+                                        {48'd0, (operand_a[15:0] + operand_b[15:0])};
+      3'b010: vector_addsub = subtract ? {32'd0, (operand_a[31:0] - operand_b[31:0])} :
+                                        {32'd0, (operand_a[31:0] + operand_b[31:0])};
+      default: vector_addsub = subtract ? operand_a - operand_b : operand_a + operand_b;
+    endcase
+  endfunction
+
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
   assign is_vmv_x_s = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010000) &&
                       instr_i[25] && (instr_i[14:12] == 3'b010) && (instr_i[19:15] == 5'd0);
@@ -128,21 +145,52 @@ module moon_vector_unit (
           default: for (int i = 0; i < 2; i++) if (i < vl_q) vreg[vd][i*64 +: 64] <= scalar_rs1_i;
         endcase
       end else if (is_vadd_vv) begin
-        for (int i = 0; i < 4; i++) begin
-          if ((vsew_q == 3'b010) && (i < vl_q)) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] + vreg[vs1][i*32 +: 32];
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b0);
+              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b0);
+              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32], vreg[vs1][i*32 +: 32], vsew_q, 1'b0);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64], vreg[vs1][i*64 +: 64], vsew_q, 1'b0);
+            endcase
+          end
         end
       end else if (is_vadd_vx) begin
-        for (int i = 0; i < 4; i++) begin
-          if ((vsew_q == 3'b010) && (i < vl_q)) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] +
-              ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i[31:0]);
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
+              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
+              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
+            endcase
+          end
         end
       end else if (is_vsub_vv) begin
-        for (int i = 0; i < 4; i++) begin
-          if ((vsew_q == 3'b010) && (i < vl_q)) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] - vreg[vs1][i*32 +: 32];
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b1);
+              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b1);
+              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32], vreg[vs1][i*32 +: 32], vsew_q, 1'b1);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64], vreg[vs1][i*64 +: 64], vsew_q, 1'b1);
+            endcase
+          end
         end
       end else if (is_vsub_vx) begin
-        for (int i = 0; i < 4; i++) begin
-          if ((vsew_q == 3'b010) && (i < vl_q)) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] - scalar_rs1_i[31:0];
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], scalar_rs1_i, vsew_q, 1'b1);
+              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], scalar_rs1_i, vsew_q, 1'b1);
+              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32], scalar_rs1_i, vsew_q, 1'b1);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64], scalar_rs1_i, vsew_q, 1'b1);
+            endcase
+          end
         end
       end else if (is_vlogic) begin
         for (int i = 0; i < 4; i++) begin
