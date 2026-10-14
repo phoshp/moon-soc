@@ -132,6 +132,66 @@ _start:
     li   t2, 1
     bne  t1, t2, fail
 
+    li   t0, 0x3ff8000000000000
+    fmv.d.x f1, t0
+    fcvt.s.d f2, f1, rne
+    fmv.x.w t1, f2
+    li   t2, 0x3fc00000
+    bne  t1, t2, fail
+    fcvt.d.s f3, f2, rne
+    fmv.x.d t1, f3
+    li   t2, 0x3ff8000000000000
+    bne  t1, t2, fail
+
+    li   t0, 0x3ff0000010000000
+    fmv.d.x f1, t0
+    fcvt.s.d f2, f1, rne
+    fmv.x.w t1, f2
+    li   t2, 0x3f800000
+    bne  t1, t2, fail
+    fcvt.s.d f2, f1, rup
+    fmv.x.w t1, f2
+    li   t2, 0x3f800001
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 1
+    li   t2, 1
+    bne  t1, t2, fail
+
+    li   t0, 1
+    fmv.w.x f1, t0
+    fcvt.d.s f2, f1, rne
+    fmv.x.d t1, f2
+    li   t2, 0x36a0000000000000
+    bne  t1, t2, fail
+
+    csrw fflags, zero
+    li   t0, 0x3690000000000000
+    fmv.d.x f1, t0
+    fcvt.s.d f2, f1, rne
+    fmv.x.w t1, f2
+    bne  t1, zero, fail
+    fcvt.s.d f2, f1, rup
+    fmv.x.w t1, f2
+    li   t2, 1
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 3
+    li   t2, 3
+    bne  t1, t2, fail
+
+    csrw fflags, zero
+    li   t0, 0x47f0000000000000
+    fmv.d.x f1, t0
+    fcvt.s.d f2, f1, rne
+    fmv.x.w t1, f2
+    li   t2, 0x7f800000
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 5
+    li   t2, 5
+    bne  t1, t2, fail
+
     li   t0, 0x80001000
     li   t1, 0xCAFEBABE
     sw   t1, 0(t0)
