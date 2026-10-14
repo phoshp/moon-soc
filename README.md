@@ -1,15 +1,17 @@
 # Moon-SoC
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![ISA: RISC-V RV64IMA](https://img.shields.io/badge/ISA-RISC--V_RV64IMA-orange.svg)](https://riscv.org/)
+[![ISA: RISC-V RV64IMAFD+](https://img.shields.io/badge/ISA-RISC--V_RV64IMAFD%2B-orange.svg)](https://riscv.org/)
 [![Simulator: Verilator](https://img.shields.io/badge/Simulator-Verilator_5+-lightgrey.svg)](https://www.veripool.org/verilator/)
 [![Verification: Cocotb](https://img.shields.io/badge/Verification-Cocotb_2.x-brightgreen.svg)](https://www.cocotb.org/)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-yellow.svg)](https://www.python.org/)
 [![Build: Passing](https://img.shields.io/badge/Build-Passing-success.svg)](#running-simulation)
 
-Moon-SoC is a modular, high-performance 64-bit RISC-V (RV64IMA) processor core written in SystemVerilog. Designed with simplicity, extensibility, and testability in mind, Moon-SoC features a classic 5-stage in-order pipeline, complete integer arithmetic with hardware multiply/divide, atomic memory operations, and privileged Machine-mode CSR and trap handling.
+Moon-SoC is a modular 64-bit RISC-V processor and SoC written in SystemVerilog. It features a classic 5-stage in-order pipeline, integer arithmetic with hardware multiply/divide, atomic memory operations, privileged architecture support, caches, and an evolving set of RVA23 computational extensions.
 
 Verification is implemented in Python using [cocotb](https://www.cocotb.org/) and [Verilator](https://www.veripool.org/verilator/), providing fast simulation alongside flexible test orchestration.
+
+The Phase 4 integer, privilege, and virtual-memory work is complete for the current project scope. Phase 5 is active; scalar F/D and crypto slices are implemented, and RVV support is being built incrementally. See the roadmap for status and remaining work.
 
 ---
 
@@ -28,6 +30,11 @@ Verification is implemented in Python using [cocotb](https://www.cocotb.org/) an
 - **Privileged Machine-Mode Trap & CSR Architecture**:
   - Standard Machine-mode CSRs: `mstatus`, `misa`, `mie`, `mtvec`, `mepc`, `mcause`, `mtval`, `mip`, `mhartid`, `mcycle`, `minstret`, and `fcsr`.
   - Vectored and direct trap entry, exception decoding, interrupt handling (timer, software, external), and return via `mret`.
+- **RVA23 Computational Extensions (in progress)**:
+  - Scalar F/D operations include arithmetic, division, square root, comparisons, conversions, and fused multiply-add.
+  - Scalar AES64 and SHA-256/SHA-512 integer operations are available.
+  - The RVV unit currently implements a VLEN=128, LMUL=1 integer slice for e8/e16/e32/e64, including vector configuration, moves, arithmetic, bitwise and shift operations, comparisons, min/max, mask logic, and masked execution.
+  - RVV 1.0 is not complete: vector memory operations, vector floating point, reductions, full vector CSR state, and complete tail/mask policies remain future work.
 - **5-Stage Pipeline & Hazard Management**:
   - In-order pipeline stages: **IF** (Fetch), **ID** (Decode), **EX** (Execute), **MEM** (Memory), **WB** (Writeback).
   - Forwarding paths from EX/MEM and MEM/WB to execution operands.
@@ -43,7 +50,8 @@ Verification is implemented in Python using [cocotb](https://www.cocotb.org/) an
 ```text
        +----------+    +----------+    +----------+    +----------+    +----------+
        |    IF    |    |    ID    |    |    EX    |    |   MEM    |    |    WB    |
-       |  Fetch   |--->|  Decode  |--->| Execute  |--->|  Memory  |--->|Writeback |
+       |  Fetch   |--->|  Decode  |--->| ALU/FPU/ |--->|  Memory  |--->|Writeback |
+       |          |    |          |    |   RVV    |    |          |    |          |
        +----------+    +----------+    +----------+    +----------+    +----------+
             |               |               |               |               |
          PC Gen         Regfile Read    64-bit ALU      Load / Store     Regfile
@@ -69,7 +77,9 @@ moon-soc/
 │       ├── moon_id_stage.sv    # Instruction Decode and immediate extraction
 │       ├── moon_regfile.sv     # 32 x 64-bit integer register file
 │       ├── moon_ex_stage.sv    # Execution stage multiplexers and branch logic
-│       ├── moon_alu.sv         # 64-bit and 32-bit ALU
+│       ├── moon_alu.sv         # Integer ALU and scalar crypto operations
+│       ├── moon_fpu_*.sv       # Scalar F/D arithmetic, conversions, and fused operations
+│       ├── moon_vector_unit.sv # VLEN=128 RVV integer slice (in progress)
 │       ├── moon_mul.sv         # Hardware integer multiplier
 │       ├── moon_div.sv         # Multi-cycle radix-2 divider / remainder
 │       ├── moon_mem_stage.sv   # Memory stage, sign/zero extension, aligner
@@ -152,6 +162,21 @@ All simulation commands can be run from the root directory:
    ```bash
    make clean
    ```
+
+### RVA23 Computational Extension Tests
+
+Run the directed firmware targets for the currently implemented Phase 5 slices:
+
+```bash
+make soc-fp-test
+make soc-crypto-test
+make soc-crypto-aes-test
+make soc-crypto-aes-rounds-test
+make soc-crypto-sha512-test
+make soc-rvv-test
+```
+
+The RVV target covers the implemented integer slice only; a passing run does not establish full RVV 1.0 compliance. See [ROADMAP_RVA23_PLAN.md](ROADMAP_RVA23_PLAN.md) for current progress and remaining work. That roadmap is locally gitignored in this checkout.
 
 ---
 
