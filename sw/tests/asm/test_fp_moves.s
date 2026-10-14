@@ -99,6 +99,62 @@ _start:
     li   t2, 0x3ff8000000000000
     bne  t1, t2, fail
 
+    csrw fflags, zero
+    li   t0, 0x40800000
+    fmv.w.x f1, t0
+    fsqrt.s f2, f1, rne
+    fmv.x.w t1, f2
+    li   t2, 0x40000000
+    bne  t1, t2, fail
+    li   t0, 0x40000000
+    fmv.w.x f1, t0
+    fsqrt.s f2, f1, rne
+    fmv.x.w t1, f2
+    li   t2, 0x3fb504f3
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 1
+    li   t2, 1
+    bne  t1, t2, fail
+    li   t0, 1
+    fmv.w.x f1, t0
+    fsqrt.s f2, f1, rne
+    fmv.x.w t1, f2
+    li   t2, 0x1a3504f3
+    bne  t1, t2, fail
+    csrw fflags, zero
+
+    li   t0, 0x4022000000000000
+    fmv.d.x f1, t0
+    fsqrt.d f2, f1, rne
+    fmv.x.d t1, f2
+    li   t2, 0x4008000000000000
+    bne  t1, t2, fail
+    li   t0, 0x4000000000000000
+    fmv.d.x f1, t0
+    fsqrt.d f2, f1, rne
+    fmv.x.d t1, f2
+    li   t2, 0x3ff6a09e667f3bcd
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 1
+    li   t2, 1
+    bne  t1, t2, fail
+    csrw fflags, zero
+    li   t0, 0x8000000000000000
+    fmv.d.x f1, t0
+    fsqrt.d f2, f1, rne
+    fmv.x.d t1, f2
+    bne  t1, t0, fail
+    li   t0, 0xbff0000000000000
+    fmv.d.x f1, t0
+    csrw fflags, zero
+    fsqrt.d f2, f1, rne
+    csrr t1, fflags
+    andi t1, t1, 16
+    li   t2, 16
+    bne  t1, t2, fail
+
     li   t0, 0x3f800000
     fmv.w.x f1, t0
     li   t0, 0x33800000
