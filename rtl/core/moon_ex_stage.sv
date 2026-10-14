@@ -58,6 +58,7 @@ module moon_ex_stage
   input  logic [4:0]       id_ex_fp_rd_i,
   input  logic             id_ex_fp_word_i,
   input  logic             id_ex_fp_add_i,
+  input  logic             id_ex_fp_sub_i,
   input  logic [2:0]       id_ex_fp_rm_i,
   input  logic [2:0]       frm_i,
   input  logic             id_ex_is_csr_i,
@@ -160,7 +161,7 @@ module moon_ex_stage
     .operand_a_i       (id_ex_rs1_data_i),
     .operand_b_i       (id_ex_rs2_data_i),
     .is_single_i       (id_ex_fp_word_i),
-    .subtract_i        (1'b0),
+    .subtract_i        (id_ex_fp_sub_i),
     .rounding_mode_i   (fp_rounding_mode),
     .result_o          (fp_add_result),
     .flags_o           (fp_add_flags)

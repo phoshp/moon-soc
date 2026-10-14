@@ -77,6 +77,7 @@ module moon_id_stage
   output logic [4:0]       id_ex_fp_rd_o,
   output logic             id_ex_fp_word_o,
   output logic             id_ex_fp_add_o,
+  output logic             id_ex_fp_sub_o,
   output logic [2:0]       id_ex_fp_rm_o,
   output logic             id_ex_is_csr_o,
   output logic [2:0]       id_ex_csr_op_o,
@@ -115,13 +116,15 @@ module moon_id_stage
   assign id_fp_rs1_en_o = if_id_valid_i && (opcode == OPCODE_FP) &&
                           ((((funct7 == 7'b1110000) || (funct7 == 7'b1110001)) &&
                             (rs2 == 5'd0) && (funct3 == 3'b000)) ||
-                           ((funct7 == 7'b0000000) || (funct7 == 7'b0000001)));
+                           ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
+                            (funct7 == 7'b0000100) || (funct7 == 7'b0000101)));
   assign id_fp_rs2_o = rs2;
   assign id_fp_rs2_en_o = if_id_valid_i &&
                           (((opcode == OPCODE_STORE_FP) &&
                             ((funct3 == 3'b010) || (funct3 == 3'b011))) ||
                            ((opcode == OPCODE_FP) &&
-                            ((funct7 == 7'b0000000) || (funct7 == 7'b0000001))));
+                            ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
+                             (funct7 == 7'b0000100) || (funct7 == 7'b0000101))));
 
   // --------------------------------------------------------------------------
   // Register File Instantiation
@@ -192,6 +195,7 @@ module moon_id_stage
   logic         dec_fmv_x_w;
   logic         dec_fmv_x_d;
   logic         dec_fp_add;
+  logic         dec_fp_sub;
   logic         dec_is_csr;
   logic [2:0]   dec_csr_op;
   logic         dec_is_mret;
@@ -224,6 +228,7 @@ module moon_id_stage
     dec_fmv_x_w        = 1'b0;
     dec_fmv_x_d        = 1'b0;
     dec_fp_add         = 1'b0;
+    dec_fp_sub         = 1'b0;
     dec_is_csr         = 1'b0;
     dec_csr_op         = funct3;
     dec_is_mret        = 1'b0;
@@ -500,11 +505,13 @@ module moon_id_stage
       // Scalar floating-point operations; unimplemented funct7 values remain
       // unrecognized until their Phase 5 execution slices are added.
       OPCODE_FP: begin
-        if ((funct7 == 7'b0000000) || (funct7 == 7'b0000001)) begin
-          // FADD.S and FADD.D; funct3 carries the static/dynamic rounding mode.
+        if ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
+            (funct7 == 7'b0000100) || (funct7 == 7'b0000101)) begin
+          // FADD/FSUB.S and FADD/FSUB.D; funct3 selects rounding mode.
           dec_fp_we   = 1'b1;
-          dec_fp_word = (funct7 == 7'b0000000);
+          dec_fp_word = (funct7 == 7'b0000000) || (funct7 == 7'b0000100);
           dec_fp_add  = 1'b1;
+          dec_fp_sub  = (funct7 == 7'b0000100) || (funct7 == 7'b0000101);
         end else if ((funct7 == 7'b1110000) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
           // FMV.X.W: move a single-precision bit pattern to an integer register.
           dec_regwrite = 1'b1;
@@ -622,6 +629,7 @@ module moon_id_stage
       id_ex_fp_rd_o        <= '0;
       id_ex_fp_word_o      <= 1'b0;
       id_ex_fp_add_o       <= 1'b0;
+      id_ex_fp_sub_o       <= 1'b0;
       id_ex_fp_rm_o        <= '0;
       id_ex_is_csr_o       <= 1'b0;
       id_ex_csr_op_o       <= '0;
@@ -665,6 +673,7 @@ module moon_id_stage
       id_ex_fp_rd_o        <= '0;
       id_ex_fp_word_o      <= 1'b0;
       id_ex_fp_add_o       <= 1'b0;
+      id_ex_fp_sub_o       <= 1'b0;
       id_ex_fp_rm_o        <= '0;
       id_ex_is_csr_o       <= 1'b0;
       id_ex_csr_op_o       <= '0;
@@ -727,6 +736,7 @@ module moon_id_stage
       id_ex_fp_rd_o        <= rd;
       id_ex_fp_word_o      <= dec_fp_word;
       id_ex_fp_add_o       <= dec_fp_add;
+      id_ex_fp_sub_o       <= dec_fp_sub;
       id_ex_fp_rm_o        <= funct3;
       id_ex_is_csr_o       <= dec_is_csr;
       id_ex_csr_op_o       <= dec_csr_op;

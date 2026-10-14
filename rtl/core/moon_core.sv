@@ -105,6 +105,7 @@ module moon_core
   logic [4:0]       id_ex_fp_rd;
   logic             id_ex_fp_word;
   logic             id_ex_fp_add;
+  logic             id_ex_fp_sub;
   logic [2:0]       id_ex_fp_rm;
   logic             id_ex_is_csr;
   logic [2:0]       id_ex_csr_op;
@@ -437,6 +438,7 @@ module moon_core
     .id_ex_fp_rd_o        (id_ex_fp_rd),
     .id_ex_fp_word_o      (id_ex_fp_word),
     .id_ex_fp_add_o       (id_ex_fp_add),
+    .id_ex_fp_sub_o       (id_ex_fp_sub),
     .id_ex_fp_rm_o        (id_ex_fp_rm),
     .id_ex_is_csr_o       (id_ex_is_csr),
     .id_ex_csr_op_o       (id_ex_csr_op),
@@ -490,6 +492,7 @@ module moon_core
     .id_ex_fp_rd_i        (id_ex_fp_rd),
     .id_ex_fp_word_i      (id_ex_fp_word),
     .id_ex_fp_add_i       (id_ex_fp_add),
+    .id_ex_fp_sub_i       (id_ex_fp_sub),
     .id_ex_fp_rm_i        (id_ex_fp_rm),
     .frm_i                (frm),
     .id_ex_is_csr_i       (id_ex_is_csr),
