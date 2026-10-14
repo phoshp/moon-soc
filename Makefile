@@ -41,12 +41,15 @@ soc-pmp-test:
 soc-mmu-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_mmu_sv39.hex
 
-.PHONY: soc-crypto-test soc-crypto-aes-test soc-crypto-sha512-test soc-rvv-test
+.PHONY: soc-crypto-test soc-crypto-aes-test soc-crypto-aes-rounds-test soc-crypto-sha512-test soc-rvv-test
 soc-crypto-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_crypto_sha256.hex
 
 soc-crypto-aes-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_crypto_aes64ks2.hex
+
+soc-crypto-aes-rounds-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_crypto_aes64rounds.hex
 
 soc-crypto-sha512-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_crypto_sha512.hex
