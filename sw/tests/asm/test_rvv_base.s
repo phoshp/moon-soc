@@ -28,6 +28,16 @@ _start:
     li   t1, 5
     bne  a2, t1, fail
 
+    vand.vv v4, v3, v2
+    vmv.x.s a2, v4
+    li   t1, 0
+    bne  a2, t1, fail
+
+    vxor.vx v4, v3, a0
+    vmv.x.s a2, v4
+    li   t1, 11
+    bne  a2, t1, fail
+
 pass:
     li   t0, 0xCAFEBABE
     sw   t0, 0(s0)
