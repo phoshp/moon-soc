@@ -8,6 +8,7 @@
 `define MOON_CORE_SV
 
 `include "moon_pkg.sv"
+`include "moon_fregfile.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
 `include "moon_ex_stage.sv"
