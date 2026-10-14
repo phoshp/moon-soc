@@ -61,6 +61,9 @@ module moon_ex_stage
   input  logic             id_ex_fp_add_i,
   input  logic             id_ex_fp_sub_i,
   input  logic             id_ex_fp_mul_i,
+  input  logic             id_ex_fp_class_i,
+  input  logic             id_ex_fp_sign_i,
+  input  logic [1:0]       id_ex_fp_sign_op_i,
   input  logic [2:0]       id_ex_fp_rm_i,
   input  logic [2:0]       frm_i,
   input  logic             id_ex_is_csr_i,
@@ -157,7 +160,50 @@ module moon_ex_stage
   logic [4:0]      fp_add_flags;
   logic [FLEN-1:0] fp_mul_result;
   logic [4:0]      fp_mul_flags;
+  logic [XLEN-1:0] fp_class_result;
+  logic [FLEN-1:0] fp_sign_result;
   logic [2:0]      fp_rounding_mode;
+
+  always_comb begin : fp_misc_comb
+    logic sign_a, sign_b, sign_out;
+    logic [10:0] exp_field;
+    logic [51:0] fraction;
+    logic [9:0] class_bits;
+
+    sign_a = id_ex_fp_word_i ? id_ex_rs1_data_i[31] : id_ex_rs1_data_i[63];
+    sign_b = id_ex_fp_word_i ? id_ex_rs2_data_i[31] : id_ex_rs2_data_i[63];
+    case (id_ex_fp_sign_op_i)
+      2'b00: sign_out = sign_b;
+      2'b01: sign_out = ~sign_b;
+      default: sign_out = sign_a ^ sign_b;
+    endcase
+    if (id_ex_fp_word_i) begin
+      if ((id_ex_rs1_data_i[63:32] != 32'hffff_ffff) ||
+          (id_ex_rs2_data_i[63:32] != 32'hffff_ffff))
+        fp_sign_result = 64'hffff_ffff_7fc0_0000;
+      else
+        fp_sign_result = {32'hffff_ffff, sign_out, id_ex_rs1_data_i[30:0]};
+    end else begin
+      fp_sign_result = {sign_out, id_ex_rs1_data_i[62:0]};
+    end
+
+    exp_field = id_ex_fp_word_i ? {3'b0, id_ex_rs1_data_i[30:23]} : id_ex_rs1_data_i[62:52];
+    fraction = id_ex_fp_word_i ? {29'b0, id_ex_rs1_data_i[22:0]} : id_ex_rs1_data_i[51:0];
+    class_bits = '0;
+    if (id_ex_fp_word_i && (id_ex_rs1_data_i[63:32] != 32'hffff_ffff)) begin
+      class_bits[9] = 1'b1;
+    end else if ((exp_field == (id_ex_fp_word_i ? 11'h0ff : 11'h7ff)) && (fraction == 0)) begin
+      class_bits[sign_a ? 0 : 7] = 1'b1;
+    end else if (exp_field == (id_ex_fp_word_i ? 11'h0ff : 11'h7ff)) begin
+      class_bits[fraction[id_ex_fp_word_i ? 22 : 51] ? 9 : 8] = 1'b1;
+    end else if (exp_field == 0) begin
+      if (fraction == 0) class_bits[sign_a ? 3 : 4] = 1'b1;
+      else class_bits[sign_a ? 2 : 5] = 1'b1;
+    end else begin
+      class_bits[sign_a ? 1 : 6] = 1'b1;
+    end
+    fp_class_result = {54'd0, class_bits};
+  end
 
   assign fp_rounding_mode = (id_ex_fp_rm_i == 3'b111) ? frm_i : id_ex_fp_rm_i;
 
@@ -362,7 +408,9 @@ module moon_ex_stage
       ex_mem_rd_o        <= id_ex_rd_i;
       ex_mem_rs2_o       <= id_ex_rs2_i;
       ex_mem_alu_res_o   <= id_ex_fp_mul_i ? fp_mul_result :
-                            (id_ex_fp_add_i ? fp_add_result : alu_result);
+                            (id_ex_fp_add_i ? fp_add_result :
+                             (id_ex_fp_sign_i ? fp_sign_result :
+                              (id_ex_fp_class_i ? fp_class_result : alu_result)));
       ex_mem_mul_res_o   <= mul_result;
       ex_mem_div_res_o   <= div_result;
       ex_mem_is_mul_o    <= id_ex_is_mul_i;

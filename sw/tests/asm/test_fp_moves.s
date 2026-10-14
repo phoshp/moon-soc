@@ -38,6 +38,18 @@ _start:
     fmv.x.w t1, f3
     li   t2, 0x40580000
     bne  t1, t2, fail
+    fsgnj.s f3, f1, f2
+    fmv.x.w t1, f3
+    li   t2, 0x3fc00000
+    bne  t1, t2, fail
+    fsgnjn.s f3, f1, f2
+    fmv.x.w t1, f3
+    li   t2, 0xbfc00000
+    addiw t2, t2, 0
+    bne  t1, t2, fail
+    fclass.s t1, f1
+    li   t2, 64
+    bne  t1, t2, fail
 
     li   t0, 0x3ff8000000000000
     fmv.d.x f1, t0
@@ -54,6 +66,13 @@ _start:
     fmul.d f3, f1, f2, rne
     fmv.x.d t1, f3
     li   t2, 0x400b000000000000
+    bne  t1, t2, fail
+    fsgnj.d f3, f1, f2
+    fmv.x.d t1, f3
+    fmv.x.d t2, f1
+    bne  t1, t2, fail
+    fclass.d t1, f1
+    li   t2, 64
     bne  t1, t2, fail
 
     li   t0, 0x3f800000
