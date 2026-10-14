@@ -34,6 +34,10 @@ _start:
     fmv.x.w t1, f3
     li   t2, 0x40700000
     bne  t1, t2, fail
+    fmul.s f3, f1, f2, rne
+    fmv.x.w t1, f3
+    li   t2, 0x40580000
+    bne  t1, t2, fail
 
     li   t0, 0x3ff8000000000000
     fmv.d.x f1, t0
@@ -46,6 +50,10 @@ _start:
     fsub.d f3, f2, f1, rne
     fmv.x.d t1, f3
     li   t2, 0x3fe8000000000000
+    bne  t1, t2, fail
+    fmul.d f3, f1, f2, rne
+    fmv.x.d t1, f3
+    li   t2, 0x400b000000000000
     bne  t1, t2, fail
 
     li   t0, 0x3f800000

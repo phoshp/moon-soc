@@ -10,6 +10,7 @@
 `include "moon_pkg.sv"
 `include "moon_fregfile.sv"
 `include "moon_fpu_add.sv"
+`include "moon_fpu_mul.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
 `include "moon_ex_stage.sv"
@@ -106,6 +107,7 @@ module moon_core
   logic             id_ex_fp_word;
   logic             id_ex_fp_add;
   logic             id_ex_fp_sub;
+  logic             id_ex_fp_mul;
   logic [2:0]       id_ex_fp_rm;
   logic             id_ex_is_csr;
   logic [2:0]       id_ex_csr_op;
@@ -439,6 +441,7 @@ module moon_core
     .id_ex_fp_word_o      (id_ex_fp_word),
     .id_ex_fp_add_o       (id_ex_fp_add),
     .id_ex_fp_sub_o       (id_ex_fp_sub),
+    .id_ex_fp_mul_o       (id_ex_fp_mul),
     .id_ex_fp_rm_o        (id_ex_fp_rm),
     .id_ex_is_csr_o       (id_ex_is_csr),
     .id_ex_csr_op_o       (id_ex_csr_op),
@@ -493,6 +496,7 @@ module moon_core
     .id_ex_fp_word_i      (id_ex_fp_word),
     .id_ex_fp_add_i       (id_ex_fp_add),
     .id_ex_fp_sub_i       (id_ex_fp_sub),
+    .id_ex_fp_mul_i       (id_ex_fp_mul),
     .id_ex_fp_rm_i        (id_ex_fp_rm),
     .frm_i                (frm),
     .id_ex_is_csr_i       (id_ex_is_csr),
