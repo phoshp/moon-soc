@@ -38,6 +38,35 @@ _start:
     li   t1, 11
     bne  a2, t1, fail
 
+    li   a0, 3
+    vmv.v.x v1, a0
+    li   a1, 2
+    vsll.vx v4, v1, a1
+    vmv.x.s a2, v4
+    li   t1, 12
+    bne  a2, t1, fail
+    vmv.v.x v2, a1
+    vsll.vv v4, v1, v2
+    vmv.x.s a2, v4
+    li   t1, 12
+    bne  a2, t1, fail
+
+    li   a0, 0x80000000
+    vmv.v.x v1, a0
+    li   a1, 1
+    vsrl.vx v4, v1, a1
+    vmv.x.s a2, v4
+    li   t1, 0x40000000
+    bne  a2, t1, fail
+
+    li   a0, -16
+    vmv.v.x v1, a0
+    li   a1, 2
+    vsra.vx v4, v1, a1
+    vmv.x.s a2, v4
+    li   t1, -4
+    bne  a2, t1, fail
+
 pass:
     li   t0, 0xCAFEBABE
     sw   t0, 0(s0)
