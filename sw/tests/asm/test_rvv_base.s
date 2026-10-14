@@ -97,6 +97,23 @@ _start:
     li   t1, 0
     bne  a2, t1, fail
 
+    li   a0, -1
+    vmv.v.x v1, a0
+    li   a1, 1
+    vminu.vx v5, v1, a1
+    vmv.x.s a2, v5
+    bne  a2, a1, fail
+    vmaxu.vx v5, v1, a1
+    vmv.x.s a2, v5
+    li   t1, -1
+    bne  a2, t1, fail
+    vmin.vx v5, v1, a1
+    vmv.x.s a2, v5
+    bne  a2, t1, fail
+    vmax.vx v5, v1, a1
+    vmv.x.s a2, v5
+    bne  a2, a1, fail
+
 pass:
     li   t0, 0xCAFEBABE
     sw   t0, 0(s0)
