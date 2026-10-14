@@ -89,6 +89,44 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_shift(
+    input logic [63:0] operand,
+    input logic [5:0]  amount,
+    input logic [2:0]  sew,
+    input logic [5:0]  operation
+  );
+    case (sew)
+      3'b000: begin
+        case (operation)
+          6'b100101: vector_shift = {56'd0, (operand[7:0] << amount[2:0])};
+          6'b101000: vector_shift = {56'd0, (operand[7:0] >> amount[2:0])};
+          default:   vector_shift = {56'd0, ($signed(operand[7:0]) >>> amount[2:0])};
+        endcase
+      end
+      3'b001: begin
+        case (operation)
+          6'b100101: vector_shift = {48'd0, (operand[15:0] << amount[3:0])};
+          6'b101000: vector_shift = {48'd0, (operand[15:0] >> amount[3:0])};
+          default:   vector_shift = {48'd0, ($signed(operand[15:0]) >>> amount[3:0])};
+        endcase
+      end
+      3'b010: begin
+        case (operation)
+          6'b100101: vector_shift = {32'd0, (operand[31:0] << amount[4:0])};
+          6'b101000: vector_shift = {32'd0, (operand[31:0] >> amount[4:0])};
+          default:   vector_shift = {32'd0, ($signed(operand[31:0]) >>> amount[4:0])};
+        endcase
+      end
+      default: begin
+        case (operation)
+          6'b100101: vector_shift = operand << amount[5:0];
+          6'b101000: vector_shift = operand >> amount[5:0];
+          default:   vector_shift = $signed(operand) >>> amount[5:0];
+        endcase
+      end
+    endcase
+  endfunction
+
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
   assign is_vmv_x_s = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010000) &&
                       instr_i[25] && (instr_i[14:12] == 3'b010) && (instr_i[19:15] == 5'd0);
@@ -250,15 +288,21 @@ module moon_vector_unit (
           end
         end
       end else if (is_vshift) begin
-        for (int i = 0; i < 4; i++) begin
-          if ((vsew_q == 3'b010) && (i < vl_q)) begin
-            logic [4:0] shift_amount;
-            shift_amount = (instr_i[14:12] == 3'b100) ? scalar_rs1_i[4:0] :
-                           (instr_i[14:12] == 3'b011) ? instr_i[19:15] : vreg[vs1][i*32 +: 5];
-            case (instr_i[31:26])
-              6'b100101: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] << shift_amount;
-              6'b101000: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] >> shift_amount;
-              default:   vreg[vd][i*32 +: 32] <= $signed(vreg[vs2][i*32 +: 32]) >>> shift_amount;
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_shift(vreg[vs2][i*8 +: 8],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*8 +: 6]), vsew_q, instr_i[31:26]);
+              3'b001: vreg[vd][i*16 +: 16] <= vector_shift(vreg[vs2][i*16 +: 16],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*16 +: 6]), vsew_q, instr_i[31:26]);
+              3'b010: vreg[vd][i*32 +: 32] <= vector_shift(vreg[vs2][i*32 +: 32],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*32 +: 6]), vsew_q, instr_i[31:26]);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_shift(vreg[vs2][i*64 +: 64],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*64 +: 6]), vsew_q, instr_i[31:26]);
             endcase
           end
         end
