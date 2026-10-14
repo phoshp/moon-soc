@@ -70,6 +70,8 @@ module moon_core
   logic [4:0]       id_rs2;
   logic [4:0]       id_fp_rs1;
   logic             id_fp_rs1_en;
+  logic [4:0]       id_fp_rs2;
+  logic             id_fp_rs2_en;
   logic             id_ex_valid;
   logic [XLEN-1:0]  id_ex_pc;
   logic [ILEN-1:0]  id_ex_instr;
@@ -394,6 +396,8 @@ module moon_core
     .id_rs2_o             (id_rs2),
     .id_fp_rs1_o          (id_fp_rs1),
     .id_fp_rs1_en_o       (id_fp_rs1_en),
+    .id_fp_rs2_o          (id_fp_rs2),
+    .id_fp_rs2_en_o       (id_fp_rs2_en),
     .id_ex_valid_o        (id_ex_valid),
     .id_ex_pc_o           (id_ex_pc),
     .id_ex_instr_o        (id_ex_instr),
@@ -646,6 +650,8 @@ module moon_core
     .mem_wb_rd_i        (mem_wb_rd),
     .if_id_fp_rs1_en_i  (id_fp_rs1_en),
     .if_id_fp_rs1_i     (id_fp_rs1),
+    .if_id_fp_rs2_en_i  (id_fp_rs2_en),
+    .if_id_fp_rs2_i     (id_fp_rs2),
     .id_ex_fp_we_i      (id_ex_fp_we),
     .id_ex_fp_rd_i      (id_ex_fp_rd),
     .ex_mem_fp_we_i     (ex_mem_fp_we),

@@ -22,6 +22,8 @@ module moon_hazard_unit
   input  logic [4:0]  mem_wb_rd_i,
   input  logic        if_id_fp_rs1_en_i,
   input  logic [4:0]  if_id_fp_rs1_i,
+  input  logic        if_id_fp_rs2_en_i,
+  input  logic [4:0]  if_id_fp_rs2_i,
   input  logic        id_ex_fp_we_i,
   input  logic [4:0]  id_ex_fp_rd_i,
   input  logic        ex_mem_fp_we_i,
@@ -85,9 +87,13 @@ module moon_hazard_unit
                          ((id_ex_rd_i == if_id_rs1_i) || (id_ex_rd_i == if_id_rs2_i));
 
   wire csr_hazard = id_ex_is_csr_i || ex_mem_is_csr_i;
-  wire fp_hazard = if_id_fp_rs1_en_i &&
-                   ((id_ex_fp_we_i && (id_ex_fp_rd_i == if_id_fp_rs1_i)) ||
-                    (ex_mem_fp_we_i && (ex_mem_fp_rd_i == if_id_fp_rs1_i)));
+  wire fp_rs1_hazard = if_id_fp_rs1_en_i &&
+                       ((id_ex_fp_we_i && (id_ex_fp_rd_i == if_id_fp_rs1_i)) ||
+                        (ex_mem_fp_we_i && (ex_mem_fp_rd_i == if_id_fp_rs1_i)));
+  wire fp_rs2_hazard = if_id_fp_rs2_en_i &&
+                       ((id_ex_fp_we_i && (id_ex_fp_rd_i == if_id_fp_rs2_i)) ||
+                        (ex_mem_fp_we_i && (ex_mem_fp_rd_i == if_id_fp_rs2_i)));
+  wire fp_hazard = fp_rs1_hazard || fp_rs2_hazard;
 
   // --------------------------------------------------------------------------
   // Stall and Flush Control

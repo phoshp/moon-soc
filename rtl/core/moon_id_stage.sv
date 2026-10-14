@@ -39,6 +39,8 @@ module moon_id_stage
   output logic [4:0]       id_rs2_o,
   output logic [4:0]       id_fp_rs1_o,
   output logic             id_fp_rs1_en_o,
+  output logic [4:0]       id_fp_rs2_o,
+  output logic             id_fp_rs2_en_o,
 
   // Outputs to EX Stage (ID/EX Pipeline Register)
   output logic             id_ex_valid_o,
@@ -111,6 +113,9 @@ module moon_id_stage
   assign id_fp_rs1_en_o = if_id_valid_i && (opcode == OPCODE_FP) &&
                           (funct7 == 7'b1110000) && (rs2 == 5'd0) &&
                           (funct3 == 3'b000);
+  assign id_fp_rs2_o = rs2;
+  assign id_fp_rs2_en_o = if_id_valid_i && (opcode == OPCODE_STORE_FP) &&
+                          ((funct3 == 3'b010) || (funct3 == 3'b011));
 
   // --------------------------------------------------------------------------
   // Register File Instantiation
@@ -498,6 +503,28 @@ module moon_id_stage
         end
       end
 
+      OPCODE_LOAD_FP: begin
+        if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
+          dec_is_load  = 1'b1;
+          dec_fp_we    = 1'b1;
+          dec_fp_word  = (funct3 == 3'b010);
+          dec_alu_op   = ALU_ADD;
+          dec_alu_src_b_imm = 1'b1;
+          selected_imm = imm_i;
+          dec_mem_width = (funct3 == 3'b010) ? MEM_WORD_U : MEM_DWORD;
+        end
+      end
+
+      OPCODE_STORE_FP: begin
+        if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
+          dec_is_store = 1'b1;
+          dec_alu_op   = ALU_ADD;
+          dec_alu_src_b_imm = 1'b1;
+          selected_imm = imm_s;
+          dec_mem_width = (funct3 == 3'b010) ? MEM_WORD : MEM_DWORD;
+        end
+      end
+
       // MISC-MEM (FENCE, FENCE.I treated as pipeline NOP / flush)
       OPCODE_MISC_MEM: begin
         dec_alu_op        = ALU_ADD;
@@ -630,7 +657,7 @@ module moon_id_stage
       id_ex_rs1_o          <= rs1;
       id_ex_rs2_o          <= rs2;
       id_ex_rs1_data_o     <= dec_fmv_x_w ? {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]} : rf_rs1_data;
-      id_ex_rs2_data_o     <= rf_rs2_data;
+      id_ex_rs2_data_o     <= (opcode == OPCODE_STORE_FP) ? fp_rs2_data : rf_rs2_data;
       id_ex_imm_o          <= selected_imm;
       id_ex_alu_op_o       <= dec_alu_op;
       id_ex_alu_src_a_pc_o <= dec_alu_src_a_pc;
