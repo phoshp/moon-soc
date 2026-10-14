@@ -50,6 +50,18 @@ _start:
     vmv.x.s a2, v4
     li   t1, 12
     bne  a2, t1, fail
+    vadd.vi v4, v1, 5
+    vmv.x.s a2, v4
+    li   t1, 8
+    bne  a2, t1, fail
+    vxor.vi v4, v1, -1
+    vmv.x.s a2, v4
+    li   t1, -4
+    bne  a2, t1, fail
+    vsll.vi v4, v1, 2
+    vmv.x.s a2, v4
+    li   t1, 12
+    bne  a2, t1, fail
 
     li   a0, 0x80000000
     vmv.v.x v1, a0
