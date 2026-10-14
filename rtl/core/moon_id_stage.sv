@@ -130,6 +130,7 @@ module moon_id_stage
                            ((funct7 == 7'b0100000) && (rs2 == 5'd1)) ||
                            ((funct7 == 7'b0100001) && (rs2 == 5'd0)) ||
                            (((funct7 == 7'b1100000) || (funct7 == 7'b1100001)) && (rs2 <= 5'd3)) ||
+                           (((funct7 == 7'b0101100) || (funct7 == 7'b0101101)) && (rs2 == 5'd0)) ||
                            ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
                             (funct7 == 7'b0000100) || (funct7 == 7'b0000101) ||
                             (funct7 == 7'b0001000) || (funct7 == 7'b0001001) ||
@@ -599,6 +600,11 @@ module moon_id_stage
           dec_fp_sub  = (funct7 == 7'b0000100) || (funct7 == 7'b0000101);
           dec_fp_mul  = (funct7 == 7'b0001000) || (funct7 == 7'b0001001);
           dec_fp_div  = (funct7 == 7'b0001100) || (funct7 == 7'b0001101);
+        end else if (((funct7 == 7'b0101100) || (funct7 == 7'b0101101)) &&
+                     (rs2 == 5'd0) && (funct3 <= 3'b100)) begin
+          dec_fp_we   = 1'b1;
+          dec_fp_div  = 1'b1;
+          dec_fp_word = (funct7 == 7'b0101100);
         end else if ((funct7 == 7'b1110000) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
           // FMV.X.W: move a single-precision bit pattern to an integer register.
           dec_regwrite = 1'b1;

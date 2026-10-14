@@ -17,6 +17,7 @@
 `include "moon_fpu_div.sv"
 `include "moon_fpu_cvt.sv"
 `include "moon_fpu_intcvt.sv"
+`include "moon_fpu_sqrt.sv"
 `include "moon_vector_unit.sv"
 
 module moon_ex_stage
@@ -175,6 +176,9 @@ module moon_ex_stage
   logic [4:0]      fp_cmp_flags;
   logic [FLEN-1:0] fp_div_result;
   logic [4:0]      fp_div_flags;
+  logic [FLEN-1:0] fp_sqrt_result;
+  logic [4:0]      fp_sqrt_flags;
+  logic            fp_sqrt_instruction;
   logic [FLEN-1:0] fp_cvt_result;
   logic [4:0]      fp_cvt_flags;
   logic [FLEN-1:0] fp_int_cvt_result;
@@ -263,6 +267,17 @@ module moon_ex_stage
     .result_o          (fp_div_result),
     .flags_o           (fp_div_flags)
   );
+
+  moon_fpu_sqrt u_fpu_sqrt (
+    .operand_i       (id_ex_rs1_data_i),
+    .is_single_i     (id_ex_fp_word_i),
+    .rounding_mode_i (fp_rounding_mode),
+    .result_o        (fp_sqrt_result),
+    .flags_o         (fp_sqrt_flags)
+  );
+
+  assign fp_sqrt_instruction = (id_ex_instr_i[31:25] == 7'b0101100) ||
+                               (id_ex_instr_i[31:25] == 7'b0101101);
 
   moon_fpu_cvt u_fpu_cvt (
     .operand_i       (id_ex_rs1_data_i),
@@ -477,7 +492,7 @@ module moon_ex_stage
       ex_mem_rs2_o       <= id_ex_rs2_i;
       ex_mem_alu_res_o   <= id_ex_fp_cvt_i ?
                             (fp_int_cvt_instruction ? fp_int_cvt_result : fp_cvt_result) :
-                            (id_ex_fp_div_i ? fp_div_result :
+                            (id_ex_fp_div_i ? (fp_sqrt_instruction ? fp_sqrt_result : fp_div_result) :
                             (id_ex_fp_mul_i ? fp_mul_result :
                              (id_ex_fp_add_i ? fp_add_result :
                               (id_ex_fp_cmp_i ? fp_cmp_result :
@@ -504,7 +519,7 @@ module moon_ex_stage
       ex_mem_fp_word_o   <= id_ex_fp_word_i;
       ex_mem_fp_flags_o  <= id_ex_fp_cvt_i ?
                              (fp_int_cvt_instruction ? fp_int_cvt_flags : fp_cvt_flags) :
-                             (id_ex_fp_div_i ? fp_div_flags :
+                             (id_ex_fp_div_i ? (fp_sqrt_instruction ? fp_sqrt_flags : fp_div_flags) :
                               (id_ex_fp_mul_i ? fp_mul_flags :
                                (id_ex_fp_cmp_i ? fp_cmp_flags : fp_add_flags)));
       ex_mem_fp_flags_we_o <= id_ex_fp_add_i || id_ex_fp_mul_i ||

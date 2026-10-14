@@ -15,6 +15,7 @@
 `include "moon_fpu_div.sv"
 `include "moon_fpu_cvt.sv"
 `include "moon_fpu_intcvt.sv"
+`include "moon_fpu_sqrt.sv"
 `include "moon_vector_unit.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
