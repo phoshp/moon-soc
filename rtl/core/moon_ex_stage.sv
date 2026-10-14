@@ -15,6 +15,7 @@
 `include "moon_fpu_mul.sv"
 `include "moon_fpu_cmp.sv"
 `include "moon_fpu_div.sv"
+`include "moon_vector_unit.sv"
 
 module moon_ex_stage
   import moon_pkg::*;
@@ -160,6 +161,8 @@ module moon_ex_stage
   logic [XLEN-1:0] alu_in_a;
   logic [XLEN-1:0] alu_in_b;
   logic [XLEN-1:0] alu_result;
+  logic [XLEN-1:0] vector_scalar_result;
+  logic            vector_scalar_result_valid;
   logic            alu_zero;
   logic [FLEN-1:0] fp_add_result;
   logic [4:0]      fp_add_flags;
@@ -262,6 +265,17 @@ module moon_ex_stage
     .operand_b_i (alu_in_b),
     .result_o    (alu_result),
     .zero_o      (alu_zero)
+  );
+
+  moon_vector_unit u_vector_unit (
+    .clk_i                  (clk_i),
+    .rst_ni                 (rst_ni),
+    .valid_i                (id_ex_valid_i),
+    .advance_i              (!stall_mem_i && !flush_mem_i),
+    .instr_i                (id_ex_instr_i),
+    .scalar_rs1_i           (operand_a_fwd),
+    .scalar_result_valid_o  (vector_scalar_result_valid),
+    .scalar_result_o        (vector_scalar_result)
   );
 
   // --------------------------------------------------------------------------
@@ -439,7 +453,8 @@ module moon_ex_stage
                              (id_ex_fp_add_i ? fp_add_result :
                               (id_ex_fp_cmp_i ? fp_cmp_result :
                                (id_ex_fp_sign_i ? fp_sign_result :
-                                (id_ex_fp_class_i ? fp_class_result : alu_result)))));
+       (id_ex_fp_class_i ? fp_class_result :
+        (vector_scalar_result_valid ? vector_scalar_result : alu_result))))));
       ex_mem_mul_res_o   <= mul_result;
       ex_mem_div_res_o   <= div_result;
       ex_mem_is_mul_o    <= id_ex_is_mul_i;

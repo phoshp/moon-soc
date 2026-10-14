@@ -13,6 +13,7 @@
 `include "moon_fpu_mul.sv"
 `include "moon_fpu_cmp.sv"
 `include "moon_fpu_div.sv"
+`include "moon_vector_unit.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
 `include "moon_ex_stage.sv"

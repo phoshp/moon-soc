@@ -611,6 +611,15 @@ module moon_id_stage
         end
       end
 
+      // Initial RVV 1.0 subset: vsetvli and vmv.x.s write an integer result.
+      7'b1010111: begin
+        if (funct3 == 3'b111 ||
+            ((funct3 == 3'b010) && (if_id_instr_i[31:26] == 6'b010000) &&
+             (if_id_instr_i[25]) && (rs1 == 5'd0))) begin
+          dec_regwrite = 1'b1;
+        end
+      end
+
       OPCODE_LOAD_FP: begin
         if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
           dec_is_load  = 1'b1;
