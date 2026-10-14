@@ -11,6 +11,7 @@
 `include "moon_fregfile.sv"
 `include "moon_fpu_add.sv"
 `include "moon_fpu_mul.sv"
+`include "moon_fpu_cmp.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
 `include "moon_ex_stage.sv"
@@ -111,6 +112,8 @@ module moon_core
   logic             id_ex_fp_class;
   logic             id_ex_fp_sign;
   logic [1:0]       id_ex_fp_sign_op;
+  logic             id_ex_fp_cmp;
+  logic [2:0]       id_ex_fp_cmp_op;
   logic [2:0]       id_ex_fp_rm;
   logic             id_ex_is_csr;
   logic [2:0]       id_ex_csr_op;
@@ -448,6 +451,8 @@ module moon_core
     .id_ex_fp_class_o     (id_ex_fp_class),
     .id_ex_fp_sign_o      (id_ex_fp_sign),
     .id_ex_fp_sign_op_o   (id_ex_fp_sign_op),
+    .id_ex_fp_cmp_o      (id_ex_fp_cmp),
+    .id_ex_fp_cmp_op_o   (id_ex_fp_cmp_op),
     .id_ex_fp_rm_o        (id_ex_fp_rm),
     .id_ex_is_csr_o       (id_ex_is_csr),
     .id_ex_csr_op_o       (id_ex_csr_op),
@@ -506,6 +511,8 @@ module moon_core
     .id_ex_fp_class_i     (id_ex_fp_class),
     .id_ex_fp_sign_i      (id_ex_fp_sign),
     .id_ex_fp_sign_op_i   (id_ex_fp_sign_op),
+    .id_ex_fp_cmp_i      (id_ex_fp_cmp),
+    .id_ex_fp_cmp_op_i   (id_ex_fp_cmp_op),
     .id_ex_fp_rm_i        (id_ex_fp_rm),
     .frm_i                (frm),
     .id_ex_is_csr_i       (id_ex_is_csr),
