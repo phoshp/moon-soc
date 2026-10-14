@@ -23,6 +23,8 @@ module moon_vector_unit (
   logic         is_vmv_x_s;
   logic         is_vmv_v_x;
   logic         is_vadd_vv;
+  logic         is_vadd_vx;
+  logic         is_vsub_vv;
   logic [4:0]   vd, vs1, vs2;
 
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
@@ -31,6 +33,10 @@ module moon_vector_unit (
   assign is_vmv_v_x = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010111) &&
                       instr_i[25] && (instr_i[14:12] == 3'b100) && (instr_i[24:20] == 5'd0);
   assign is_vadd_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
+                      instr_i[25] && (instr_i[14:12] == 3'b000);
+  assign is_vadd_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
+                      instr_i[25] && (instr_i[14:12] == 3'b100);
+  assign is_vsub_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
                       instr_i[25] && (instr_i[14:12] == 3'b000);
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
@@ -75,6 +81,14 @@ module moon_vector_unit (
       end else if (is_vadd_vv) begin
         for (int i = 0; i < 4; i++) begin
           if (i < vl_q) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] + vreg[vs1][i*32 +: 32];
+        end
+      end else if (is_vadd_vx) begin
+        for (int i = 0; i < 4; i++) begin
+          if (i < vl_q) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] + scalar_rs1_i[31:0];
+        end
+      end else if (is_vsub_vv) begin
+        for (int i = 0; i < 4; i++) begin
+          if (i < vl_q) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] - vreg[vs1][i*32 +: 32];
         end
       end
     end
