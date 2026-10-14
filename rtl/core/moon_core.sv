@@ -16,6 +16,7 @@
 `include "moon_fpu_cvt.sv"
 `include "moon_fpu_intcvt.sv"
 `include "moon_fpu_sqrt.sv"
+`include "moon_fpu_fma.sv"
 `include "moon_vector_unit.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
@@ -80,6 +81,8 @@ module moon_core
   logic             id_fp_rs1_en;
   logic [4:0]       id_fp_rs2;
   logic             id_fp_rs2_en;
+  logic [4:0]       id_fp_rs3;
+  logic             id_fp_rs3_en;
   logic             id_ex_valid;
   logic [XLEN-1:0]  id_ex_pc;
   logic [ILEN-1:0]  id_ex_instr;
@@ -89,6 +92,7 @@ module moon_core
   logic [4:0]       id_ex_rs2;
   logic [XLEN-1:0]  id_ex_rs1_data;
   logic [XLEN-1:0]  id_ex_rs2_data;
+  logic [FLEN-1:0]  id_ex_fp_rs3_data;
   logic [XLEN-1:0]  id_ex_imm;
   alu_op_e          id_ex_alu_op;
   logic             id_ex_alu_src_a_pc;
@@ -421,6 +425,8 @@ module moon_core
     .id_fp_rs1_en_o       (id_fp_rs1_en),
     .id_fp_rs2_o          (id_fp_rs2),
     .id_fp_rs2_en_o       (id_fp_rs2_en),
+    .id_fp_rs3_o          (id_fp_rs3),
+    .id_fp_rs3_en_o       (id_fp_rs3_en),
     .id_ex_valid_o        (id_ex_valid),
     .id_ex_pc_o           (id_ex_pc),
     .id_ex_instr_o        (id_ex_instr),
@@ -430,6 +436,7 @@ module moon_core
     .id_ex_rs2_o          (id_ex_rs2),
     .id_ex_rs1_data_o     (id_ex_rs1_data),
     .id_ex_rs2_data_o     (id_ex_rs2_data),
+    .id_ex_fp_rs3_data_o  (id_ex_fp_rs3_data),
     .id_ex_imm_o          (id_ex_imm),
     .id_ex_alu_op_o       (id_ex_alu_op),
     .id_ex_alu_src_a_pc_o (id_ex_alu_src_a_pc),
@@ -491,6 +498,7 @@ module moon_core
     .id_ex_rs2_i          (id_ex_rs2),
     .id_ex_rs1_data_i     (id_ex_rs1_data),
     .id_ex_rs2_data_i     (id_ex_rs2_data),
+    .id_ex_fp_rs3_data_i  (id_ex_fp_rs3_data),
     .id_ex_imm_i          (id_ex_imm),
     .id_ex_alu_op_i       (id_ex_alu_op),
     .id_ex_alu_src_a_pc_i (id_ex_alu_src_a_pc),
@@ -704,6 +712,8 @@ module moon_core
     .if_id_fp_rs1_i     (id_fp_rs1),
     .if_id_fp_rs2_en_i  (id_fp_rs2_en),
     .if_id_fp_rs2_i     (id_fp_rs2),
+    .if_id_fp_rs3_en_i  (id_fp_rs3_en),
+    .if_id_fp_rs3_i     (id_fp_rs3),
     .id_ex_fp_we_i      (id_ex_fp_we),
     .id_ex_fp_rd_i      (id_ex_fp_rd),
     .ex_mem_fp_we_i     (ex_mem_fp_we),

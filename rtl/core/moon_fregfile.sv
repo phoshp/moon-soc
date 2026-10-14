@@ -18,6 +18,8 @@ module moon_fregfile
   output logic [FLEN-1:0]   rs1_data_o,
   input  logic [4:0]       rs2_addr_i,
   output logic [FLEN-1:0]   rs2_data_o,
+  input  logic [4:0]       rs3_addr_i,
+  output logic [FLEN-1:0]   rs3_data_o,
 
   input  logic             rd_we_i,
   input  logic [4:0]       rd_addr_i,
@@ -47,6 +49,12 @@ module moon_fregfile
       rs2_data_o = rd_data_i;
     end else begin
       rs2_data_o = regs[rs2_addr_i];
+    end
+
+    if (rd_we_i && (rd_addr_i == rs3_addr_i)) begin
+      rs3_data_o = rd_data_i;
+    end else begin
+      rs3_data_o = regs[rs3_addr_i];
     end
   end
 

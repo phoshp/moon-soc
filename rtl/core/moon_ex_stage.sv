@@ -18,6 +18,7 @@
 `include "moon_fpu_cvt.sv"
 `include "moon_fpu_intcvt.sv"
 `include "moon_fpu_sqrt.sv"
+`include "moon_fpu_fma.sv"
 `include "moon_vector_unit.sv"
 
 module moon_ex_stage
@@ -39,6 +40,7 @@ module moon_ex_stage
   input  logic [4:0]       id_ex_rs2_i,
   input  logic [XLEN-1:0]  id_ex_rs1_data_i,
   input  logic [XLEN-1:0]  id_ex_rs2_data_i,
+  input  logic [FLEN-1:0]  id_ex_fp_rs3_data_i,
   input  logic [XLEN-1:0]  id_ex_imm_i,
 
   // Control Signals from ID Stage
@@ -179,6 +181,11 @@ module moon_ex_stage
   logic [FLEN-1:0] fp_sqrt_result;
   logic [4:0]      fp_sqrt_flags;
   logic            fp_sqrt_instruction;
+  logic [FLEN-1:0] fp_fma_result;
+  logic [4:0]      fp_fma_flags;
+  logic            fp_fma_instruction;
+  logic [FLEN-1:0] fp_result_selected;
+  logic [4:0]      fp_flags_selected;
   logic [FLEN-1:0] fp_cvt_result;
   logic [4:0]      fp_cvt_flags;
   logic [FLEN-1:0] fp_int_cvt_result;
@@ -276,6 +283,22 @@ module moon_ex_stage
     .flags_o         (fp_sqrt_flags)
   );
 
+  moon_fpu_fma u_fpu_fma (
+    .operand_a_i     (id_ex_rs1_data_i),
+    .operand_b_i     (id_ex_rs2_data_i),
+    .operand_c_i     (id_ex_fp_rs3_data_i),
+    .format_i        (id_ex_instr_i[26:25]),
+    .opcode_i        (id_ex_instr_i[6:0]),
+    .rounding_mode_i (fp_rounding_mode),
+    .result_o        (fp_fma_result),
+    .flags_o         (fp_fma_flags)
+  );
+
+  assign fp_fma_instruction = (id_ex_instr_i[6:0] == 7'b1000011) ||
+                              (id_ex_instr_i[6:0] == 7'b1000111) ||
+                              (id_ex_instr_i[6:0] == 7'b1001011) ||
+                              (id_ex_instr_i[6:0] == 7'b1001111);
+
   assign fp_sqrt_instruction = (id_ex_instr_i[31:25] == 7'b0101100) ||
                                (id_ex_instr_i[31:25] == 7'b0101101);
 
@@ -297,6 +320,30 @@ module moon_ex_stage
 
   assign fp_int_cvt_instruction = (id_ex_instr_i[31:27] == 5'b11000) ||
                                   (id_ex_instr_i[31:27] == 5'b11010);
+
+  always_comb begin
+    if (fp_fma_instruction) fp_result_selected = fp_fma_result;
+    else if (id_ex_fp_cvt_i)
+      fp_result_selected = fp_int_cvt_instruction ? fp_int_cvt_result : fp_cvt_result;
+    else if (id_ex_fp_div_i)
+      fp_result_selected = fp_sqrt_instruction ? fp_sqrt_result : fp_div_result;
+    else if (id_ex_fp_mul_i) fp_result_selected = fp_mul_result;
+    else if (id_ex_fp_add_i) fp_result_selected = fp_add_result;
+    else if (id_ex_fp_cmp_i) fp_result_selected = fp_cmp_result;
+    else if (id_ex_fp_sign_i) fp_result_selected = fp_sign_result;
+    else if (id_ex_fp_class_i) fp_result_selected = fp_class_result;
+    else if (vector_scalar_result_valid) fp_result_selected = vector_scalar_result;
+    else fp_result_selected = alu_result;
+
+    if (fp_fma_instruction) fp_flags_selected = fp_fma_flags;
+    else if (id_ex_fp_cvt_i)
+      fp_flags_selected = fp_int_cvt_instruction ? fp_int_cvt_flags : fp_cvt_flags;
+    else if (id_ex_fp_div_i)
+      fp_flags_selected = fp_sqrt_instruction ? fp_sqrt_flags : fp_div_flags;
+    else if (id_ex_fp_mul_i) fp_flags_selected = fp_mul_flags;
+    else if (id_ex_fp_cmp_i) fp_flags_selected = fp_cmp_flags;
+    else fp_flags_selected = fp_add_flags;
+  end
 
   assign alu_in_a = id_ex_alu_src_a_pc_i  ? id_ex_pc_i  : operand_a_fwd;
   assign alu_in_b = id_ex_alu_src_b_imm_i ? id_ex_imm_i : operand_b_fwd;
@@ -490,15 +537,7 @@ module moon_ex_stage
       ex_mem_instr_o     <= id_ex_instr_i;
       ex_mem_rd_o        <= id_ex_rd_i;
       ex_mem_rs2_o       <= id_ex_rs2_i;
-      ex_mem_alu_res_o   <= id_ex_fp_cvt_i ?
-                            (fp_int_cvt_instruction ? fp_int_cvt_result : fp_cvt_result) :
-                            (id_ex_fp_div_i ? (fp_sqrt_instruction ? fp_sqrt_result : fp_div_result) :
-                            (id_ex_fp_mul_i ? fp_mul_result :
-                             (id_ex_fp_add_i ? fp_add_result :
-                              (id_ex_fp_cmp_i ? fp_cmp_result :
-                               (id_ex_fp_sign_i ? fp_sign_result :
-       (id_ex_fp_class_i ? fp_class_result :
-        (vector_scalar_result_valid ? vector_scalar_result : alu_result)))))));
+      ex_mem_alu_res_o   <= fp_result_selected;
       ex_mem_mul_res_o   <= mul_result;
       ex_mem_div_res_o   <= div_result;
       ex_mem_is_mul_o    <= id_ex_is_mul_i;
@@ -517,13 +556,10 @@ module moon_ex_stage
       ex_mem_fp_we_o     <= id_ex_fp_we_i;
       ex_mem_fp_rd_o     <= id_ex_fp_rd_i;
       ex_mem_fp_word_o   <= id_ex_fp_word_i;
-      ex_mem_fp_flags_o  <= id_ex_fp_cvt_i ?
-                             (fp_int_cvt_instruction ? fp_int_cvt_flags : fp_cvt_flags) :
-                             (id_ex_fp_div_i ? (fp_sqrt_instruction ? fp_sqrt_flags : fp_div_flags) :
-                              (id_ex_fp_mul_i ? fp_mul_flags :
-                               (id_ex_fp_cmp_i ? fp_cmp_flags : fp_add_flags)));
+      ex_mem_fp_flags_o  <= fp_flags_selected;
       ex_mem_fp_flags_we_o <= id_ex_fp_add_i || id_ex_fp_mul_i ||
-                              id_ex_fp_div_i || id_ex_fp_cvt_i || id_ex_fp_cmp_i;
+                              id_ex_fp_div_i || id_ex_fp_cvt_i || id_ex_fp_cmp_i ||
+                              fp_fma_instruction;
       ex_mem_is_csr_o    <= id_ex_is_csr_i;
       ex_mem_csr_op_o    <= id_ex_csr_op_i;
       ex_mem_csr_addr_o  <= id_ex_csr_addr_i;
