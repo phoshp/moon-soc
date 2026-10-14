@@ -18,7 +18,13 @@ module tb_moon_soc (
   output logic [31:0] test_error_code,
   output logic [63:0] debug_pc,
   output logic [31:0] debug_instr,
-  output logic        uart_tx
+  output logic        uart_tx,
+  output logic        spi_mosi,
+  output logic        spi_sck,
+  output logic        spi_cs_n,
+  output logic        i2c_scl,
+  output logic        i2c_sda_o,
+  output logic        i2c_sda_oe
 );
 
   import moon_pkg::*;
@@ -53,6 +59,14 @@ module tb_moon_soc (
     .rst_ni           (rst_n),
     .uart_rx_i        (1'b1),
     .uart_tx_o        (uart_tx),
+    .spi_miso_i       (1'b0),
+    .spi_mosi_o       (spi_mosi),
+    .spi_sck_o        (spi_sck),
+    .spi_cs_no        (spi_cs_n),
+    .i2c_sda_i        (1'b1),
+    .i2c_scl_o        (i2c_scl),
+    .i2c_sda_o        (i2c_sda_o),
+    .i2c_sda_oe_o     (i2c_sda_oe),
     .ext_irq_i        ('0),
     .m_ext_ar_o       (ext_ar),
     .m_ext_ar_ready_i (ext_ar_ready),

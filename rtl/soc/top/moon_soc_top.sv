@@ -23,6 +23,8 @@
 `include "moon_crg.sv"
 `include "moon_reset_ctrl.sv"
 `include "moon_pmu.sv"
+`include "moon_spi.sv"
+`include "moon_i2c.sv"
 
 module moon_soc_top
   import moon_pkg::*;
@@ -38,6 +40,14 @@ module moon_soc_top
   // External UART Console Pins
   input  logic uart_rx_i,
   output logic uart_tx_o,
+  input  logic spi_miso_i,
+  output logic spi_mosi_o,
+  output logic spi_sck_o,
+  output logic spi_cs_no,
+  input  logic i2c_sda_i,
+  output logic i2c_scl_o,
+  output logic i2c_sda_o,
+  output logic i2c_sda_oe_o,
 
   // External Interrupt Inputs (from external board pins)
   input  logic [30:0] ext_irq_i,
@@ -309,12 +319,12 @@ module moon_soc_top
     .apb_resp_i   (bridge_apb_resp)
   );
 
-  // APB Peripherals: P0: CLINT, P1: PLIC, P2: UART, P3: CRG, P4: PMU
-  apb_req_t  [4:0] p_req;
-  apb_resp_t [4:0] p_resp;
+  // APB Peripherals: CLINT, PLIC, UART, CRG, PMU, SPI, I2C
+  apb_req_t  [6:0] p_req;
+  apb_resp_t [6:0] p_resp;
 
   apb_crossbar #(
-    .NUM_PERIPHS(5)
+    .NUM_PERIPHS(7)
   ) u_apb_crossbar (
     .m_req_i  (bridge_apb_req),
     .m_resp_o (bridge_apb_resp),
@@ -385,6 +395,18 @@ module moon_soc_top
     .peri_clk_gate_req_o (peri_clk_gate_req),
     .pll_pwr_down_req_o  (pll_pwr_down_req),
     .current_state_o     ()
+  );
+
+  // P5: SPI master (0x1000_6000)
+  moon_spi u_spi (
+    .clk_i(clk_peri), .rst_ni(rst_peri_n), .req_i(p_req[5]), .resp_o(p_resp[5]),
+    .miso_i(spi_miso_i), .mosi_o(spi_mosi_o), .sck_o(spi_sck_o), .cs_no(spi_cs_no)
+  );
+
+  // P6: I2C master (0x1000_7000); sda_oe_o requests open-drain low.
+  moon_i2c u_i2c (
+    .clk_i(clk_peri), .rst_ni(rst_peri_n), .req_i(p_req[6]), .resp_o(p_resp[6]),
+    .sda_i(i2c_sda_i), .scl_o(i2c_scl_o), .sda_o(i2c_sda_o), .sda_oe_o(i2c_sda_oe_o)
   );
 
   // --------------------------------------------------------------------------
