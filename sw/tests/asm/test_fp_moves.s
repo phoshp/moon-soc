@@ -63,6 +63,10 @@ _start:
     bne  t1, t2, fail
     feq.s t1, f1, f1
     bne  t1, t2, fail
+    fdiv.s f3, f2, f1, rne
+    fmv.x.w t1, f3
+    li   t2, 0x3fc00000
+    bne  t1, t2, fail
 
     li   t0, 0x3ff8000000000000
     fmv.d.x f1, t0
@@ -89,6 +93,10 @@ _start:
     bne  t1, t2, fail
     fle.d t1, f1, f2
     li   t2, 1
+    bne  t1, t2, fail
+    fdiv.d f3, f2, f1, rne
+    fmv.x.d t1, f3
+    li   t2, 0x3ff8000000000000
     bne  t1, t2, fail
 
     li   t0, 0x3f800000

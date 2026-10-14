@@ -79,6 +79,7 @@ module moon_id_stage
   output logic             id_ex_fp_add_o,
   output logic             id_ex_fp_sub_o,
   output logic             id_ex_fp_mul_o,
+  output logic             id_ex_fp_div_o,
   output logic             id_ex_fp_class_o,
   output logic             id_ex_fp_sign_o,
   output logic [1:0]       id_ex_fp_sign_op_o,
@@ -127,7 +128,8 @@ module moon_id_stage
                            ((funct7 == 7'b1010000) || (funct7 == 7'b1010001)) ||
                            ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
                             (funct7 == 7'b0000100) || (funct7 == 7'b0000101) ||
-                            (funct7 == 7'b0001000) || (funct7 == 7'b0001001)));
+                            (funct7 == 7'b0001000) || (funct7 == 7'b0001001) ||
+                            (funct7 == 7'b0001100) || (funct7 == 7'b0001101)));
   assign id_fp_rs2_o = rs2;
   assign id_fp_rs2_en_o = if_id_valid_i &&
                           (((opcode == OPCODE_STORE_FP) &&
@@ -136,6 +138,7 @@ module moon_id_stage
                             ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
                              (funct7 == 7'b0000100) || (funct7 == 7'b0000101) ||
                              (funct7 == 7'b0001000) || (funct7 == 7'b0001001) ||
+                             (funct7 == 7'b0001100) || (funct7 == 7'b0001101) ||
                              (funct7 == 7'b0010000) || (funct7 == 7'b0010001) ||
                              (funct7 == 7'b0010100) || (funct7 == 7'b0010101) ||
                              (funct7 == 7'b1010000) || (funct7 == 7'b1010001))));
@@ -211,6 +214,7 @@ module moon_id_stage
   logic         dec_fp_add;
   logic         dec_fp_sub;
   logic         dec_fp_mul;
+  logic         dec_fp_div;
   logic         dec_fp_class;
   logic         dec_fp_sign;
   logic         dec_fp_cmp;
@@ -249,6 +253,7 @@ module moon_id_stage
     dec_fp_add         = 1'b0;
     dec_fp_sub         = 1'b0;
     dec_fp_mul         = 1'b0;
+    dec_fp_div         = 1'b0;
     dec_fp_class       = 1'b0;
     dec_fp_sign        = 1'b0;
     dec_fp_cmp         = 1'b0;
@@ -531,15 +536,18 @@ module moon_id_stage
       OPCODE_FP: begin
         if ((funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
             (funct7 == 7'b0000100) || (funct7 == 7'b0000101) ||
-            (funct7 == 7'b0001000) || (funct7 == 7'b0001001)) begin
-          // FADD/FSUB/FMUL.S and FADD/FSUB/FMUL.D.
+            (funct7 == 7'b0001000) || (funct7 == 7'b0001001) ||
+            (funct7 == 7'b0001100) || (funct7 == 7'b0001101)) begin
+          // FADD/FSUB/FMUL/FDIV.S and FADD/FSUB/FMUL/FDIV.D.
           dec_fp_we   = 1'b1;
           dec_fp_word = (funct7 == 7'b0000000) || (funct7 == 7'b0000100) ||
                         (funct7 == 7'b0001000);
+          dec_fp_word = dec_fp_word || (funct7 == 7'b0001100);
           dec_fp_add  = (funct7 == 7'b0000000) || (funct7 == 7'b0000001) ||
                         (funct7 == 7'b0000100) || (funct7 == 7'b0000101);
           dec_fp_sub  = (funct7 == 7'b0000100) || (funct7 == 7'b0000101);
           dec_fp_mul  = (funct7 == 7'b0001000) || (funct7 == 7'b0001001);
+          dec_fp_div  = (funct7 == 7'b0001100) || (funct7 == 7'b0001101);
         end else if ((funct7 == 7'b1110000) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
           // FMV.X.W: move a single-precision bit pattern to an integer register.
           dec_regwrite = 1'b1;
@@ -685,6 +693,7 @@ module moon_id_stage
       id_ex_fp_add_o       <= 1'b0;
       id_ex_fp_sub_o       <= 1'b0;
       id_ex_fp_mul_o       <= 1'b0;
+      id_ex_fp_div_o       <= 1'b0;
       id_ex_fp_class_o     <= 1'b0;
       id_ex_fp_sign_o      <= 1'b0;
       id_ex_fp_sign_op_o   <= '0;
@@ -735,6 +744,7 @@ module moon_id_stage
       id_ex_fp_add_o       <= 1'b0;
       id_ex_fp_sub_o       <= 1'b0;
       id_ex_fp_mul_o       <= 1'b0;
+      id_ex_fp_div_o       <= 1'b0;
       id_ex_fp_class_o     <= 1'b0;
       id_ex_fp_sign_o      <= 1'b0;
       id_ex_fp_sign_op_o   <= '0;
@@ -761,12 +771,12 @@ module moon_id_stage
         id_ex_rs1_data_o <= {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]};
       end else if (dec_fmv_x_d) begin
         id_ex_rs1_data_o <= fp_rs1_data;
-      end else if (dec_fp_add || dec_fp_mul || dec_fp_sign || dec_fp_class || dec_fp_cmp) begin
+      end else if (dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_sign || dec_fp_class || dec_fp_cmp) begin
         id_ex_rs1_data_o <= fp_rs1_data;
       end else begin
         id_ex_rs1_data_o <= rf_rs1_data;
       end
-      id_ex_rs2_data_o     <= ((opcode == OPCODE_STORE_FP) || dec_fp_add || dec_fp_mul ||
+      id_ex_rs2_data_o     <= ((opcode == OPCODE_STORE_FP) || dec_fp_add || dec_fp_mul || dec_fp_div ||
                                dec_fp_sign || dec_fp_cmp) ?
                               fp_rs2_data : rf_rs2_data;
       id_ex_imm_o          <= selected_imm;
@@ -806,6 +816,7 @@ module moon_id_stage
       id_ex_fp_add_o       <= dec_fp_add;
       id_ex_fp_sub_o       <= dec_fp_sub;
       id_ex_fp_mul_o       <= dec_fp_mul;
+      id_ex_fp_div_o       <= dec_fp_div;
       id_ex_fp_class_o     <= dec_fp_class;
       id_ex_fp_sign_o      <= dec_fp_sign;
       id_ex_fp_sign_op_o   <= funct3[1:0];
