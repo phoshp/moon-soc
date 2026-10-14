@@ -155,6 +155,13 @@ _start:
     vmv.x.s a2, v5
     li   t1, -1
     bne  a2, t1, fail
+    li   a0, 0x80
+    vmv.v.x v1, a0
+    li   a1, 1
+    vmin.vx v3, v1, a1
+    vmv.x.s a2, v3
+    li   t1, -128
+    bne  a2, t1, fail
 
     vsetvli t0, zero, e16, m1, ta, ma
     li   t1, 8
@@ -186,6 +193,10 @@ _start:
     vmv.x.s a2, v5
     li   t1, 255
     bne  a2, t1, fail
+    vmax.vx v3, v1, a1
+    vmv.x.s a2, v3
+    li   t1, 1
+    bne  a2, t1, fail
 
     vsetvli t0, zero, e64, m1, ta, ma
     li   t1, 2
@@ -201,6 +212,12 @@ _start:
     vmv.x.s a2, v3
     li   t1, 0x8000000000000000
     bne  a2, t1, fail
+    li   a0, -1
+    vmv.v.x v1, a0
+    li   a1, 1
+    vminu.vx v3, v1, a1
+    vmv.x.s a2, v3
+    bne  a2, a1, fail
     li   a0, 0x1234
     vmv.v.x v1, a0
     li   a1, 0xff
