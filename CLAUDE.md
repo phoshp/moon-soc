@@ -4,7 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Moon-SoC is a 64-bit RISC-V (RV64IMA) processor core implementation in SystemVerilog featuring a 5-stage in-order pipeline, hardware multiplier/divider, atomic operations (LR/SC and AMO), Machine-mode CSR and trap support, and a cocotb-based Python simulation testbench with Verilator.
+Moon-SoC is a 64-bit RISC-V processor and SoC implementation in SystemVerilog. It has a 5-stage in-order pipeline, hardware integer multiply/divide, atomic operations, privileged architecture support, caches, scalar F/D and crypto extensions, and an evolving RVV unit. Simulation uses cocotb and Verilator.
+
+## Current RVA23 Development Status
+
+Phase 4 (integer, compressed, Supervisor-mode, PMP, and Sv39 work) is complete for the current project scope and has directed SoC test targets. Phase 5 is active:
+
+- Scalar F/D paths cover arithmetic, division, square root, comparisons, conversions, moves/classification, and fused multiply-add. Target: `make soc-fp-test`.
+- Scalar AES64 and SHA-256/SHA-512 integer operations are implemented. Targets: `make soc-crypto-test`, `make soc-crypto-aes-test`, `make soc-crypto-aes-rounds-test`, and `make soc-crypto-sha512-test`.
+- `rtl/core/moon_vector_unit.sv` currently provides a VLEN=128, LMUL=1 integer slice with e8/e16/e32/e64 configuration and execution, including v0-masked arithmetic and mask logical operations. Target: `make soc-rvv-test`.
+- RVV 1.0 is not complete. Vector memory operations, full vector CSR/vstart/vill behavior, complete tail and mask policies, reductions, remaining vector arithmetic families, and vector floating point remain future work. Do not describe the Phase 5 implementation as full RVV compliance.
+
+The user prefers each minimal implementation and its regression to be committed as separate small commits. Keep generated firmware `.s`, `.bin`, and `.hex` changes together in the regression commit. `ROADMAP_RVA23_PLAN.md` is intentionally gitignored and serves as a local progress plan.
 
 ## Build, Test, and Simulation Commands
 
@@ -17,6 +28,9 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 - **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC, CRG, PMU).
 - **Run SoC WFI & PMU clock-gating test**: `make soc-wfi-test` (verifies WFI execution, PMU clock-gating, and timer wake-up).
 - **Run SoC L1 Cache verification**: `make soc-cache-test` (verifies 32KB L1-I and L1-D caches, writeback, eviction, hits).
+- **Run scalar F/D verification**: `make soc-fp-test`.
+- **Run scalar crypto verification**: `make soc-crypto-test`, `make soc-crypto-aes-test`, `make soc-crypto-aes-rounds-test`, and `make soc-crypto-sha512-test`.
+- **Run the implemented RVV integer-slice verification**: `make soc-rvv-test`.
 - **Run with verbose cycle trace**: `make verbose-test`.
 - **Run via pytest**: `make pytest` (runs both core and SoC regression testbenches).
 - **Run a specific firmware test**:
@@ -59,6 +73,7 @@ The core is structured across five sequential pipeline stages connected through 
    - Divider: `rtl/core/moon_div.sv` is a multi-cycle radix-2 divider asserting `busy_div` to stall upstream stages until complete.
    - Evaluates branch conditions and branch targets.
    - Contains operand forwarding multiplexers for ALU inputs.
+   - Instantiates scalar F/D datapaths and the current RVV integer slice; see the Phase 5 status above for the supported subset and gaps.
 
 4. **MEM (Memory - `rtl/core/moon_mem_stage.sv`)**:
    - Drives data memory bus (`dmem`) with byte strobes for SB, SH, SW, SD, and sign/zero-extends loads (LB, LH, LW, LD, LBU, LHU, LWU).
