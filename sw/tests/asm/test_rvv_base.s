@@ -123,6 +123,9 @@ _start:
     li   t1, 0
     vsetvli t0, t1, e8, m1, ta, ma
     bne  t0, t1, fail
+    vsetivli t0, 5, e8, m1, ta, ma
+    li   t1, 5
+    bne  t0, t1, fail
     vsetvli t0, zero, e8, m1, ta, ma
     li   t1, 16
     bne  t0, t1, fail
