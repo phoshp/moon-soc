@@ -337,7 +337,9 @@ module moon_id_stage
           3'b110: dec_alu_op = ALU_OR;  // ORI
           3'b111: dec_alu_op = ALU_AND; // ANDI
           3'b001: begin
-            if (funct7 == 7'b0001000) begin // Zknh SHA-256 word operations
+            if (funct7 == 7'b0011000 && rs2[3:0] <= 4'd10) begin // Zkne/Zknd AES key schedule
+              dec_alu_op = ALU_AES64KS1I;
+            end else if (funct7 == 7'b0001000) begin // Zknh SHA-256 word operations
               dec_alu_src_b_imm = 1'b0;
               case (rs2)
                 5'd0: dec_alu_op = ALU_SHA256SUM0;

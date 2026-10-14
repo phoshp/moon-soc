@@ -33,15 +33,67 @@ module moon_alu
   logic [31:0] res_rolw;
   logic [31:0] res_rorw;
   logic [31:0] sha256_sig0, sha256_sig1, sha256_sum0, sha256_sum1;
+  logic [7:0] aes_byte0, aes_byte1, aes_byte2, aes_byte3;
+  logic [31:0] aes_ks1_word, aes_rcon;
 
   function automatic logic [31:0] ror32(input logic [31:0] value, input integer amount);
     ror32 = (value >> amount) | (value << (32 - amount));
+  endfunction
+
+  function automatic logic [7:0] aes_gf_mul(input logic [7:0] lhs, input logic [7:0] rhs);
+    logic [7:0] a, b, product;
+    a = lhs;
+    b = rhs;
+    product = '0;
+    for (int i = 0; i < 8; i++) begin
+      if (b[0]) product ^= a;
+      a = a[7] ? ((a << 1) ^ 8'h1b) : (a << 1);
+      b >>= 1;
+    end
+    return product;
+  endfunction
+
+  function automatic logic [7:0] aes_sbox(input logic [7:0] value);
+    logic [7:0] x2, x4, x8, x16, x32, x64, x128, inv;
+    x2 = aes_gf_mul(value, value);
+    x4 = aes_gf_mul(x2, x2);
+    x8 = aes_gf_mul(x4, x4);
+    x16 = aes_gf_mul(x8, x8);
+    x32 = aes_gf_mul(x16, x16);
+    x64 = aes_gf_mul(x32, x32);
+    x128 = aes_gf_mul(x64, x64);
+    inv = aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(x2, x4), x8), x16), x32), x64), x128);
+    return inv ^ {inv[6:0], inv[7]} ^ {inv[5:0], inv[7:6]} ^
+           {inv[4:0], inv[7:5]} ^ {inv[3:0], inv[7:4]} ^ 8'h63;
+  endfunction
+
+  function automatic logic [31:0] aes_rcon_lookup(input logic [3:0] round);
+    case (round)
+      4'd1: aes_rcon_lookup = 32'h01000000;
+      4'd2: aes_rcon_lookup = 32'h02000000;
+      4'd3: aes_rcon_lookup = 32'h04000000;
+      4'd4: aes_rcon_lookup = 32'h08000000;
+      4'd5: aes_rcon_lookup = 32'h10000000;
+      4'd6: aes_rcon_lookup = 32'h20000000;
+      4'd7: aes_rcon_lookup = 32'h40000000;
+      4'd8: aes_rcon_lookup = 32'h80000000;
+      4'd9: aes_rcon_lookup = 32'h1b000000;
+      4'd10: aes_rcon_lookup = 32'h36000000;
+      default: aes_rcon_lookup = '0;
+    endcase
   endfunction
 
   assign sha256_sig0 = ror32(a32, 7) ^ ror32(a32, 18) ^ (a32 >> 3);
   assign sha256_sig1 = ror32(a32, 17) ^ ror32(a32, 19) ^ (a32 >> 10);
   assign sha256_sum0 = ror32(a32, 2) ^ ror32(a32, 13) ^ ror32(a32, 22);
   assign sha256_sum1 = ror32(a32, 6) ^ ror32(a32, 11) ^ ror32(a32, 25);
+  assign aes_byte0 = aes_sbox(aes_ks1_word[7:0]);
+  assign aes_byte1 = aes_sbox(aes_ks1_word[15:8]);
+  assign aes_byte2 = aes_sbox(aes_ks1_word[23:16]);
+  assign aes_byte3 = aes_sbox(aes_ks1_word[31:24]);
+  assign aes_ks1_word = (operand_b_i[3:0] == 4'd10) ? operand_a_i[63:32] :
+                       {operand_a_i[39:32], operand_a_i[63:40]};
+  assign aes_rcon = aes_rcon_lookup(operand_b_i[3:0]);
 
   assign shamt64 = operand_b_i[5:0];
   assign shamt32 = operand_b_i[4:0];
@@ -219,6 +271,12 @@ module moon_alu
       ALU_AES64KS2: result_o = {
         (operand_a_i[63:32] ^ operand_b_i[31:0] ^ operand_b_i[63:32]),
         (operand_a_i[63:32] ^ operand_b_i[31:0])
+      };
+      ALU_AES64KS1I: result_o = {
+        (aes_byte3 ^ aes_rcon[31:24]), (aes_byte2 ^ aes_rcon[23:16]),
+        (aes_byte1 ^ aes_rcon[15:8]), (aes_byte0 ^ aes_rcon[7:0]),
+        (aes_byte3 ^ aes_rcon[31:24]), (aes_byte2 ^ aes_rcon[23:16]),
+        (aes_byte1 ^ aes_rcon[15:8]), (aes_byte0 ^ aes_rcon[7:0])
       };
 
       default:       result_o = '0;
