@@ -33,6 +33,7 @@ module moon_alu
   logic [31:0] res_rolw;
   logic [31:0] res_rorw;
   logic [31:0] sha256_sig0, sha256_sig1, sha256_sum0, sha256_sum1;
+  logic [63:0] sha512_sig0, sha512_sig1, sha512_sum0, sha512_sum1;
   logic [7:0] aes_byte0, aes_byte1, aes_byte2, aes_byte3;
   logic [31:0] aes_ks1_word, aes_rcon;
 
@@ -87,6 +88,16 @@ module moon_alu
   assign sha256_sig1 = ror32(a32, 17) ^ ror32(a32, 19) ^ (a32 >> 10);
   assign sha256_sum0 = ror32(a32, 2) ^ ror32(a32, 13) ^ ror32(a32, 22);
   assign sha256_sum1 = ror32(a32, 6) ^ ror32(a32, 11) ^ ror32(a32, 25);
+  assign sha512_sig0 = (operand_a_i >> 1 | operand_a_i << 63) ^
+                       (operand_a_i >> 8 | operand_a_i << 56) ^ (operand_a_i >> 7);
+  assign sha512_sig1 = (operand_a_i >> 19 | operand_a_i << 45) ^
+                       (operand_a_i >> 61 | operand_a_i << 3) ^ (operand_a_i >> 6);
+  assign sha512_sum0 = (operand_a_i >> 28 | operand_a_i << 36) ^
+                       (operand_a_i >> 34 | operand_a_i << 30) ^
+                       (operand_a_i >> 39 | operand_a_i << 25);
+  assign sha512_sum1 = (operand_a_i >> 14 | operand_a_i << 50) ^
+                       (operand_a_i >> 18 | operand_a_i << 46) ^
+                       (operand_a_i >> 41 | operand_a_i << 23);
   assign aes_byte0 = aes_sbox(aes_ks1_word[7:0]);
   assign aes_byte1 = aes_sbox(aes_ks1_word[15:8]);
   assign aes_byte2 = aes_sbox(aes_ks1_word[23:16]);
@@ -268,6 +279,10 @@ module moon_alu
       ALU_SHA256SIG1: result_o = {{32{sha256_sig1[31]}}, sha256_sig1};
       ALU_SHA256SUM0: result_o = {{32{sha256_sum0[31]}}, sha256_sum0};
       ALU_SHA256SUM1: result_o = {{32{sha256_sum1[31]}}, sha256_sum1};
+      ALU_SHA512SIG0: result_o = sha512_sig0;
+      ALU_SHA512SIG1: result_o = sha512_sig1;
+      ALU_SHA512SUM0: result_o = sha512_sum0;
+      ALU_SHA512SUM1: result_o = sha512_sum1;
       ALU_AES64KS2: result_o = {
         (operand_a_i[63:32] ^ operand_b_i[31:0] ^ operand_b_i[63:32]),
         (operand_a_i[63:32] ^ operand_b_i[31:0])

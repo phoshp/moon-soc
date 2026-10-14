@@ -346,6 +346,10 @@ module moon_id_stage
                 5'd1: dec_alu_op = ALU_SHA256SUM1;
                 5'd2: dec_alu_op = ALU_SHA256SIG0;
                 5'd3: dec_alu_op = ALU_SHA256SIG1;
+                5'd4: dec_alu_op = ALU_SHA512SUM0;
+                5'd5: dec_alu_op = ALU_SHA512SUM1;
+                5'd6: dec_alu_op = ALU_SHA512SIG0;
+                5'd7: dec_alu_op = ALU_SHA512SIG1;
                 default: dec_regwrite = 1'b0;
               endcase
             end else if (funct7 == 7'b0110000) begin
