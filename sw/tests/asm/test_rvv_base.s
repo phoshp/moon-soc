@@ -189,6 +189,18 @@ _start:
     vmv.x.s a2, v3
     li   t1, -128
     bne  a2, t1, fail
+    li   a0, 0x55
+    vmv.v.x v1, a0
+    li   a1, 0x33
+    vmv.v.x v2, a1
+    vmand.mm v3, v1, v2
+    vmv.x.s a2, v3
+    li   t1, 0x11
+    bne  a2, t1, fail
+    vmxor.mm v3, v1, v2
+    vmv.x.s a2, v3
+    li   t1, 0x66
+    bne  a2, t1, fail
 
     vsetvli t0, zero, e16, m1, ta, ma
     li   t1, 8
