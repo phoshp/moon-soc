@@ -17,6 +17,17 @@ _start:
     li   t1, 7
     bne  a2, t1, fail
 
+    li   a0, 2
+    vadd.vx v3, v3, a0
+    vmv.x.s a2, v3
+    li   t1, 9
+    bne  a2, t1, fail
+
+    vsub.vv v4, v3, v2
+    vmv.x.s a2, v4
+    li   t1, 5
+    bne  a2, t1, fail
+
 pass:
     li   t0, 0xCAFEBABE
     sw   t0, 0(s0)
