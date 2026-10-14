@@ -9,6 +9,7 @@
 
 `include "moon_pkg.sv"
 `include "moon_fregfile.sv"
+`include "moon_fpu_add.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
 `include "moon_ex_stage.sv"
@@ -103,6 +104,8 @@ module moon_core
   logic             id_ex_fp_we;
   logic [4:0]       id_ex_fp_rd;
   logic             id_ex_fp_word;
+  logic             id_ex_fp_add;
+  logic [2:0]       id_ex_fp_rm;
   logic             id_ex_is_csr;
   logic [2:0]       id_ex_csr_op;
   logic [11:0]      id_ex_csr_addr;
@@ -142,6 +145,8 @@ module moon_core
   logic             ex_mem_fp_we;
   logic [4:0]       ex_mem_fp_rd;
   logic             ex_mem_fp_word;
+  logic [4:0]       ex_mem_fp_flags;
+  logic             ex_mem_fp_flags_we;
   logic             ex_mem_is_csr;
   logic [2:0]       ex_mem_csr_op;
   logic [11:0]      ex_mem_csr_addr;
@@ -211,6 +216,8 @@ module moon_core
   logic             mem_wb_fp_we;
   logic [4:0]       mem_wb_fp_rd;
   logic             mem_wb_fp_word;
+  logic [4:0]       mem_wb_fp_flags;
+  logic             mem_wb_fp_flags_we;
   logic             mem_wb_is_csr;
   logic [2:0]       mem_wb_csr_op;
   logic [11:0]      mem_wb_csr_addr;
@@ -429,6 +436,8 @@ module moon_core
     .id_ex_fp_we_o        (id_ex_fp_we),
     .id_ex_fp_rd_o        (id_ex_fp_rd),
     .id_ex_fp_word_o      (id_ex_fp_word),
+    .id_ex_fp_add_o       (id_ex_fp_add),
+    .id_ex_fp_rm_o        (id_ex_fp_rm),
     .id_ex_is_csr_o       (id_ex_is_csr),
     .id_ex_csr_op_o       (id_ex_csr_op),
     .id_ex_csr_addr_o     (id_ex_csr_addr),
@@ -480,6 +489,9 @@ module moon_core
     .id_ex_fp_we_i        (id_ex_fp_we),
     .id_ex_fp_rd_i        (id_ex_fp_rd),
     .id_ex_fp_word_i      (id_ex_fp_word),
+    .id_ex_fp_add_i       (id_ex_fp_add),
+    .id_ex_fp_rm_i        (id_ex_fp_rm),
+    .frm_i                (frm),
     .id_ex_is_csr_i       (id_ex_is_csr),
     .id_ex_csr_op_i       (id_ex_csr_op),
     .id_ex_csr_addr_i     (id_ex_csr_addr),
@@ -521,6 +533,8 @@ module moon_core
     .ex_mem_fp_we_o       (ex_mem_fp_we),
     .ex_mem_fp_rd_o       (ex_mem_fp_rd),
     .ex_mem_fp_word_o     (ex_mem_fp_word),
+    .ex_mem_fp_flags_o    (ex_mem_fp_flags),
+    .ex_mem_fp_flags_we_o (ex_mem_fp_flags_we),
     .ex_mem_is_csr_o      (ex_mem_is_csr),
     .ex_mem_csr_op_o      (ex_mem_csr_op),
     .ex_mem_csr_addr_o    (ex_mem_csr_addr),
@@ -565,6 +579,8 @@ module moon_core
     .ex_mem_fp_we_i      (ex_mem_fp_we),
     .ex_mem_fp_rd_i      (ex_mem_fp_rd),
     .ex_mem_fp_word_i    (ex_mem_fp_word),
+    .ex_mem_fp_flags_i   (ex_mem_fp_flags),
+    .ex_mem_fp_flags_we_i(ex_mem_fp_flags_we),
     .ex_mem_is_csr_i     (ex_mem_is_csr),
     .ex_mem_csr_op_i     (ex_mem_csr_op),
     .ex_mem_csr_addr_i   (ex_mem_csr_addr),
@@ -598,6 +614,8 @@ module moon_core
     .mem_wb_fp_we_o      (mem_wb_fp_we),
     .mem_wb_fp_rd_o      (mem_wb_fp_rd),
     .mem_wb_fp_word_o    (mem_wb_fp_word),
+    .mem_wb_fp_flags_o   (mem_wb_fp_flags),
+    .mem_wb_fp_flags_we_o(mem_wb_fp_flags_we),
     .mem_wb_is_csr_o     (mem_wb_is_csr),
     .mem_wb_csr_op_o     (mem_wb_csr_op),
     .mem_wb_csr_addr_o   (mem_wb_csr_addr),
@@ -677,7 +695,7 @@ module moon_core
     .flush_mem_o        (flush_mem)
   );
 
-  logic [2:0] unused_frm;
+  logic [2:0] frm;
 
   // --------------------------------------------------------------------------
   // 7. CSR Unit Instantiation
@@ -714,9 +732,9 @@ module moon_core
     .pmpaddr_o           (pmpaddr),
     .interrupt_pending_o (interrupt_pending),
     .interrupt_cause_o   (interrupt_cause),
-    .fpu_flags_i         (5'b0),
-    .fpu_flags_we_i      (1'b0),
-    .frm_o               (unused_frm)
+    .fpu_flags_i         (mem_wb_fp_flags),
+    .fpu_flags_we_i      (mem_wb_fp_flags_we),
+    .frm_o               (frm)
   );
 
   // --------------------------------------------------------------------------

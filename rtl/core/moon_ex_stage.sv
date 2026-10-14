@@ -11,6 +11,7 @@
 `include "moon_alu.sv"
 `include "moon_mul.sv"
 `include "moon_div.sv"
+`include "moon_fpu_add.sv"
 
 module moon_ex_stage
   import moon_pkg::*;
@@ -56,6 +57,9 @@ module moon_ex_stage
   input  logic             id_ex_fp_we_i,
   input  logic [4:0]       id_ex_fp_rd_i,
   input  logic             id_ex_fp_word_i,
+  input  logic             id_ex_fp_add_i,
+  input  logic [2:0]       id_ex_fp_rm_i,
+  input  logic [2:0]       frm_i,
   input  logic             id_ex_is_csr_i,
   input  logic [2:0]       id_ex_csr_op_i,
   input  logic [11:0]      id_ex_csr_addr_i,
@@ -105,6 +109,8 @@ module moon_ex_stage
   output logic             ex_mem_fp_we_o,
   output logic [4:0]       ex_mem_fp_rd_o,
   output logic             ex_mem_fp_word_o,
+  output logic [4:0]       ex_mem_fp_flags_o,
+  output logic             ex_mem_fp_flags_we_o,
   output logic             ex_mem_is_csr_o,
   output logic [2:0]       ex_mem_csr_op_o,
   output logic [11:0]      ex_mem_csr_addr_o,
@@ -144,6 +150,21 @@ module moon_ex_stage
   logic [XLEN-1:0] alu_in_b;
   logic [XLEN-1:0] alu_result;
   logic            alu_zero;
+  logic [FLEN-1:0] fp_add_result;
+  logic [4:0]      fp_add_flags;
+  logic [2:0]      fp_rounding_mode;
+
+  assign fp_rounding_mode = (id_ex_fp_rm_i == 3'b111) ? frm_i : id_ex_fp_rm_i;
+
+  moon_fpu_add u_fpu_add (
+    .operand_a_i       (id_ex_rs1_data_i),
+    .operand_b_i       (id_ex_rs2_data_i),
+    .is_single_i       (id_ex_fp_word_i),
+    .subtract_i        (1'b0),
+    .rounding_mode_i   (fp_rounding_mode),
+    .result_o          (fp_add_result),
+    .flags_o           (fp_add_flags)
+  );
 
   assign alu_in_a = id_ex_alu_src_a_pc_i  ? id_ex_pc_i  : operand_a_fwd;
   assign alu_in_b = id_ex_alu_src_b_imm_i ? id_ex_imm_i : operand_b_fwd;
@@ -269,6 +290,8 @@ module moon_ex_stage
       ex_mem_fp_we_o     <= 1'b0;
       ex_mem_fp_rd_o     <= '0;
       ex_mem_fp_word_o   <= 1'b0;
+      ex_mem_fp_flags_o  <= '0;
+      ex_mem_fp_flags_we_o <= 1'b0;
       ex_mem_is_csr_o    <= 1'b0;
       ex_mem_csr_op_o    <= '0;
       ex_mem_csr_addr_o  <= '0;
@@ -305,6 +328,8 @@ module moon_ex_stage
       ex_mem_fp_we_o     <= 1'b0;
       ex_mem_fp_rd_o     <= '0;
       ex_mem_fp_word_o   <= 1'b0;
+      ex_mem_fp_flags_o  <= '0;
+      ex_mem_fp_flags_we_o <= 1'b0;
       ex_mem_is_csr_o    <= 1'b0;
       ex_mem_csr_op_o    <= '0;
       ex_mem_csr_addr_o  <= '0;
@@ -322,7 +347,7 @@ module moon_ex_stage
       ex_mem_instr_o     <= id_ex_instr_i;
       ex_mem_rd_o        <= id_ex_rd_i;
       ex_mem_rs2_o       <= id_ex_rs2_i;
-      ex_mem_alu_res_o   <= alu_result;
+      ex_mem_alu_res_o   <= id_ex_fp_add_i ? fp_add_result : alu_result;
       ex_mem_mul_res_o   <= mul_result;
       ex_mem_div_res_o   <= div_result;
       ex_mem_is_mul_o    <= id_ex_is_mul_i;
@@ -341,6 +366,8 @@ module moon_ex_stage
       ex_mem_fp_we_o     <= id_ex_fp_we_i;
       ex_mem_fp_rd_o     <= id_ex_fp_rd_i;
       ex_mem_fp_word_o   <= id_ex_fp_word_i;
+      ex_mem_fp_flags_o  <= fp_add_flags;
+      ex_mem_fp_flags_we_o <= id_ex_fp_add_i;
       ex_mem_is_csr_o    <= id_ex_is_csr_i;
       ex_mem_csr_op_o    <= id_ex_csr_op_i;
       ex_mem_csr_addr_o  <= id_ex_csr_addr_i;

@@ -45,6 +45,8 @@ module moon_mem_stage
   input  logic             ex_mem_fp_we_i,
   input  logic [4:0]       ex_mem_fp_rd_i,
   input  logic             ex_mem_fp_word_i,
+  input  logic [4:0]       ex_mem_fp_flags_i,
+  input  logic             ex_mem_fp_flags_we_i,
   input  logic             ex_mem_is_csr_i,
   input  logic [2:0]       ex_mem_csr_op_i,
   input  logic [11:0]      ex_mem_csr_addr_i,
@@ -84,6 +86,8 @@ module moon_mem_stage
   output logic             mem_wb_fp_we_o,
   output logic [4:0]       mem_wb_fp_rd_o,
   output logic             mem_wb_fp_word_o,
+  output logic [4:0]       mem_wb_fp_flags_o,
+  output logic             mem_wb_fp_flags_we_o,
   output logic             mem_wb_is_csr_o,
   output logic [2:0]       mem_wb_csr_op_o,
   output logic [11:0]      mem_wb_csr_addr_o,
@@ -223,6 +227,8 @@ module moon_mem_stage
       mem_wb_fp_we_o      <= 1'b0;
       mem_wb_fp_rd_o      <= '0;
       mem_wb_fp_word_o    <= 1'b0;
+      mem_wb_fp_flags_o   <= '0;
+      mem_wb_fp_flags_we_o <= 1'b0;
       mem_wb_is_csr_o     <= 1'b0;
       mem_wb_csr_op_o     <= '0;
       mem_wb_csr_addr_o   <= '0;
@@ -250,6 +256,8 @@ module moon_mem_stage
       mem_wb_fp_we_o      <= ex_mem_fp_we_i;
       mem_wb_fp_rd_o      <= ex_mem_fp_rd_i;
       mem_wb_fp_word_o    <= ex_mem_fp_word_i;
+      mem_wb_fp_flags_o   <= ex_mem_fp_flags_i;
+      mem_wb_fp_flags_we_o <= ex_mem_fp_flags_we_i;
       mem_wb_is_csr_o     <= ex_mem_is_csr_i;
       mem_wb_csr_op_o     <= ex_mem_csr_op_i;
       mem_wb_csr_addr_o   <= ex_mem_csr_addr_i;

@@ -1,4 +1,4 @@
-# Directed test for the first scalar F extension register-transfer operations.
+# Directed tests for scalar F/D moves, memory transfers, and addition.
 .section .text
 .globl _start
 .option norvc
@@ -24,6 +24,45 @@ _start:
 
     fmv.d.x f4, t1
     fmv.x.d t2, f4
+    bne  t1, t2, fail
+
+    li   t0, 0x3fc00000
+    fmv.w.x f1, t0
+    li   t0, 0x40100000
+    fmv.w.x f2, t0
+    fadd.s f3, f1, f2, rne
+    fmv.x.w t1, f3
+    li   t2, 0x40700000
+    bne  t1, t2, fail
+
+    li   t0, 0x3ff8000000000000
+    fmv.d.x f1, t0
+    li   t0, 0x4002000000000000
+    fmv.d.x f2, t0
+    fadd.d f3, f1, f2, rne
+    fmv.x.d t1, f3
+    li   t2, 0x400e000000000000
+    bne  t1, t2, fail
+
+    li   t0, 0x3f800000
+    fmv.w.x f1, t0
+    li   t0, 0x33800000
+    fmv.w.x f2, t0
+    fadd.s f3, f1, f2, rne
+    fmv.x.w t1, f3
+    li   t2, 0x3f800000
+    bne  t1, t2, fail
+
+    li   t0, 3
+    csrw frm, t0
+    fadd.s f3, f1, f2, dyn
+    fmv.x.w t1, f3
+    li   t2, 0x3f800001
+    bne  t1, t2, fail
+    csrw frm, zero
+    csrr t1, fflags
+    andi t1, t1, 1
+    li   t2, 1
     bne  t1, t2, fail
 
     li   t0, 0x80001000
