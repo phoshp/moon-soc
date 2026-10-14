@@ -192,6 +192,49 @@ _start:
     li   t2, 5
     bne  t1, t2, fail
 
+    li   t0, 0x40700000
+    fmv.w.x f1, t0
+    csrw fflags, zero
+    fcvt.w.s t1, f1, rne
+    li   t2, 4
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 1
+    li   t2, 1
+    bne  t1, t2, fail
+    fcvt.w.s t1, f1, rtz
+    li   t2, 3
+    bne  t1, t2, fail
+
+    li   t0, 0x3f000000
+    fmv.w.x f1, t0
+    fcvt.w.s t1, f1, rne
+    bne  t1, zero, fail
+    fcvt.w.s t1, f1, rmm
+    li   t2, 1
+    bne  t1, t2, fail
+    fcvt.w.s t1, f1, rup
+    bne  t1, t2, fail
+
+    li   t0, -3
+    fcvt.s.w f2, t0, rne
+    fmv.x.w t1, f2
+    li   t2, 0xffffffffc0400000
+    bne  t1, t2, fail
+    fcvt.d.l f3, t0, rne
+    fmv.x.d t1, f3
+    li   t2, 0xc008000000000000
+    bne  t1, t2, fail
+    fcvt.l.d t1, f3, rne
+    li   t2, -3
+    bne  t1, t2, fail
+
+    li   t0, 3
+    fcvt.s.wu f2, t0, rne
+    fmv.x.w t1, f2
+    li   t2, 0x40400000
+    bne  t1, t2, fail
+
     li   t0, 0x80001000
     li   t1, 0xCAFEBABE
     sw   t1, 0(t0)
