@@ -34,6 +34,7 @@ module moon_vector_unit (
   logic         is_vshift;
   logic         is_vcompare;
   logic         is_vminmax;
+  logic         is_vmask_logic;
   logic [4:0]   vd, vs1, vs2;
 
   function automatic logic [63:0] vector_addsub(
@@ -256,6 +257,16 @@ module moon_vector_unit (
                        (instr_i[31:26] == 6'b000110) ||
                        (instr_i[31:26] == 6'b000111)) &&
                       ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100));
+  assign is_vmask_logic = (instr_i[6:0] == 7'b1010111) && (instr_i[25]) &&
+                          (instr_i[14:12] == 3'b010) &&
+                          ((instr_i[31:26] == 6'b011000) ||
+                           (instr_i[31:26] == 6'b011001) ||
+                           (instr_i[31:26] == 6'b011010) ||
+                           (instr_i[31:26] == 6'b011011) ||
+                           (instr_i[31:26] == 6'b011100) ||
+                           (instr_i[31:26] == 6'b011101) ||
+                           (instr_i[31:26] == 6'b011110) ||
+                           (instr_i[31:26] == 6'b011111));
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
@@ -318,6 +329,21 @@ module moon_vector_unit (
           3'b010: for (int i = 0; i < 4; i++) if (i < vl_q) vreg[vd][i*32 +: 32] <= scalar_rs1_i[31:0];
           default: for (int i = 0; i < 2; i++) if (i < vl_q) vreg[vd][i*64 +: 64] <= scalar_rs1_i;
         endcase
+      end else if (is_vmask_logic) begin
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (instr_i[31:26])
+              6'b011000: vreg[vd][i] <= vreg[vs2][i] & ~vreg[vs1][i];
+              6'b011001: vreg[vd][i] <= vreg[vs2][i] & vreg[vs1][i];
+              6'b011010: vreg[vd][i] <= vreg[vs2][i] | vreg[vs1][i];
+              6'b011011: vreg[vd][i] <= vreg[vs2][i] ^ vreg[vs1][i];
+              6'b011100: vreg[vd][i] <= ~(vreg[vs2][i] ^ vreg[vs1][i]);
+              6'b011101: vreg[vd][i] <= ~(vreg[vs2][i] & vreg[vs1][i]);
+              6'b011110: vreg[vd][i] <= ~(vreg[vs2][i] | vreg[vs1][i]);
+              default:   vreg[vd][i] <= vreg[vs2][i] | ~vreg[vs1][i];
+            endcase
+          end
+        end
       end else if (is_vadd_vv) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
