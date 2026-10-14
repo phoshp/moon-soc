@@ -22,6 +22,10 @@ _start:
     ld   t2, 16(s0)
     bne  t1, t2, fail
 
+    fmv.d.x f4, t1
+    fmv.x.d t2, f4
+    bne  t1, t2, fail
+
     li   t0, 0x80001000
     li   t1, 0xCAFEBABE
     sw   t1, 0(t0)

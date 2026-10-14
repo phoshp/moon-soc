@@ -111,11 +111,13 @@ module moon_id_stage
   assign id_rs2_o = rs2;
   assign id_fp_rs1_o = rs1;
   assign id_fp_rs1_en_o = if_id_valid_i && (opcode == OPCODE_FP) &&
-                          (funct7 == 7'b1110000) && (rs2 == 5'd0) &&
+                          ((funct7 == 7'b1110000) || (funct7 == 7'b1110001)) &&
+                          (rs2 == 5'd0) &&
                           (funct3 == 3'b000);
   assign id_fp_rs2_o = rs2;
-  assign id_fp_rs2_en_o = if_id_valid_i && (opcode == OPCODE_STORE_FP) &&
-                          ((funct3 == 3'b010) || (funct3 == 3'b011));
+  assign id_fp_rs2_en_o = if_id_valid_i &&
+                          (((opcode == OPCODE_STORE_FP) &&
+                            ((funct3 == 3'b010) || (funct3 == 3'b011))));
 
   // --------------------------------------------------------------------------
   // Register File Instantiation
@@ -184,6 +186,7 @@ module moon_id_stage
   logic         dec_fp_we;
   logic         dec_fp_word;
   logic         dec_fmv_x_w;
+  logic         dec_fmv_x_d;
   logic         dec_is_csr;
   logic [2:0]   dec_csr_op;
   logic         dec_is_mret;
@@ -214,6 +217,7 @@ module moon_id_stage
     dec_fp_we          = 1'b0;
     dec_fp_word        = 1'b0;
     dec_fmv_x_w        = 1'b0;
+    dec_fmv_x_d        = 1'b0;
     dec_is_csr         = 1'b0;
     dec_csr_op         = funct3;
     dec_is_mret        = 1'b0;
@@ -500,6 +504,13 @@ module moon_id_stage
           dec_fp_we   = 1'b1;
           dec_fp_word = 1'b1;
           dec_alu_op  = ALU_COPY_A;
+        end else if ((funct7 == 7'b1110001) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
+          dec_regwrite = 1'b1;
+          dec_alu_op   = ALU_COPY_A;
+          dec_fmv_x_d  = 1'b1;
+        end else if ((funct7 == 7'b1111001) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
+          dec_fp_we  = 1'b1;
+          dec_alu_op = ALU_COPY_A;
         end
       end
 
@@ -656,7 +667,13 @@ module moon_id_stage
       id_ex_rd_o           <= rd;
       id_ex_rs1_o          <= rs1;
       id_ex_rs2_o          <= rs2;
-      id_ex_rs1_data_o     <= dec_fmv_x_w ? {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]} : rf_rs1_data;
+      if (dec_fmv_x_w) begin
+        id_ex_rs1_data_o <= {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]};
+      end else if (dec_fmv_x_d) begin
+        id_ex_rs1_data_o <= fp_rs1_data;
+      end else begin
+        id_ex_rs1_data_o <= rf_rs1_data;
+      end
       id_ex_rs2_data_o     <= (opcode == OPCODE_STORE_FP) ? fp_rs2_data : rf_rs2_data;
       id_ex_imm_o          <= selected_imm;
       id_ex_alu_op_o       <= dec_alu_op;
