@@ -419,7 +419,9 @@ module moon_id_stage
       // OP (64-bit register-register: RV64I, RV64M, Zba, Zbb, Zbs)
       OPCODE_OP: begin
         dec_regwrite = 1'b1;
-        if (funct7 == 7'b0000001) begin // RV64M extension
+        if (funct7 == 7'b0111111 && funct3 == 3'b000) begin // Zkne/Zknd AES key schedule
+          dec_alu_op = ALU_AES64KS2;
+        end else if (funct7 == 7'b0000001) begin // RV64M extension
           case (funct3)
             3'b000: dec_muldiv_op = MULDIV_MUL;
             3'b001: dec_muldiv_op = MULDIV_MULH;

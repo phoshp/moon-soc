@@ -216,6 +216,10 @@ module moon_alu
       ALU_SHA256SIG1: result_o = {{32{sha256_sig1[31]}}, sha256_sig1};
       ALU_SHA256SUM0: result_o = {{32{sha256_sum0[31]}}, sha256_sum0};
       ALU_SHA256SUM1: result_o = {{32{sha256_sum1[31]}}, sha256_sum1};
+      ALU_AES64KS2: result_o = {
+        (operand_a_i[63:32] ^ operand_b_i[31:0] ^ operand_b_i[63:32]),
+        (operand_a_i[63:32] ^ operand_b_i[31:0])
+      };
 
       default:       result_o = '0;
     endcase

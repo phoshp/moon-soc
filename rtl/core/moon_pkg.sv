@@ -109,7 +109,8 @@ package moon_pkg;
     ALU_SHA256SIG0 = 6'd51,
     ALU_SHA256SIG1 = 6'd52,
     ALU_SHA256SUM0 = 6'd53,
-    ALU_SHA256SUM1 = 6'd54
+    ALU_SHA256SUM1 = 6'd54,
+    ALU_AES64KS2 = 6'd55
   } alu_op_e;
 
   // --------------------------------------------------------------------------
