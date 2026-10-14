@@ -99,16 +99,16 @@ module moon_hazard_unit
       flush_id_o  = 1'b1;
       flush_ex_o  = 1'b1;
       flush_mem_o = 1'b1;
-    end else if (branch_taken_i) begin
-      // Branch misprediction flushes IF/ID and ID/EX
-      flush_id_o  = 1'b1;
-      flush_ex_o  = 1'b1;
     end else if (global_busy) begin
       // Multi-cycle operation stalls all stages
       stall_if_o  = 1'b1;
       stall_id_o  = 1'b1;
       stall_ex_o  = 1'b1;
       stall_mem_o = 1'b1;
+    end else if (branch_taken_i) begin
+      // Hold the redirect until older memory and MMU operations complete.
+      flush_id_o  = 1'b1;
+      flush_ex_o  = 1'b1;
     end else if (load_use_hazard || csr_hazard) begin
       // Load-use or CSR serialization bubble
       stall_if_o  = 1'b1;
