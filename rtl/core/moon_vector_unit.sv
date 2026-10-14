@@ -51,6 +51,44 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_logic(
+    input logic [63:0] operand_a,
+    input logic [63:0] operand_b,
+    input logic [2:0]  sew,
+    input logic [5:0]  operation
+  );
+    case (sew)
+      3'b000: begin
+        case (operation)
+          6'b001001: vector_logic = {56'd0, (operand_a[7:0] & operand_b[7:0])};
+          6'b001010: vector_logic = {56'd0, (operand_a[7:0] | operand_b[7:0])};
+          default:   vector_logic = {56'd0, (operand_a[7:0] ^ operand_b[7:0])};
+        endcase
+      end
+      3'b001: begin
+        case (operation)
+          6'b001001: vector_logic = {48'd0, (operand_a[15:0] & operand_b[15:0])};
+          6'b001010: vector_logic = {48'd0, (operand_a[15:0] | operand_b[15:0])};
+          default:   vector_logic = {48'd0, (operand_a[15:0] ^ operand_b[15:0])};
+        endcase
+      end
+      3'b010: begin
+        case (operation)
+          6'b001001: vector_logic = {32'd0, (operand_a[31:0] & operand_b[31:0])};
+          6'b001010: vector_logic = {32'd0, (operand_a[31:0] | operand_b[31:0])};
+          default:   vector_logic = {32'd0, (operand_a[31:0] ^ operand_b[31:0])};
+        endcase
+      end
+      default: begin
+        case (operation)
+          6'b001001: vector_logic = operand_a & operand_b;
+          6'b001010: vector_logic = operand_a | operand_b;
+          default:   vector_logic = operand_a ^ operand_b;
+        endcase
+      end
+    endcase
+  endfunction
+
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
   assign is_vmv_x_s = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010000) &&
                       instr_i[25] && (instr_i[14:12] == 3'b010) && (instr_i[19:15] == 5'd0);
@@ -193,18 +231,21 @@ module moon_vector_unit (
           end
         end
       end else if (is_vlogic) begin
-        for (int i = 0; i < 4; i++) begin
-          if ((vsew_q == 3'b010) && (i < vl_q)) begin
-            case (instr_i[31:26])
-              6'b001001: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] &
-                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] :
-                                                    ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]));
-              6'b001010: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] |
-                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] :
-                                                    ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]));
-              default:   vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] ^
-                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] :
-                                                    ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]));
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_logic(vreg[vs2][i*8 +: 8],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*8 +: 8]), vsew_q, instr_i[31:26]);
+              3'b001: vreg[vd][i*16 +: 16] <= vector_logic(vreg[vs2][i*16 +: 16],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*16 +: 16]), vsew_q, instr_i[31:26]);
+              3'b010: vreg[vd][i*32 +: 32] <= vector_logic(vreg[vs2][i*32 +: 32],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]), vsew_q, instr_i[31:26]);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_logic(vreg[vs2][i*64 +: 64],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*64 +: 64]), vsew_q, instr_i[31:26]);
             endcase
           end
         end
