@@ -134,6 +134,14 @@ _start:
     vmv.x.s a2, v3
     li   t1, 16
     bne  a2, t1, fail
+    li   a0, 0xf0
+    vmv.v.x v1, a0
+    li   a1, 0x3c
+    vmv.v.x v2, a1
+    vand.vv v3, v1, v2
+    vmv.x.s a2, v3
+    li   t1, 0x30
+    bne  a2, t1, fail
 
     vsetvli t0, zero, e16, m1, ta, ma
     li   t1, 8
@@ -164,6 +172,13 @@ _start:
     vadd.vx v3, v1, a1
     vmv.x.s a2, v3
     li   t1, 0x8000000000000000
+    bne  a2, t1, fail
+    li   a0, 0x1234
+    vmv.v.x v1, a0
+    li   a1, 0xff
+    vxor.vx v3, v1, a1
+    vmv.x.s a2, v3
+    li   t1, 0x12cb
     bne  a2, t1, fail
 
 pass:
