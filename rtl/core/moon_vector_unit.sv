@@ -225,42 +225,37 @@ module moon_vector_unit (
   assign is_vmv_v_x = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010111) &&
                       instr_i[25] && (instr_i[14:12] == 3'b100) && (instr_i[24:20] == 5'd0);
   assign is_vadd_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
-                      instr_i[25] && (instr_i[14:12] == 3'b000);
+                      (instr_i[14:12] == 3'b000);
   assign is_vadd_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
-                      instr_i[25] && ((instr_i[14:12] == 3'b100) ||
-                                      (instr_i[14:12] == 3'b011));
+                      ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
   assign is_vsub_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
-                      instr_i[25] && (instr_i[14:12] == 3'b000);
+                      (instr_i[14:12] == 3'b000);
   assign is_vsub_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
-                      instr_i[25] && (instr_i[14:12] == 3'b100);
+                      (instr_i[14:12] == 3'b100);
   assign is_vlogic = (instr_i[6:0] == 7'b1010111) &&
                      ((instr_i[31:26] == 6'b001001) ||
                       (instr_i[31:26] == 6'b001010) ||
                       (instr_i[31:26] == 6'b001011)) &&
-                     instr_i[25] && ((instr_i[14:12] == 3'b000) ||
-                                     (instr_i[14:12] == 3'b100) ||
-                                     (instr_i[14:12] == 3'b011));
+                     ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100) ||
+                      (instr_i[14:12] == 3'b011));
   assign is_vshift = (instr_i[6:0] == 7'b1010111) &&
                      ((instr_i[31:26] == 6'b100101) ||
                       (instr_i[31:26] == 6'b101000) ||
                       (instr_i[31:26] == 6'b101001)) &&
-                     instr_i[25] && ((instr_i[14:12] == 3'b000) ||
-                                     (instr_i[14:12] == 3'b100) ||
-                                     (instr_i[14:12] == 3'b011));
+                     ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100) ||
+                      (instr_i[14:12] == 3'b011));
   assign is_vcompare = (instr_i[6:0] == 7'b1010111) &&
                        ((instr_i[31:26] == 6'b011000) ||
                         (instr_i[31:26] == 6'b011001) ||
                         (instr_i[31:26] == 6'b011010) ||
                         (instr_i[31:26] == 6'b011011)) &&
-                       instr_i[25] && ((instr_i[14:12] == 3'b000) ||
-                                       (instr_i[14:12] == 3'b100));
+                       ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100));
   assign is_vminmax = (instr_i[6:0] == 7'b1010111) &&
                       ((instr_i[31:26] == 6'b000100) ||
                        (instr_i[31:26] == 6'b000101) ||
                        (instr_i[31:26] == 6'b000110) ||
                        (instr_i[31:26] == 6'b000111)) &&
-                      instr_i[25] && ((instr_i[14:12] == 3'b000) ||
-                                      (instr_i[14:12] == 3'b100));
+                      ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100));
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
@@ -325,7 +320,7 @@ module moon_vector_unit (
         endcase
       end else if (is_vadd_vv) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b0);
               3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b0);
@@ -336,7 +331,7 @@ module moon_vector_unit (
         end
       end else if (is_vadd_vx) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
@@ -351,7 +346,7 @@ module moon_vector_unit (
         end
       end else if (is_vsub_vv) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b1);
               3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b1);
@@ -362,7 +357,7 @@ module moon_vector_unit (
         end
       end else if (is_vsub_vx) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], scalar_rs1_i, vsew_q, 1'b1);
               3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], scalar_rs1_i, vsew_q, 1'b1);
@@ -373,7 +368,7 @@ module moon_vector_unit (
         end
       end else if (is_vlogic) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_logic(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
@@ -392,7 +387,7 @@ module moon_vector_unit (
         end
       end else if (is_vshift) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_shift(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
@@ -411,7 +406,7 @@ module moon_vector_unit (
         end
       end else if (is_vcompare) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i] <= vector_compare(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]);
@@ -426,7 +421,7 @@ module moon_vector_unit (
         end
       end else if (is_vminmax) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_minmax(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]);
