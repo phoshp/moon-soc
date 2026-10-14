@@ -13,6 +13,7 @@
 `include "moon_fpu_mul.sv"
 `include "moon_fpu_cmp.sv"
 `include "moon_fpu_div.sv"
+`include "moon_fpu_cvt.sv"
 `include "moon_vector_unit.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
@@ -112,6 +113,7 @@ module moon_core
   logic             id_ex_fp_sub;
   logic             id_ex_fp_mul;
   logic             id_ex_fp_div;
+  logic             id_ex_fp_cvt;
   logic             id_ex_fp_class;
   logic             id_ex_fp_sign;
   logic [1:0]       id_ex_fp_sign_op;
@@ -452,6 +454,7 @@ module moon_core
     .id_ex_fp_sub_o       (id_ex_fp_sub),
     .id_ex_fp_mul_o       (id_ex_fp_mul),
     .id_ex_fp_div_o       (id_ex_fp_div),
+    .id_ex_fp_cvt_o       (id_ex_fp_cvt),
     .id_ex_fp_class_o     (id_ex_fp_class),
     .id_ex_fp_sign_o      (id_ex_fp_sign),
     .id_ex_fp_sign_op_o   (id_ex_fp_sign_op),
@@ -513,6 +516,7 @@ module moon_core
     .id_ex_fp_sub_i       (id_ex_fp_sub),
     .id_ex_fp_mul_i       (id_ex_fp_mul),
     .id_ex_fp_div_i       (id_ex_fp_div),
+    .id_ex_fp_cvt_i       (id_ex_fp_cvt),
     .id_ex_fp_class_i     (id_ex_fp_class),
     .id_ex_fp_sign_i      (id_ex_fp_sign),
     .id_ex_fp_sign_op_i   (id_ex_fp_sign_op),
