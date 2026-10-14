@@ -105,7 +105,11 @@ package moon_pkg;
     ALU_BSET      = 6'd47,
     ALU_BCLR      = 6'd48,
     ALU_BINV      = 6'd49,
-    ALU_BEXT      = 6'd50
+    ALU_BEXT      = 6'd50,
+    ALU_SHA256SIG0 = 6'd51,
+    ALU_SHA256SIG1 = 6'd52,
+    ALU_SHA256SUM0 = 6'd53,
+    ALU_SHA256SUM1 = 6'd54
   } alu_op_e;
 
   // --------------------------------------------------------------------------

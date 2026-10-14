@@ -337,7 +337,16 @@ module moon_id_stage
           3'b110: dec_alu_op = ALU_OR;  // ORI
           3'b111: dec_alu_op = ALU_AND; // ANDI
           3'b001: begin
-            if (funct7 == 7'b0110000) begin
+            if (funct7 == 7'b0001000) begin // Zknh SHA-256 word operations
+              dec_alu_src_b_imm = 1'b0;
+              case (rs2)
+                5'd0: dec_alu_op = ALU_SHA256SUM0;
+                5'd1: dec_alu_op = ALU_SHA256SUM1;
+                5'd2: dec_alu_op = ALU_SHA256SIG0;
+                5'd3: dec_alu_op = ALU_SHA256SIG1;
+                default: dec_regwrite = 1'b0;
+              endcase
+            end else if (funct7 == 7'b0110000) begin
               case (rs2)
                 5'b00000: dec_alu_op = ALU_CLZ;    // CLZ
                 5'b00001: dec_alu_op = ALU_CTZ;    // CTZ

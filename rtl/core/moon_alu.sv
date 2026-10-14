@@ -32,6 +32,16 @@ module moon_alu
   logic [31:0] res_sraw;
   logic [31:0] res_rolw;
   logic [31:0] res_rorw;
+  logic [31:0] sha256_sig0, sha256_sig1, sha256_sum0, sha256_sum1;
+
+  function automatic logic [31:0] ror32(input logic [31:0] value, input integer amount);
+    ror32 = (value >> amount) | (value << (32 - amount));
+  endfunction
+
+  assign sha256_sig0 = ror32(a32, 7) ^ ror32(a32, 18) ^ (a32 >> 3);
+  assign sha256_sig1 = ror32(a32, 17) ^ ror32(a32, 19) ^ (a32 >> 10);
+  assign sha256_sum0 = ror32(a32, 2) ^ ror32(a32, 13) ^ ror32(a32, 22);
+  assign sha256_sum1 = ror32(a32, 6) ^ ror32(a32, 11) ^ ror32(a32, 25);
 
   assign shamt64 = operand_b_i[5:0];
   assign shamt32 = operand_b_i[4:0];
@@ -200,6 +210,12 @@ module moon_alu
       ALU_BCLR:      result_o = operand_a_i & ~(64'd1 << shamt64);
       ALU_BINV:      result_o = operand_a_i ^ (64'd1 << shamt64);
       ALU_BEXT:      result_o = (operand_a_i >> shamt64) & 64'd1;
+
+      // Zknh SHA-256 word operations (RV64 results are sign-extended).
+      ALU_SHA256SIG0: result_o = {{32{sha256_sig0[31]}}, sha256_sig0};
+      ALU_SHA256SIG1: result_o = {{32{sha256_sig1[31]}}, sha256_sig1};
+      ALU_SHA256SUM0: result_o = {{32{sha256_sum0[31]}}, sha256_sum0};
+      ALU_SHA256SUM1: result_o = {{32{sha256_sum1[31]}}, sha256_sum1};
 
       default:       result_o = '0;
     endcase
