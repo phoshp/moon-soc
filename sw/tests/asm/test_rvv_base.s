@@ -117,6 +117,15 @@ _start:
     vsetvli t0, zero, e8, m1, ta, ma
     li   t1, 16
     bne  t0, t1, fail
+    li   t1, 5
+    vsetvli t0, t1, e8, m1, ta, ma
+    bne  t0, t1, fail
+    li   t1, 0
+    vsetvli t0, t1, e8, m1, ta, ma
+    bne  t0, t1, fail
+    vsetvli t0, zero, e8, m1, ta, ma
+    li   t1, 16
+    bne  t0, t1, fail
     li   a0, 0x123
     vmv.v.x v6, a0
     vmv.x.s a2, v6
