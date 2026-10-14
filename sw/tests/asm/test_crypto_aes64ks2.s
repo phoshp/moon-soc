@@ -10,6 +10,11 @@ _start:
     li   t3, 0x55667788cccccc44
     bne  t2, t3, fail
 
+    li   t0, 0
+    aes64ks1i t2, t0, 7
+    li   t3, 0x2363636323636363
+    bne  t2, t3, fail
+
 pass:
     li   t0, 0xCAFEBABE
     sw   t0, 0(s0)
