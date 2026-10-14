@@ -11,7 +11,7 @@
 `include "moon_pkg.sv"
 `include "axi_pkg.sv"
 `include "moon_core.sv"
-`include "moon_core_axi_adapter.sv"
+`include "moon_l1_cache_subsystem.sv"
 `include "axi_crossbar.sv"
 `include "axi_to_apb_bridge.sv"
 `include "apb_crossbar.sv"
@@ -148,7 +148,7 @@ module moon_soc_top
   );
 
   // --------------------------------------------------------------------------
-  // 2. Core-to-AXI4 Adapter
+  // 2. L1 Cache Subsystem (32 KB L1-I & 32 KB L1-D) with AXI4 Masters
   // --------------------------------------------------------------------------
   axi_ar_t [1:0] core_ar;
   logic    [1:0] core_ar_ready;
@@ -162,13 +162,14 @@ module moon_soc_top
   axi_b_t  [1:0] core_b;
   logic    [1:0] core_b_ready;
 
-  moon_core_axi_adapter u_core_adapter (
+  moon_l1_cache_subsystem u_l1_cache (
     .clk_i         (clk_core),
     .rst_ni        (rst_core_n),
     .imem_req_i    (imem_req),
     .imem_addr_i   (imem_addr),
     .imem_valid_o  (imem_valid),
     .imem_rdata_o  (imem_rdata),
+    .fence_i_i     (1'b0),
     .dmem_req_i    (dmem_req),
     .dmem_we_i     (dmem_we),
     .dmem_addr_i   (dmem_addr),
@@ -176,6 +177,10 @@ module moon_soc_top
     .dmem_wstrb_i  (dmem_wstrb),
     .dmem_valid_o  (dmem_valid),
     .dmem_rdata_o  (dmem_rdata),
+    .cbo_inval_i   (1'b0),
+    .cbo_clean_i   (1'b0),
+    .cbo_flush_i   (1'b0),
+    .cbo_zero_i    (1'b0),
     .m0_ar_o       (core_ar[0]),
     .m0_ar_ready_i (core_ar_ready[0]),
     .m0_r_i        (core_r[0]),

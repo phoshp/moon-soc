@@ -16,3 +16,6 @@ __pycache__/
 # Intermediate object files
 *.o
 *.elf
+
+# Local roadmap / plan file (ignored by git)
+ROADMAP_RVA23_PLAN.md

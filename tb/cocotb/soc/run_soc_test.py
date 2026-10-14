@@ -10,6 +10,7 @@ def run_soc_test(test_hex=None, waves=False, verbose=False):
     repo_root = Path(__file__).resolve().parent.parent.parent.parent
     rtl_dirs = [
         repo_root / "rtl" / "core",
+        repo_root / "rtl" / "core" / "cache",
         repo_root / "rtl" / "soc" / "interconnect",
         repo_root / "rtl" / "soc" / "memory",
         repo_root / "rtl" / "soc" / "periph",

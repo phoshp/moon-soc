@@ -16,6 +16,7 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 - **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/cocotb/soc/run_soc_test.py` with `test_rv64_all.hex`).
 - **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC, CRG, PMU).
 - **Run SoC WFI & PMU clock-gating test**: `make soc-wfi-test` (verifies WFI execution, PMU clock-gating, and timer wake-up).
+- **Run SoC L1 Cache verification**: `make soc-cache-test` (verifies 32KB L1-I and L1-D caches, writeback, eviction, hits).
 - **Run with verbose cycle trace**: `make verbose-test`.
 - **Run via pytest**: `make pytest` (runs both core and SoC regression testbenches).
 - **Run a specific firmware test**:
@@ -83,7 +84,11 @@ The core is structured across five sequential pipeline stages connected through 
 - Supports timer, software (IPI), and external interrupt inputs.
 
 ### SoC Subsystems & Infrastructure (`rtl/soc/`)
-- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates `moon_core`, 64-bit AXI4 crossbar, AXI-to-APB bridge, Boot ROM, On-Chip SRAM, CLINT, PLIC, UART 16550, and external AXI memory port.
+- **L1 Cache Subsystem (`rtl/core/cache/`)**:
+  - `moon_icache.sv`: 32 KB 4-way set-associative L1 instruction cache with 64-byte lines, AXI4 burst refill (M0), and FENCE.I support.
+  - `moon_dcache.sv`: 32 KB 4-way set-associative L1 data cache with write-back, write-allocate, AXI4 burst refill/eviction (M1), uncached I/O bypass, and RVA23 Zicbom/Zicboz operations.
+  - `moon_l1_cache_subsystem.sv`: Integrated L1 cache wrapper connecting core IF/MEM interfaces directly to AXI4 masters.
+- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates `moon_core`, `moon_l1_cache_subsystem`, 64-bit AXI4 crossbar, AXI-to-APB bridge, Boot ROM, On-Chip SRAM, CLINT, PLIC, UART 16550, CRG, PMU, and external AXI memory port.
 - **Interconnect (`rtl/soc/interconnect/`)**:
   - `axi_pkg.sv`: AXI4 and APB4 signal definitions, transaction structs, and burst/response codes.
   - `axi_crossbar.sv`: Multi-master, multi-slave 64-bit crossbar switch (M0: Fetch, M1: Data; S0: Boot ROM, S1: SRAM, S2: APB Bridge, S3: External RAM).

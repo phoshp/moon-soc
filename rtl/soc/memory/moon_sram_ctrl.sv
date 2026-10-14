@@ -39,9 +39,9 @@ module moon_sram_ctrl
   // Write Path
   // --------------------------------------------------------------------------
   typedef enum logic [1:0] {
-    W_IDLE = 2'd0,
-    W_ACC  = 2'd1,
-    W_RESP = 2'd2
+    W_IDLE   = 2'd0,
+    W_BURST  = 2'd1,
+    W_RESP   = 2'd2
   } w_state_e;
 
   w_state_e w_state_q, w_state_d;
@@ -82,19 +82,24 @@ module moon_sram_ctrl
 
     case (w_state_q)
       W_IDLE: begin
-        if (s_aw_i.valid && s_w_i.valid) begin
+        if (s_aw_i.valid) begin
           s_aw_ready_o = 1'b1;
-          s_w_ready_o  = 1'b1;
           w_id_d       = s_aw_i.id;
           w_addr_d     = s_aw_i.addr;
-          w_data_d     = s_w_i.data;
-          w_strb_d     = s_w_i.strb;
-          w_state_d    = W_ACC;
+          w_state_d    = W_BURST;
         end
       end
 
-      W_ACC: begin
-        w_state_d = W_RESP;
+      W_BURST: begin
+        s_w_ready_o = 1'b1;
+        if (s_w_i.valid) begin
+          w_data_d = s_w_i.data;
+          w_strb_d = s_w_i.strb;
+          w_addr_d = w_addr_q + 64'd8;
+          if (s_w_i.last) begin
+            w_state_d = W_RESP;
+          end
+        end
       end
 
       W_RESP: begin
@@ -112,10 +117,10 @@ module moon_sram_ctrl
 
   // Synchronous SRAM Write commit
   always_ff @(posedge clk_i) begin
-    if (w_state_q == W_ACC && (w_word_idx < NUM_WORDS)) begin
+    if (w_state_q == W_BURST && s_w_i.valid && (w_word_idx < NUM_WORDS)) begin
       for (int b = 0; b < 8; b++) begin
-        if (w_strb_q[b]) begin
-          sram_mem[w_word_idx][b] <= w_data_q[b*8 +: 8];
+        if (s_w_i.strb[b]) begin
+          sram_mem[w_word_idx][b] <= s_w_i.data[b*8 +: 8];
         end
       end
     end
@@ -134,6 +139,8 @@ module moon_sram_ctrl
   logic [AXI_ID_WIDTH-1:0]   r_id_q,   r_id_d;
   logic [AXI_ADDR_WIDTH-1:0] r_addr_q, r_addr_d;
   logic [AXI_DATA_WIDTH-1:0] r_data_q, r_data_d;
+  logic [7:0]                r_len_q,  r_len_d;
+  logic [7:0]                r_cnt_q,  r_cnt_d;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -141,23 +148,30 @@ module moon_sram_ctrl
       r_id_q    <= '0;
       r_addr_q  <= '0;
       r_data_q  <= '0;
+      r_len_q   <= '0;
+      r_cnt_q   <= '0;
     end else begin
       r_state_q <= r_state_d;
       r_id_q    <= r_id_d;
       r_addr_q  <= r_addr_d;
       r_data_q  <= r_data_d;
+      r_len_q   <= r_len_d;
+      r_cnt_q   <= r_cnt_d;
     end
   end
 
   logic [AXI_ADDR_WIDTH-1:0] r_rel_addr;
   assign r_rel_addr = r_addr_q - BASE_ADDR;
   wire [13:0] r_word_idx = r_rel_addr[16:3];
+  wire is_last_rbeat = (r_cnt_q == r_len_q);
 
   always_comb begin
     r_state_d    = r_state_q;
     r_id_d       = r_id_q;
     r_addr_d     = r_addr_q;
     r_data_d     = r_data_q;
+    r_len_d      = r_len_q;
+    r_cnt_d      = r_cnt_q;
     s_ar_ready_o = 1'b0;
     s_r_o        = '0;
 
@@ -167,6 +181,8 @@ module moon_sram_ctrl
         if (s_ar_i.valid) begin
           r_id_d    = s_ar_i.id;
           r_addr_d  = s_ar_i.addr;
+          r_len_d   = s_ar_i.len;
+          r_cnt_d   = 8'd0;
           r_state_d = R_READ;
         end
       end
@@ -187,9 +203,15 @@ module moon_sram_ctrl
         s_r_o.id    = r_id_q;
         s_r_o.data  = r_data_q;
         s_r_o.resp  = AXI_RESP_OKAY;
-        s_r_o.last  = 1'b1;
+        s_r_o.last  = is_last_rbeat;
         if (s_r_ready_i) begin
-          r_state_d = R_IDLE;
+          if (is_last_rbeat) begin
+            r_state_d = R_IDLE;
+          end else begin
+            r_cnt_d   = r_cnt_q + 8'd1;
+            r_addr_d  = r_addr_q + 64'd8;
+            r_state_d = R_READ;
+          end
         end
       end
 

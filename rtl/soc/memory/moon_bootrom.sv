@@ -61,6 +61,8 @@ module moon_bootrom
   logic [AXI_ID_WIDTH-1:0]   r_id_q,   r_id_d;
   logic [AXI_ADDR_WIDTH-1:0] r_addr_q, r_addr_d;
   logic [AXI_DATA_WIDTH-1:0] r_data_q, r_data_d;
+  logic [7:0]                r_len_q,  r_len_d;
+  logic [7:0]                r_cnt_q,  r_cnt_d;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -68,11 +70,15 @@ module moon_bootrom
       r_id_q    <= '0;
       r_addr_q  <= '0;
       r_data_q  <= '0;
+      r_len_q   <= '0;
+      r_cnt_q   <= '0;
     end else begin
       r_state_q <= r_state_d;
       r_id_q    <= r_id_d;
       r_addr_q  <= r_addr_d;
       r_data_q  <= r_data_d;
+      r_len_q   <= r_len_d;
+      r_cnt_q   <= r_cnt_d;
     end
   end
 
@@ -82,11 +88,15 @@ module moon_bootrom
   wire [14:0] word_idx_lo = rel_addr[14:2];
   wire [14:0] word_idx_hi = word_idx_lo + 15'd1;
 
+  wire is_last_beat = (r_cnt_q == r_len_q);
+
   always_comb begin
     r_state_d    = r_state_q;
     r_id_d       = r_id_q;
     r_addr_d     = r_addr_q;
     r_data_d     = r_data_q;
+    r_len_d      = r_len_q;
+    r_cnt_d      = r_cnt_q;
     s_ar_ready_o = 1'b0;
     s_r_o        = '0;
 
@@ -94,17 +104,19 @@ module moon_bootrom
       R_IDLE: begin
         s_ar_ready_o = 1'b1;
         if (s_ar_i.valid) begin
-          r_id_d   = s_ar_i.id;
-          r_addr_d = s_ar_i.addr;
-          r_state_d= R_READ;
+          r_id_d    = s_ar_i.id;
+          r_addr_d  = s_ar_i.addr;
+          r_len_d   = s_ar_i.len;
+          r_cnt_d   = 8'd0;
+          r_state_d = R_READ;
         end
       end
 
       R_READ: begin
         // Read 64 bits (two 32-bit words) from ROM
         logic [31:0] lo_word, hi_word;
-        lo_word = (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo] : 32'h0;
-        hi_word = (word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi] : 32'h0;
+        lo_word   = (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo] : 32'h0;
+        hi_word   = (word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi] : 32'h0;
         r_data_d  = {hi_word, lo_word};
         r_state_d = R_RESP;
       end
@@ -114,9 +126,15 @@ module moon_bootrom
         s_r_o.id    = r_id_q;
         s_r_o.data  = r_data_q;
         s_r_o.resp  = AXI_RESP_OKAY;
-        s_r_o.last  = 1'b1;
+        s_r_o.last  = is_last_beat;
         if (s_r_ready_i) begin
-          r_state_d = R_IDLE;
+          if (is_last_beat) begin
+            r_state_d = R_IDLE;
+          end else begin
+            r_cnt_d   = r_cnt_q + 8'd1;
+            r_addr_d  = r_addr_q + 64'd8; // Next doubleword
+            r_state_d = R_READ;
+          end
         end
       end
 

@@ -48,13 +48,15 @@ module moon_reset_ctrl (
       peri_rst_q <= 1'b0;
       mem_rst_q  <= 1'b0;
     end else begin
-      if (seq_cnt_q < 4'd8) begin
+      if (seq_cnt_q < 4'd4) begin
         seq_cnt_q <= seq_cnt_q + 4'd1;
       end
 
-      if (seq_cnt_q >= 4'd2) mem_rst_q  <= 1'b1;
-      if (seq_cnt_q >= 4'd4) peri_rst_q <= 1'b1;
-      if (seq_cnt_q >= 4'd7) core_rst_q <= 1'b1;
+      if (seq_cnt_q >= 4'd2) begin
+        mem_rst_q  <= 1'b1;
+        peri_rst_q <= 1'b1;
+        core_rst_q <= 1'b1;
+      end
     end
   end
 

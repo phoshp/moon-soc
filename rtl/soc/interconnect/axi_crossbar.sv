@@ -179,6 +179,10 @@ module axi_crossbar
     end
   end
 
+  // When AW is active, W routes to the new aw_target_s; on subsequent beats, it routes to b_target_s
+  int cur_w_target_s;
+  assign cur_w_target_s = m_aw_i[1].valid ? aw_target_s : b_target_s;
+
   // Write Address routing
   always_comb begin
     m_aw_ready_o[0] = 1'b0; // M0 never writes
@@ -195,10 +199,10 @@ module axi_crossbar
   // Write Data routing
   always_comb begin
     m_w_ready_o[0] = 1'b0;
-    m_w_ready_o[1] = s_w_ready_i[aw_target_s];
+    m_w_ready_o[1] = s_w_ready_i[cur_w_target_s];
     for (int s = 0; s < NUM_SLAVES; s++) begin
       s_w_o[s] = '0;
-      if (m_w_i[1].valid && (aw_target_s == s)) begin
+      if (m_w_i[1].valid && (cur_w_target_s == s)) begin
         s_w_o[s]       = m_w_i[1];
         s_w_o[s].valid = 1'b1;
       end

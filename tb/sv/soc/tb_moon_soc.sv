@@ -115,7 +115,7 @@ module tb_moon_soc (
     end
   end
 
-  // Read Responder (Single-cycle / pipelined)
+  // Read Responder with AXI4 Burst Support
   typedef enum logic [1:0] {
     RAM_R_IDLE = 2'd0,
     RAM_R_RESP = 2'd1
@@ -123,26 +123,39 @@ module tb_moon_soc (
 
   ram_r_state_e r_st_q, r_st_d;
   logic [AXI_ID_WIDTH-1:0]   r_id_q,   r_id_d;
+  logic [AXI_ADDR_WIDTH-1:0] r_addr_q, r_addr_d;
   logic [AXI_DATA_WIDTH-1:0] r_data_q, r_data_d;
+  logic [7:0]                r_len_q,  r_len_d;
+  logic [7:0]                r_cnt_q,  r_cnt_d;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       r_st_q   <= RAM_R_IDLE;
       r_id_q   <= '0;
+      r_addr_q <= '0;
       r_data_q <= '0;
+      r_len_q  <= '0;
+      r_cnt_q  <= '0;
     end else begin
       r_st_q   <= r_st_d;
       r_id_q   <= r_id_d;
+      r_addr_q <= r_addr_d;
       r_data_q <= r_data_d;
+      r_len_q  <= r_len_d;
+      r_cnt_q  <= r_cnt_d;
     end
   end
 
-  wire [17:0] ram_r_offset = ext_ar.addr[17:0];
+  wire [17:0] ram_r_offset = r_addr_d[17:0];
+  wire is_last_r_beat = (r_cnt_q == r_len_q);
 
   always_comb begin
     r_st_d       = r_st_q;
     r_id_d       = r_id_q;
+    r_addr_d     = r_addr_q;
     r_data_d     = r_data_q;
+    r_len_d      = r_len_q;
+    r_cnt_d      = r_cnt_q;
     ext_ar_ready = 1'b0;
     ext_r        = '0;
 
@@ -150,9 +163,12 @@ module tb_moon_soc (
       RAM_R_IDLE: begin
         ext_ar_ready = 1'b1;
         if (ext_ar.valid) begin
-          r_id_d = ext_ar.id;
+          r_id_d   = ext_ar.id;
+          r_addr_d = ext_ar.addr;
+          r_len_d  = ext_ar.len;
+          r_cnt_d  = 8'd0;
           for (int b = 0; b < 8; b++) begin
-            r_data_d[b*8 +: 8] = (ram_r_offset + b < RAM_BYTES) ? ram_mem[ram_r_offset + b] : 8'h0;
+            r_data_d[b*8 +: 8] = (ext_ar.addr[17:0] + b < RAM_BYTES) ? ram_mem[ext_ar.addr[17:0] + b] : 8'h0;
           end
           r_st_d = RAM_R_RESP;
         end
@@ -163,9 +179,17 @@ module tb_moon_soc (
         ext_r.id    = r_id_q;
         ext_r.data  = r_data_q;
         ext_r.resp  = AXI_RESP_OKAY;
-        ext_r.last  = 1'b1;
+        ext_r.last  = is_last_r_beat;
         if (ext_r_ready) begin
-          r_st_d = RAM_R_IDLE;
+          if (is_last_r_beat) begin
+            r_st_d = RAM_R_IDLE;
+          end else begin
+            r_cnt_d  = r_cnt_q + 8'd1;
+            r_addr_d = r_addr_q + 64'd8;
+            for (int b = 0; b < 8; b++) begin
+              r_data_d[b*8 +: 8] = (ram_r_offset + 8 + b < RAM_BYTES) ? ram_mem[ram_r_offset + 8 + b] : 8'h0;
+            end
+          end
         end
       end
 
@@ -173,30 +197,35 @@ module tb_moon_soc (
     endcase
   end
 
-  // Write Responder
+  // Write Responder with AXI4 Burst Support
   typedef enum logic [1:0] {
-    RAM_W_IDLE = 2'd0,
-    RAM_W_RESP = 2'd1
+    RAM_W_IDLE  = 2'd0,
+    RAM_W_BURST = 2'd1,
+    RAM_W_RESP  = 2'd2
   } ram_w_state_e;
 
   ram_w_state_e w_st_q, w_st_d;
-  logic [AXI_ID_WIDTH-1:0] w_id_q, w_id_d;
+  logic [AXI_ID_WIDTH-1:0]   w_id_q,   w_id_d;
+  logic [AXI_ADDR_WIDTH-1:0] w_addr_q, w_addr_d;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      w_st_q <= RAM_W_IDLE;
-      w_id_q <= '0;
+      w_st_q   <= RAM_W_IDLE;
+      w_id_q   <= '0;
+      w_addr_q <= '0;
     end else begin
-      w_st_q <= w_st_d;
-      w_id_q <= w_id_d;
+      w_st_q   <= w_st_d;
+      w_id_q   <= w_id_d;
+      w_addr_q <= w_addr_d;
     end
   end
 
-  wire [17:0] ram_w_offset = ext_aw.addr[17:0];
+  wire [17:0] ram_w_offset = w_addr_q[17:0];
 
   always_comb begin
     w_st_d       = w_st_q;
     w_id_d       = w_id_q;
+    w_addr_d     = w_addr_q;
     ext_aw_ready = 1'b0;
     ext_w_ready  = 1'b0;
     ext_b        = '0;
@@ -204,10 +233,20 @@ module tb_moon_soc (
     case (w_st_q)
       RAM_W_IDLE: begin
         ext_aw_ready = 1'b1;
-        ext_w_ready  = 1'b1;
-        if (ext_aw.valid && ext_w.valid) begin
-          w_id_d = ext_aw.id;
-          w_st_d = RAM_W_RESP;
+        if (ext_aw.valid) begin
+          w_id_d   = ext_aw.id;
+          w_addr_d = ext_aw.addr;
+          w_st_d   = RAM_W_BURST;
+        end
+      end
+
+      RAM_W_BURST: begin
+        ext_w_ready = 1'b1;
+        if (ext_w.valid) begin
+          w_addr_d = w_addr_q + 64'd8;
+          if (ext_w.last) begin
+            w_st_d = RAM_W_RESP;
+          end
         end
       end
 
@@ -230,7 +269,7 @@ module tb_moon_soc (
       test_passed     <= 1'b0;
       test_failed     <= 1'b0;
       test_error_code <= 32'd0;
-    end else if (ext_aw.valid && ext_w.valid && ext_aw_ready && ext_w_ready) begin
+    end else if (w_st_q == RAM_W_BURST && ext_w.valid) begin
       for (int b = 0; b < 8; b++) begin
         if (ext_w.strb[b] && (ram_w_offset + b < RAM_BYTES)) begin
           ram_mem[ram_w_offset + b] <= ext_w.data[b*8 +: 8];
@@ -238,7 +277,7 @@ module tb_moon_soc (
       end
 
       // Check protocol write to 0x8000_1000 (offset 0x1000 in RAM)
-      if (ext_aw.addr[31:0] == 32'h8000_1000) begin
+      if (w_addr_q[31:0] == 32'h8000_1000) begin
         if (ext_w.data[31:0] == 32'hCAFE_BABE) begin
           test_passed     <= 1'b1;
           test_error_code <= 32'h0;
