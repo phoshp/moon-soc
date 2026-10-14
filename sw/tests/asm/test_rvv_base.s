@@ -1,0 +1,28 @@
+.section .text
+.globl _start
+.option norvc
+
+_start:
+    li   s0, 0x80001000
+    vsetvli t0, zero, e32, m1, ta, ma
+    li   t1, 4
+    bne  t0, t1, fail
+
+    li   a0, 3
+    li   a1, 4
+    vmv.v.x v1, a0
+    vmv.v.x v2, a1
+    vadd.vv v3, v1, v2
+    vmv.x.s a2, v3
+    li   t1, 7
+    bne  a2, t1, fail
+
+pass:
+    li   t0, 0xCAFEBABE
+    sw   t0, 0(s0)
+    j    pass
+
+fail:
+    li   t0, 0xDEAD0001
+    sw   t0, 0(s0)
+    j    fail
