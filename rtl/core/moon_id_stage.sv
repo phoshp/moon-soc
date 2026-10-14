@@ -30,10 +30,15 @@ module moon_id_stage
   input  logic             wb_regwrite_i,
   input  logic [4:0]       wb_rd_i,
   input  logic [XLEN-1:0]  wb_wdata_i,
+  input  logic             wb_fp_we_i,
+  input  logic [4:0]       wb_fp_rd_i,
+  input  logic [FLEN-1:0]  wb_fp_wdata_i,
 
   // Outputs to Hazard Unit
   output logic [4:0]       id_rs1_o,
   output logic [4:0]       id_rs2_o,
+  output logic [4:0]       id_fp_rs1_o,
+  output logic             id_fp_rs1_en_o,
 
   // Outputs to EX Stage (ID/EX Pipeline Register)
   output logic             id_ex_valid_o,
@@ -66,6 +71,9 @@ module moon_id_stage
   output logic             id_ex_is_store_o,
   output mem_width_e       id_ex_mem_width_o,
   output logic             id_ex_regwrite_o,
+  output logic             id_ex_fp_we_o,
+  output logic [4:0]       id_ex_fp_rd_o,
+  output logic             id_ex_fp_word_o,
   output logic             id_ex_is_csr_o,
   output logic [2:0]       id_ex_csr_op_o,
   output logic [11:0]      id_ex_csr_addr_o,
@@ -99,12 +107,18 @@ module moon_id_stage
 
   assign id_rs1_o = rs1;
   assign id_rs2_o = rs2;
+  assign id_fp_rs1_o = rs1;
+  assign id_fp_rs1_en_o = if_id_valid_i && (opcode == OPCODE_FP) &&
+                          (funct7 == 7'b1110000) && (rs2 == 5'd0) &&
+                          (funct3 == 3'b000);
 
   // --------------------------------------------------------------------------
   // Register File Instantiation
   // --------------------------------------------------------------------------
   logic [XLEN-1:0] rf_rs1_data;
   logic [XLEN-1:0] rf_rs2_data;
+  logic [FLEN-1:0] fp_rs1_data;
+  logic [FLEN-1:0] fp_rs2_data;
 
   moon_regfile u_regfile (
     .clk_i       (clk_i),
@@ -116,6 +130,18 @@ module moon_id_stage
     .rd_we_i     (wb_regwrite_i),
     .rd_addr_i   (wb_rd_i),
     .rd_data_i   (wb_wdata_i)
+  );
+
+  moon_fregfile u_fregfile (
+    .clk_i      (clk_i),
+    .rst_ni     (rst_ni),
+    .rs1_addr_i (rs1),
+    .rs1_data_o (fp_rs1_data),
+    .rs2_addr_i (rs2),
+    .rs2_data_o (fp_rs2_data),
+    .rd_we_i    (wb_fp_we_i),
+    .rd_addr_i  (wb_fp_rd_i),
+    .rd_data_i  (wb_fp_wdata_i)
   );
 
   // --------------------------------------------------------------------------
@@ -150,6 +176,9 @@ module moon_id_stage
   logic         dec_is_store;
   mem_width_e   dec_mem_width;
   logic         dec_regwrite;
+  logic         dec_fp_we;
+  logic         dec_fp_word;
+  logic         dec_fmv_x_w;
   logic         dec_is_csr;
   logic [2:0]   dec_csr_op;
   logic         dec_is_mret;
@@ -177,6 +206,9 @@ module moon_id_stage
     dec_is_store       = 1'b0;
     dec_mem_width      = mem_width_e'(funct3);
     dec_regwrite       = 1'b0;
+    dec_fp_we          = 1'b0;
+    dec_fp_word        = 1'b0;
+    dec_fmv_x_w        = 1'b0;
     dec_is_csr         = 1'b0;
     dec_csr_op         = funct3;
     dec_is_mret        = 1'b0;
@@ -450,6 +482,22 @@ module moon_id_stage
         end
       end
 
+      // F extension register moves. Arithmetic and memory operations are
+      // added in subsequent Phase 5 slices.
+      OPCODE_FP: begin
+        if ((funct7 == 7'b1110000) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
+          // FMV.X.W: move a single-precision bit pattern to an integer register.
+          dec_regwrite = 1'b1;
+          dec_alu_op   = ALU_COPY_A;
+          dec_fmv_x_w  = 1'b1;
+        end else if ((funct7 == 7'b1111000) && (rs2 == 5'd0) && (funct3 == 3'b000)) begin
+          // FMV.W.X: move an integer word to a NaN-boxed FP register.
+          dec_fp_we   = 1'b1;
+          dec_fp_word = 1'b1;
+          dec_alu_op  = ALU_COPY_A;
+        end
+      end
+
       // MISC-MEM (FENCE, FENCE.I treated as pipeline NOP / flush)
       OPCODE_MISC_MEM: begin
         dec_alu_op        = ALU_ADD;
@@ -521,6 +569,9 @@ module moon_id_stage
       id_ex_is_store_o     <= 1'b0;
       id_ex_mem_width_o    <= MEM_WORD;
       id_ex_regwrite_o     <= 1'b0;
+      id_ex_fp_we_o        <= 1'b0;
+      id_ex_fp_rd_o        <= '0;
+      id_ex_fp_word_o      <= 1'b0;
       id_ex_is_csr_o       <= 1'b0;
       id_ex_csr_op_o       <= '0;
       id_ex_csr_addr_o     <= '0;
@@ -559,6 +610,9 @@ module moon_id_stage
       id_ex_is_store_o     <= 1'b0;
       id_ex_mem_width_o    <= MEM_WORD;
       id_ex_regwrite_o     <= 1'b0;
+      id_ex_fp_we_o        <= 1'b0;
+      id_ex_fp_rd_o        <= '0;
+      id_ex_fp_word_o      <= 1'b0;
       id_ex_is_csr_o       <= 1'b0;
       id_ex_csr_op_o       <= '0;
       id_ex_csr_addr_o     <= '0;
@@ -575,7 +629,7 @@ module moon_id_stage
       id_ex_rd_o           <= rd;
       id_ex_rs1_o          <= rs1;
       id_ex_rs2_o          <= rs2;
-      id_ex_rs1_data_o     <= rf_rs1_data;
+      id_ex_rs1_data_o     <= dec_fmv_x_w ? {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]} : rf_rs1_data;
       id_ex_rs2_data_o     <= rf_rs2_data;
       id_ex_imm_o          <= selected_imm;
       id_ex_alu_op_o       <= dec_alu_op;
@@ -608,6 +662,9 @@ module moon_id_stage
       id_ex_is_store_o     <= dec_is_store;
       id_ex_mem_width_o    <= dec_mem_width;
       id_ex_regwrite_o     <= dec_regwrite;
+      id_ex_fp_we_o        <= dec_fp_we;
+      id_ex_fp_rd_o        <= rd;
+      id_ex_fp_word_o      <= dec_fp_word;
       id_ex_is_csr_o       <= dec_is_csr;
       id_ex_csr_op_o       <= dec_csr_op;
       id_ex_csr_addr_o     <= csr_addr;

@@ -20,6 +20,12 @@ module moon_hazard_unit
   input  logic [4:0]  id_ex_rd_i,
   input  logic [4:0]  ex_mem_rd_i,
   input  logic [4:0]  mem_wb_rd_i,
+  input  logic        if_id_fp_rs1_en_i,
+  input  logic [4:0]  if_id_fp_rs1_i,
+  input  logic        id_ex_fp_we_i,
+  input  logic [4:0]  id_ex_fp_rd_i,
+  input  logic        ex_mem_fp_we_i,
+  input  logic [4:0]  ex_mem_fp_rd_i,
 
   // Control signals in pipeline stages
   input  logic        id_ex_is_load_i,
@@ -79,6 +85,9 @@ module moon_hazard_unit
                          ((id_ex_rd_i == if_id_rs1_i) || (id_ex_rd_i == if_id_rs2_i));
 
   wire csr_hazard = id_ex_is_csr_i || ex_mem_is_csr_i;
+  wire fp_hazard = if_id_fp_rs1_en_i &&
+                   ((id_ex_fp_we_i && (id_ex_fp_rd_i == if_id_fp_rs1_i)) ||
+                    (ex_mem_fp_we_i && (ex_mem_fp_rd_i == if_id_fp_rs1_i)));
 
   // --------------------------------------------------------------------------
   // Stall and Flush Control
@@ -109,7 +118,7 @@ module moon_hazard_unit
       // Hold the redirect until older memory and MMU operations complete.
       flush_id_o  = 1'b1;
       flush_ex_o  = 1'b1;
-    end else if (load_use_hazard || csr_hazard) begin
+    end else if (load_use_hazard || csr_hazard || fp_hazard) begin
       // Load-use or CSR serialization bubble
       stall_if_o  = 1'b1;
       stall_id_o  = 1'b1;

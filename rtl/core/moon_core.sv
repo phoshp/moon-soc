@@ -68,6 +68,8 @@ module moon_core
   // ID to Hazard Unit & EX
   logic [4:0]       id_rs1;
   logic [4:0]       id_rs2;
+  logic [4:0]       id_fp_rs1;
+  logic             id_fp_rs1_en;
   logic             id_ex_valid;
   logic [XLEN-1:0]  id_ex_pc;
   logic [ILEN-1:0]  id_ex_instr;
@@ -96,6 +98,9 @@ module moon_core
   logic             id_ex_is_store;
   mem_width_e       id_ex_mem_width;
   logic             id_ex_regwrite;
+  logic             id_ex_fp_we;
+  logic [4:0]       id_ex_fp_rd;
+  logic             id_ex_fp_word;
   logic             id_ex_is_csr;
   logic [2:0]       id_ex_csr_op;
   logic [11:0]      id_ex_csr_addr;
@@ -132,6 +137,9 @@ module moon_core
   logic             ex_mem_is_jal;
   logic             ex_mem_is_jalr;
   logic             ex_mem_regwrite;
+  logic             ex_mem_fp_we;
+  logic [4:0]       ex_mem_fp_rd;
+  logic             ex_mem_fp_word;
   logic             ex_mem_is_csr;
   logic [2:0]       ex_mem_csr_op;
   logic [11:0]      ex_mem_csr_addr;
@@ -198,6 +206,9 @@ module moon_core
   logic             mem_wb_is_jal;
   logic             mem_wb_is_jalr;
   logic             mem_wb_regwrite;
+  logic             mem_wb_fp_we;
+  logic [4:0]       mem_wb_fp_rd;
+  logic             mem_wb_fp_word;
   logic             mem_wb_is_csr;
   logic [2:0]       mem_wb_csr_op;
   logic [11:0]      mem_wb_csr_addr;
@@ -212,6 +223,9 @@ module moon_core
   logic             wb_regwrite;
   logic [4:0]       wb_rd;
   logic [XLEN-1:0]  wb_wdata;
+  logic [FLEN-1:0]  wb_fp_wdata;
+
+  assign wb_fp_wdata = mem_wb_fp_word ? {32'hffff_ffff, wb_wdata[31:0]} : wb_wdata;
 
   // Hazard and Forwarding
   fwd_sel_e         fwd_a;
@@ -373,8 +387,13 @@ module moon_core
     .wb_regwrite_i        (wb_regwrite),
     .wb_rd_i              (wb_rd),
     .wb_wdata_i           (wb_wdata),
+    .wb_fp_we_i           (mem_wb_fp_we),
+    .wb_fp_rd_i           (mem_wb_fp_rd),
+    .wb_fp_wdata_i        (wb_fp_wdata),
     .id_rs1_o             (id_rs1),
     .id_rs2_o             (id_rs2),
+    .id_fp_rs1_o          (id_fp_rs1),
+    .id_fp_rs1_en_o       (id_fp_rs1_en),
     .id_ex_valid_o        (id_ex_valid),
     .id_ex_pc_o           (id_ex_pc),
     .id_ex_instr_o        (id_ex_instr),
@@ -403,6 +422,9 @@ module moon_core
     .id_ex_is_store_o     (id_ex_is_store),
     .id_ex_mem_width_o    (id_ex_mem_width),
     .id_ex_regwrite_o     (id_ex_regwrite),
+    .id_ex_fp_we_o        (id_ex_fp_we),
+    .id_ex_fp_rd_o        (id_ex_fp_rd),
+    .id_ex_fp_word_o      (id_ex_fp_word),
     .id_ex_is_csr_o       (id_ex_is_csr),
     .id_ex_csr_op_o       (id_ex_csr_op),
     .id_ex_csr_addr_o     (id_ex_csr_addr),
@@ -451,6 +473,9 @@ module moon_core
     .id_ex_is_store_i     (id_ex_is_store),
     .id_ex_mem_width_i    (id_ex_mem_width),
     .id_ex_regwrite_i     (id_ex_regwrite),
+    .id_ex_fp_we_i        (id_ex_fp_we),
+    .id_ex_fp_rd_i        (id_ex_fp_rd),
+    .id_ex_fp_word_i      (id_ex_fp_word),
     .id_ex_is_csr_i       (id_ex_is_csr),
     .id_ex_csr_op_i       (id_ex_csr_op),
     .id_ex_csr_addr_i     (id_ex_csr_addr),
@@ -489,6 +514,9 @@ module moon_core
     .ex_mem_is_jal_o      (ex_mem_is_jal),
     .ex_mem_is_jalr_o     (ex_mem_is_jalr),
     .ex_mem_regwrite_o    (ex_mem_regwrite),
+    .ex_mem_fp_we_o       (ex_mem_fp_we),
+    .ex_mem_fp_rd_o       (ex_mem_fp_rd),
+    .ex_mem_fp_word_o     (ex_mem_fp_word),
     .ex_mem_is_csr_o      (ex_mem_is_csr),
     .ex_mem_csr_op_o      (ex_mem_csr_op),
     .ex_mem_csr_addr_o    (ex_mem_csr_addr),
@@ -530,6 +558,9 @@ module moon_core
     .ex_mem_is_jal_i     (ex_mem_is_jal),
     .ex_mem_is_jalr_i    (ex_mem_is_jalr),
     .ex_mem_regwrite_i   (ex_mem_regwrite),
+    .ex_mem_fp_we_i      (ex_mem_fp_we),
+    .ex_mem_fp_rd_i      (ex_mem_fp_rd),
+    .ex_mem_fp_word_i    (ex_mem_fp_word),
     .ex_mem_is_csr_i     (ex_mem_is_csr),
     .ex_mem_csr_op_i     (ex_mem_csr_op),
     .ex_mem_csr_addr_i   (ex_mem_csr_addr),
@@ -560,6 +591,9 @@ module moon_core
     .mem_wb_is_jal_o     (mem_wb_is_jal),
     .mem_wb_is_jalr_o    (mem_wb_is_jalr),
     .mem_wb_regwrite_o   (mem_wb_regwrite),
+    .mem_wb_fp_we_o      (mem_wb_fp_we),
+    .mem_wb_fp_rd_o      (mem_wb_fp_rd),
+    .mem_wb_fp_word_o    (mem_wb_fp_word),
     .mem_wb_is_csr_o     (mem_wb_is_csr),
     .mem_wb_csr_op_o     (mem_wb_csr_op),
     .mem_wb_csr_addr_o   (mem_wb_csr_addr),
@@ -610,6 +644,12 @@ module moon_core
     .id_ex_rd_i         (id_ex_rd),
     .ex_mem_rd_i        (ex_mem_rd),
     .mem_wb_rd_i        (mem_wb_rd),
+    .if_id_fp_rs1_en_i  (id_fp_rs1_en),
+    .if_id_fp_rs1_i     (id_fp_rs1),
+    .id_ex_fp_we_i      (id_ex_fp_we),
+    .id_ex_fp_rd_i      (id_ex_fp_rd),
+    .ex_mem_fp_we_i     (ex_mem_fp_we),
+    .ex_mem_fp_rd_i     (ex_mem_fp_rd),
     .id_ex_is_load_i    (id_ex_is_load),
     .id_ex_is_csr_i     (id_ex_is_csr),
     .ex_mem_is_csr_i    (ex_mem_is_csr),

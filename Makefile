@@ -7,7 +7,7 @@ SIM ?= verilator
 TEST_HEX ?= $(PWD)/sw/tests/asm/test_rv64_all.hex
 SIM_BUILD ?= sim_build
 
-.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test soc-cache-test soc-bitmanip-test soc-compressed-test soc-smode-test soc-pmp-test soc-mmu-test clean
+.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test soc-cache-test soc-bitmanip-test soc-compressed-test soc-smode-test soc-pmp-test soc-mmu-test soc-fp-test clean
 
 all: test soc-test
 
@@ -40,6 +40,9 @@ soc-pmp-test:
 # Run SoC Sv39 virtual memory translation verification test
 soc-mmu-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_mmu_sv39.hex
+
+soc-fp-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_fp_moves.hex
 
 # Run SoC Peripherals verification test
 soc-periph-test:

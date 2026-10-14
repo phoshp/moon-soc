@@ -53,6 +53,9 @@ module moon_ex_stage
   input  logic             id_ex_is_store_i,
   input  mem_width_e       id_ex_mem_width_i,
   input  logic             id_ex_regwrite_i,
+  input  logic             id_ex_fp_we_i,
+  input  logic [4:0]       id_ex_fp_rd_i,
+  input  logic             id_ex_fp_word_i,
   input  logic             id_ex_is_csr_i,
   input  logic [2:0]       id_ex_csr_op_i,
   input  logic [11:0]      id_ex_csr_addr_i,
@@ -99,6 +102,9 @@ module moon_ex_stage
   output logic             ex_mem_is_jal_o,
   output logic             ex_mem_is_jalr_o,
   output logic             ex_mem_regwrite_o,
+  output logic             ex_mem_fp_we_o,
+  output logic [4:0]       ex_mem_fp_rd_o,
+  output logic             ex_mem_fp_word_o,
   output logic             ex_mem_is_csr_o,
   output logic [2:0]       ex_mem_csr_op_o,
   output logic [11:0]      ex_mem_csr_addr_o,
@@ -260,6 +266,9 @@ module moon_ex_stage
       ex_mem_is_jal_o    <= 1'b0;
       ex_mem_is_jalr_o   <= 1'b0;
       ex_mem_regwrite_o  <= 1'b0;
+      ex_mem_fp_we_o     <= 1'b0;
+      ex_mem_fp_rd_o     <= '0;
+      ex_mem_fp_word_o   <= 1'b0;
       ex_mem_is_csr_o    <= 1'b0;
       ex_mem_csr_op_o    <= '0;
       ex_mem_csr_addr_o  <= '0;
@@ -293,6 +302,9 @@ module moon_ex_stage
       ex_mem_is_jal_o    <= 1'b0;
       ex_mem_is_jalr_o   <= 1'b0;
       ex_mem_regwrite_o  <= 1'b0;
+      ex_mem_fp_we_o     <= 1'b0;
+      ex_mem_fp_rd_o     <= '0;
+      ex_mem_fp_word_o   <= 1'b0;
       ex_mem_is_csr_o    <= 1'b0;
       ex_mem_csr_op_o    <= '0;
       ex_mem_csr_addr_o  <= '0;
@@ -326,6 +338,9 @@ module moon_ex_stage
       ex_mem_is_jal_o    <= id_ex_is_jal_i;
       ex_mem_is_jalr_o   <= id_ex_is_jalr_i;
       ex_mem_regwrite_o  <= id_ex_regwrite_i;
+      ex_mem_fp_we_o     <= id_ex_fp_we_i;
+      ex_mem_fp_rd_o     <= id_ex_fp_rd_i;
+      ex_mem_fp_word_o   <= id_ex_fp_word_i;
       ex_mem_is_csr_o    <= id_ex_is_csr_i;
       ex_mem_csr_op_o    <= id_ex_csr_op_i;
       ex_mem_csr_addr_o  <= id_ex_csr_addr_i;
