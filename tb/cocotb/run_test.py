@@ -30,6 +30,7 @@ def run_test(test_hex=None, waves=False, verbose=False):
             "-Wno-WIDTHTRUNC",
             "-Wno-UNUSED",
             f"-I{rtl_dir}",
+            f"-I{rtl_dir / 'mmu'}",
             f"-I{tb_dir}",
         ],
         waves=waves,

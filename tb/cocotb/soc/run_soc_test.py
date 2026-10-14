@@ -11,6 +11,7 @@ def run_soc_test(test_hex=None, waves=False, verbose=False):
     rtl_dirs = [
         repo_root / "rtl" / "core",
         repo_root / "rtl" / "core" / "cache",
+        repo_root / "rtl" / "core" / "mmu",
         repo_root / "rtl" / "soc" / "interconnect",
         repo_root / "rtl" / "soc" / "memory",
         repo_root / "rtl" / "soc" / "periph",

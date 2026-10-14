@@ -7,7 +7,7 @@ SIM ?= verilator
 TEST_HEX ?= $(PWD)/sw/tests/asm/test_rv64_all.hex
 SIM_BUILD ?= sim_build
 
-.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test soc-cache-test clean
+.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test soc-cache-test soc-bitmanip-test soc-compressed-test soc-smode-test soc-pmp-test soc-mmu-test clean
 
 all: test soc-test
 
@@ -20,6 +20,26 @@ sim: test
 # Run SoC Top-Level simulation test
 soc-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(TEST_HEX)
+
+# Run SoC Bitmanipulation verification test (Zba, Zbb, Zbs)
+soc-bitmanip-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_bitmanip.hex
+
+# Run SoC Compressed 16-bit instructions verification test (Zca, Zcb)
+soc-compressed-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_compressed.hex
+
+# Run SoC Supervisor Mode & Privilege Architecture verification test
+soc-smode-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_smode.hex
+
+# Run SoC Physical Memory Protection (PMP & Smepmp) verification test
+soc-pmp-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_pmp.hex
+
+# Run SoC Sv39 virtual memory translation verification test
+soc-mmu-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_mmu_sv39.hex
 
 # Run SoC Peripherals verification test
 soc-periph-test:
