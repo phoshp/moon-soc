@@ -28,6 +28,7 @@ module moon_vector_unit (
   logic         is_vsub_vx;
   logic         is_vlogic;
   logic         is_vshift;
+  logic         is_vcompare;
   logic [4:0]   vd, vs1, vs2;
 
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
@@ -58,6 +59,13 @@ module moon_vector_unit (
                      instr_i[25] && ((instr_i[14:12] == 3'b000) ||
                                      (instr_i[14:12] == 3'b100) ||
                                      (instr_i[14:12] == 3'b011));
+  assign is_vcompare = (instr_i[6:0] == 7'b1010111) &&
+                       ((instr_i[31:26] == 6'b011000) ||
+                        (instr_i[31:26] == 6'b011001) ||
+                        (instr_i[31:26] == 6'b011010) ||
+                        (instr_i[31:26] == 6'b011011)) &&
+                       instr_i[25] && ((instr_i[14:12] == 3'b000) ||
+                                       (instr_i[14:12] == 3'b100));
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
@@ -141,6 +149,19 @@ module moon_vector_unit (
               6'b100101: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] << shift_amount;
               6'b101000: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] >> shift_amount;
               default:   vreg[vd][i*32 +: 32] <= $signed(vreg[vs2][i*32 +: 32]) >>> shift_amount;
+            endcase
+          end
+        end
+      end else if (is_vcompare) begin
+        for (int i = 0; i < 4; i++) begin
+          if (i < vl_q) begin
+            logic [31:0] operand_b;
+            operand_b = (instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] : vreg[vs1][i*32 +: 32];
+            case (instr_i[31:26])
+              6'b011000: vreg[vd][i] <= vreg[vs2][i*32 +: 32] == operand_b;
+              6'b011001: vreg[vd][i] <= vreg[vs2][i*32 +: 32] != operand_b;
+              6'b011010: vreg[vd][i] <= vreg[vs2][i*32 +: 32] < operand_b;
+              default:   vreg[vd][i] <= $signed(vreg[vs2][i*32 +: 32]) < $signed(operand_b);
             endcase
           end
         end
