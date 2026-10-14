@@ -285,6 +285,90 @@ _start:
     li   t2, -3
     bne  t1, t2, fail
 
+    li   t0, 0x3fc00000
+    fmv.w.x f1, t0
+    li   t0, 0x40000000
+    fmv.w.x f2, t0
+    li   t0, 0x3f000000
+    fmv.w.x f3, t0
+    fmadd.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0x40600000
+    bne  t1, t2, fail
+    fmsub.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0x40200000
+    bne  t1, t2, fail
+    fnmsub.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0xc0200000
+    addiw t2, t2, 0
+    bne  t1, t2, fail
+    fnmadd.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0xc0600000
+    addiw t2, t2, 0
+    bne  t1, t2, fail
+
+    li   t0, 0x3f800000
+    fmv.w.x f1, t0
+    fmv.w.x f2, t0
+    li   t0, 0x33800000
+    fmv.w.x f3, t0
+    csrw fflags, zero
+    fmadd.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0x3f800000
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 1
+    li   t2, 1
+    bne  t1, t2, fail
+    fmadd.s f4, f1, f2, f3, rup
+    fmv.x.w t1, f4
+    li   t2, 0x3f800001
+    bne  t1, t2, fail
+
+    li   t0, 0x7f800000
+    fmv.w.x f1, t0
+    li   t0, 0
+    fmv.w.x f2, t0
+    li   t0, 0x3f800000
+    fmv.w.x f3, t0
+    csrw fflags, zero
+    fmadd.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0x7fc00000
+    addiw t2, t2, 0
+    bne  t1, t2, fail
+    csrr t1, fflags
+    andi t1, t1, 16
+    li   t2, 16
+    bne  t1, t2, fail
+
+    li   t0, 0x3ff0000002000000
+    fmv.d.x f1, t0
+    li   t0, 0x3feffffffc000000
+    fmv.d.x f2, t0
+    li   t0, 0xbff0000000000000
+    fmv.d.x f3, t0
+    fmadd.d f4, f1, f2, f3, rne
+    fmv.x.d t1, f4
+    li   t2, 0xbc90000000000000
+    bne  t1, t2, fail
+
+    li   t0, 0x3f800400
+    fmv.w.x f1, t0
+    li   t0, 0x3f7ff800
+    fmv.w.x f2, t0
+    li   t0, 0xbf800000
+    fmv.w.x f3, t0
+    fmadd.s f4, f1, f2, f3, rne
+    fmv.x.w t1, f4
+    li   t2, 0xb2800000
+    addiw t2, t2, 0
+    bne  t1, t2, fail
+
     li   t0, 3
     fcvt.s.wu f2, t0, rne
     fmv.x.w t1, f2
