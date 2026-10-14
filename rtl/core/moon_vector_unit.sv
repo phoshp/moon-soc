@@ -266,8 +266,15 @@ module moon_vector_unit (
     if (is_vsetvli) begin
       if ((instr_i[22:20] == 3'b000) && (instr_i[25:23] <= 3'b011)) begin
         vlmax = 5'd16 >> instr_i[25:23];
-        if ((scalar_rs1_i == 64'd0) || (scalar_rs1_i >= vlmax)) vl = vlmax;
-        else vl = scalar_rs1_i[4:0];
+        if (instr_i[19:15] == 5'd0) begin
+          vl = (instr_i[11:7] == 5'd0) ? vl_q : vlmax;
+        end else if (scalar_rs1_i == 64'd0) begin
+          vl = 5'd0;
+        end else if (scalar_rs1_i >= vlmax) begin
+          vl = vlmax;
+        end else begin
+          vl = scalar_rs1_i[4:0];
+        end
       end else begin
         vl = 5'd0;
       end
