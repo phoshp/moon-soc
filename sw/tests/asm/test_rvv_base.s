@@ -114,6 +114,32 @@ _start:
     vmv.x.s a2, v5
     bne  a2, a1, fail
 
+    vsetvli t0, zero, e8, m1, ta, ma
+    li   t1, 16
+    bne  t0, t1, fail
+    li   a0, 0x123
+    vmv.v.x v6, a0
+    vmv.x.s a2, v6
+    li   t1, 0x23
+    bne  a2, t1, fail
+
+    vsetvli t0, zero, e16, m1, ta, ma
+    li   t1, 8
+    bne  t0, t1, fail
+    li   a0, 0x8001
+    vmv.v.x v6, a0
+    vmv.x.s a2, v6
+    li   t1, -32767
+    bne  a2, t1, fail
+
+    vsetvli t0, zero, e64, m1, ta, ma
+    li   t1, 2
+    bne  t0, t1, fail
+    li   a0, 0x123456789abcdef0
+    vmv.v.x v6, a0
+    vmv.x.s a2, v6
+    bne  a2, a0, fail
+
 pass:
     li   t0, 0xCAFEBABE
     sw   t0, 0(s0)
