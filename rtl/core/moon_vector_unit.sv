@@ -38,7 +38,8 @@ module moon_vector_unit (
   assign is_vadd_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
                       instr_i[25] && (instr_i[14:12] == 3'b000);
   assign is_vadd_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
-                      instr_i[25] && (instr_i[14:12] == 3'b100);
+                      instr_i[25] && ((instr_i[14:12] == 3'b100) ||
+                                      (instr_i[14:12] == 3'b011));
   assign is_vsub_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
                       instr_i[25] && (instr_i[14:12] == 3'b000);
   assign is_vsub_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
@@ -47,12 +48,16 @@ module moon_vector_unit (
                      ((instr_i[31:26] == 6'b001001) ||
                       (instr_i[31:26] == 6'b001010) ||
                       (instr_i[31:26] == 6'b001011)) &&
-                     instr_i[25] && ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100));
+                     instr_i[25] && ((instr_i[14:12] == 3'b000) ||
+                                     (instr_i[14:12] == 3'b100) ||
+                                     (instr_i[14:12] == 3'b011));
   assign is_vshift = (instr_i[6:0] == 7'b1010111) &&
                      ((instr_i[31:26] == 6'b100101) ||
                       (instr_i[31:26] == 6'b101000) ||
                       (instr_i[31:26] == 6'b101001)) &&
-                     instr_i[25] && ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100));
+                     instr_i[25] && ((instr_i[14:12] == 3'b000) ||
+                                     (instr_i[14:12] == 3'b100) ||
+                                     (instr_i[14:12] == 3'b011));
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
@@ -99,7 +104,8 @@ module moon_vector_unit (
         end
       end else if (is_vadd_vx) begin
         for (int i = 0; i < 4; i++) begin
-          if (i < vl_q) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] + scalar_rs1_i[31:0];
+          if (i < vl_q) vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] +
+              ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i[31:0]);
         end
       end else if (is_vsub_vv) begin
         for (int i = 0; i < 4; i++) begin
@@ -114,11 +120,14 @@ module moon_vector_unit (
           if (i < vl_q) begin
             case (instr_i[31:26])
               6'b001001: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] &
-                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] : vreg[vs1][i*32 +: 32]);
+                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] :
+                                                    ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]));
               6'b001010: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] |
-                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] : vreg[vs1][i*32 +: 32]);
+                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] :
+                                                    ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]));
               default:   vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] ^
-                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] : vreg[vs1][i*32 +: 32]);
+                                                   ((instr_i[14:12] == 3'b100) ? scalar_rs1_i[31:0] :
+                                                    ((instr_i[14:12] == 3'b011) ? {{27{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]));
             endcase
           end
         end
@@ -126,7 +135,8 @@ module moon_vector_unit (
         for (int i = 0; i < 4; i++) begin
           if (i < vl_q) begin
             logic [4:0] shift_amount;
-            shift_amount = (instr_i[14:12] == 3'b100) ? scalar_rs1_i[4:0] : vreg[vs1][i*32 +: 5];
+            shift_amount = (instr_i[14:12] == 3'b100) ? scalar_rs1_i[4:0] :
+                           (instr_i[14:12] == 3'b011) ? instr_i[19:15] : vreg[vs1][i*32 +: 5];
             case (instr_i[31:26])
               6'b100101: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] << shift_amount;
               6'b101000: vreg[vd][i*32 +: 32] <= vreg[vs2][i*32 +: 32] >> shift_amount;
