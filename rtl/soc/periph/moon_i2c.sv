@@ -21,32 +21,28 @@ module moon_i2c import axi_pkg::*; #(
   logic [15:0] div_q, div_cnt_q;
   logic [7:0] tx_q, rx_q;
   logic [3:0] bit_q;
-  logic read_q, ack_q;
+  logic read_q, ack_q, phase_q, scl_q;
   wire tick = div_cnt_q >= (div_q == 0 ? 16'd1 : div_q);
   wire command = req_i.sel && req_i.enable && req_i.write && req_i.addr[7:0] == REG_CTRL;
 
   // Open-drain SDA: output enable means actively pull the line low.
   always_comb begin
-    scl_o = 1'b1;
+    scl_o = scl_q;
     sda_o = 1'b0;
     sda_oe_o = 1'b0;
     case (state_q)
-      START: begin scl_o=1'b1; sda_oe_o=1'b1; end
-      SEND: begin scl_o=1'b1; sda_oe_o=!tx_q[7]; end
-      ACK: begin scl_o=1'b1; end
-      RECEIVE: begin scl_o=1'b1; end
-      MASTER_ACK: begin scl_o=1'b1; sda_oe_o=!read_q; end
-      STOP: begin scl_o=1'b1; sda_oe_o=1'b1; end
-      default: begin scl_o=1'b1; end
+      START: sda_oe_o = 1'b1;
+      SEND: sda_oe_o = !tx_q[7];
+      MASTER_ACK: sda_oe_o = !read_q;
+      STOP: sda_oe_o = 1'b1;
+      default: ;
     endcase
-    // Clock low on alternate divider phases while a transfer is active.
-    if (state_q != IDLE && !div_cnt_q[0]) scl_o = 1'b0;
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       state_q<=IDLE; div_q<=16'd1; div_cnt_q<='0; tx_q<='0; rx_q<='0;
-      bit_q<='0; read_q<=1'b0; ack_q<=1'b0;
+      bit_q<='0; read_q<=1'b0; ack_q<=1'b0; phase_q<=1'b0; scl_q<=1'b1;
     end else begin
       if (req_i.sel && req_i.enable && req_i.write) begin
         if (req_i.addr[7:0] == REG_DIV) div_q<=req_i.wdata[15:0];
@@ -54,29 +50,44 @@ module moon_i2c import axi_pkg::*; #(
       end
       if (command && state_q==IDLE) begin
         // CTRL[0]=start+write, CTRL[1]=start+read, CTRL[2]=stop.
-        if (req_i.wdata[2]) state_q<=STOP;
+        if (req_i.wdata[2]) begin state_q<=STOP; phase_q<=1'b0; scl_q<=1'b0; end
         else if (req_i.wdata[0] || req_i.wdata[1]) begin
-          read_q<=req_i.wdata[1]; bit_q<='0; rx_q<='0; state_q<=START;
+          read_q<=req_i.wdata[1]; bit_q<='0; rx_q<='0; phase_q<=1'b0; scl_q<=1'b1; state_q<=START;
         end
       end else if (state_q != IDLE) begin
         if (tick) begin
           div_cnt_q<='0;
           case (state_q)
-            START: state_q<=read_q ? RECEIVE : SEND;
+            START: begin
+              // Hold SDA low while SCL is high for the START condition.
+              state_q<=read_q ? RECEIVE : SEND; scl_q<=1'b0; phase_q<=1'b0;
+            end
             SEND: begin
-              tx_q<={tx_q[6:0],1'b0};
-              if (bit_q==7) begin bit_q<='0; state_q<=ACK; end
-              else bit_q<=bit_q+1'b1;
+              if (!phase_q) begin scl_q<=1'b1; phase_q<=1'b1; end
+              else begin
+                scl_q<=1'b0; phase_q<=1'b0; tx_q<={tx_q[6:0],1'b0};
+                if (bit_q==7) begin bit_q<='0; state_q<=ACK; end
+                else bit_q<=bit_q+1'b1;
+              end
             end
-            ACK: begin ack_q<=!sda_i; state_q<=IDLE; end
+            ACK: begin
+              if (!phase_q) begin scl_q<=1'b1; phase_q<=1'b1; end
+              else begin ack_q<=!sda_i; scl_q<=1'b0; phase_q<=1'b0; state_q<=IDLE; end
+            end
             RECEIVE: begin
-              rx_q<={rx_q[6:0],sda_i};
-              if (bit_q==7) begin bit_q<='0; state_q<=MASTER_ACK; end
-              else bit_q<=bit_q+1'b1;
+              if (!phase_q) begin scl_q<=1'b1; phase_q<=1'b1; end
+              else begin
+                rx_q<={rx_q[6:0],sda_i}; scl_q<=1'b0; phase_q<=1'b0;
+                if (bit_q==7) begin bit_q<='0; state_q<=MASTER_ACK; end
+                else bit_q<=bit_q+1'b1;
+              end
             end
-            MASTER_ACK: state_q<=IDLE;
-            STOP: state_q<=IDLE;
-            default: state_q<=IDLE;
+            MASTER_ACK: begin scl_q<=1'b1; phase_q<=1'b0; state_q<=IDLE; end
+            STOP: begin
+              if (!phase_q) begin scl_q<=1'b1; phase_q<=1'b1; end
+              else begin scl_q<=1'b1; phase_q<=1'b0; state_q<=IDLE; end
+            end
+            default: begin state_q<=IDLE; scl_q<=1'b1; end
           endcase
         end else div_cnt_q<=div_cnt_q+1'b1;
       end
