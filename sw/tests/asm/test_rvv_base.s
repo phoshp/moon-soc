@@ -17,6 +17,21 @@ _start:
     li   t1, 7
     bne  a2, t1, fail
 
+    li   a0, 42
+    vmv.v.x v3, a0
+    li   a0, 0
+    vmv.v.x v0, a0
+    vadd.vv v3, v1, v2, v0.t
+    vmv.x.s a2, v3
+    li   t1, 42
+    bne  a2, t1, fail
+    li   a0, 1
+    vmv.v.x v0, a0
+    vadd.vv v3, v1, v2, v0.t
+    vmv.x.s a2, v3
+    li   t1, 7
+    bne  a2, t1, fail
+
     li   a0, 2
     vadd.vx v3, v3, a0
     vmv.x.s a2, v3
