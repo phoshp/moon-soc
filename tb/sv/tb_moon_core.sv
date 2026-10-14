@@ -118,6 +118,22 @@ module tb_moon_core (
         end
       end
     end
+
+    if (debug_pc == 64'h10ce) begin
+      $display("[%0t ns] [DEBUG at 0x10ce] rs1(a3)=0x%0x rs2(a1)=0x%0x (rf a3=0x%0x, a1=0x%0x)",
+               $time, dut.id_ex_rs1_data, dut.id_ex_rs2_data,
+               dut.u_id_stage.u_regfile.regs[13], dut.u_id_stage.u_regfile.regs[11]);
+    end
+
+    if (debug_pc == 64'h10d0) begin
+      $display("[%0t ns] [AT 0x10d0] ptw_state=%0d dtlb_req=%0d itlb_req=%0d dmem_vaddr=0x%0x dtlb_hit=%0d dtlb_store_fault=%0d",
+               $time, dut.u_mmu.u_ptw.state_q, dut.u_mmu.dtlb_ptw_req, dut.u_mmu.itlb_ptw_req, dut.dmem_vaddr, dut.u_mmu.dtlb_hit, dut.u_mmu.dtlb_store_fault);
+    end
+
+    if (debug_pc == 64'h10e2) begin
+      $display("[%0t ns] [AT 0x10e2] req=%0d we=%0d addr=0x%0x wdata=0x%0x hit=%0d busy=%0d",
+               $time, dmem_req, dmem_we, dmem_addr, dmem_wdata, dut.mmu_data_hit, dut.mmu_busy);
+    end
   end
 
   string hex_file = "sw/tests/asm/test_rv64_all.hex";

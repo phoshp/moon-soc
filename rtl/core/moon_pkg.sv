@@ -49,26 +49,63 @@ package moon_pkg;
   // --------------------------------------------------------------------------
   // ALU Operation Codes
   // --------------------------------------------------------------------------
-  typedef enum logic [4:0] {
-    ALU_ADD    = 5'd0,
-    ALU_SUB    = 5'd1,
-    ALU_AND    = 5'd2,
-    ALU_OR     = 5'd3,
-    ALU_XOR    = 5'd4,
-    ALU_SLL    = 5'd5,
-    ALU_SRL    = 5'd6,
-    ALU_SRA    = 5'd7,
-    ALU_SLT    = 5'd8,
-    ALU_SLTU   = 5'd9,
+  typedef enum logic [5:0] {
+    ALU_ADD    = 6'd0,
+    ALU_SUB    = 6'd1,
+    ALU_AND    = 6'd2,
+    ALU_OR     = 6'd3,
+    ALU_XOR    = 6'd4,
+    ALU_SLL    = 6'd5,
+    ALU_SRL    = 6'd6,
+    ALU_SRA    = 6'd7,
+    ALU_SLT    = 6'd8,
+    ALU_SLTU   = 6'd9,
     // 32-bit Word Operations
-    ALU_ADDW   = 5'd10,
-    ALU_SUBW   = 5'd11,
-    ALU_SLLW   = 5'd12,
-    ALU_SRLW   = 5'd13,
-    ALU_SRAW   = 5'd14,
+    ALU_ADDW   = 6'd10,
+    ALU_SUBW   = 6'd11,
+    ALU_SLLW   = 6'd12,
+    ALU_SRLW   = 6'd13,
+    ALU_SRAW   = 6'd14,
     // Pass-throughs
-    ALU_COPY_A = 5'd15,
-    ALU_COPY_B = 5'd16
+    ALU_COPY_A = 6'd15,
+    ALU_COPY_B = 6'd16,
+    // Zba (Address Generation)
+    ALU_SH1ADD    = 6'd17,
+    ALU_SH2ADD    = 6'd18,
+    ALU_SH3ADD    = 6'd19,
+    ALU_SH1ADD_UW = 6'd20,
+    ALU_SH2ADD_UW = 6'd21,
+    ALU_SH3ADD_UW = 6'd22,
+    ALU_ADD_UW    = 6'd23,
+    ALU_SLLI_UW   = 6'd24,
+    // Zbb (Basic Bitmanipulation)
+    ALU_CLZ       = 6'd25,
+    ALU_CTZ       = 6'd26,
+    ALU_CPOP      = 6'd27,
+    ALU_CLZW      = 6'd28,
+    ALU_CTZW      = 6'd29,
+    ALU_CPOPW     = 6'd30,
+    ALU_MIN       = 6'd31,
+    ALU_MAX       = 6'd32,
+    ALU_MINU      = 6'd33,
+    ALU_MAXU      = 6'd34,
+    ALU_SEXT_B    = 6'd35,
+    ALU_SEXT_H    = 6'd36,
+    ALU_ZEXT_H    = 6'd37,
+    ALU_ROL       = 6'd38,
+    ALU_ROR       = 6'd39,
+    ALU_ROLW      = 6'd40,
+    ALU_RORW      = 6'd41,
+    ALU_REV8      = 6'd42,
+    ALU_ORC_B     = 6'd43,
+    ALU_ANDN      = 6'd44,
+    ALU_ORN       = 6'd45,
+    ALU_XNOR      = 6'd46,
+    // Zbs (Single-Bit Operations)
+    ALU_BSET      = 6'd47,
+    ALU_BCLR      = 6'd48,
+    ALU_BINV      = 6'd49,
+    ALU_BEXT      = 6'd50
   } alu_op_e;
 
   // --------------------------------------------------------------------------
@@ -143,10 +180,21 @@ package moon_pkg;
   } fwd_sel_e;
 
   // --------------------------------------------------------------------------
+  // Privilege Levels
+  // --------------------------------------------------------------------------
+  typedef enum logic [1:0] {
+    PRV_U = 2'b00,  // User Mode
+    PRV_S = 2'b01,  // Supervisor Mode
+    PRV_M = 2'b11   // Machine Mode
+  } priv_lvl_e;
+
+  // --------------------------------------------------------------------------
   // Machine Mode Control and Status Registers (CSR Addresses)
   // --------------------------------------------------------------------------
   localparam logic [11:0] CSR_MSTATUS   = 12'h300;
   localparam logic [11:0] CSR_MISA      = 12'h301;
+  localparam logic [11:0] CSR_MEDELEG   = 12'h302;
+  localparam logic [11:0] CSR_MIDELEG   = 12'h303;
   localparam logic [11:0] CSR_MIE       = 12'h304;
   localparam logic [11:0] CSR_MTVEC     = 12'h305;
   localparam logic [11:0] CSR_MEPC      = 12'h341;
@@ -156,6 +204,39 @@ package moon_pkg;
   localparam logic [11:0] CSR_MHARTID   = 12'hF14;
   localparam logic [11:0] CSR_MCYCLE    = 12'hB00;
   localparam logic [11:0] CSR_MINSTRET  = 12'hB02;
+
+  // Supervisor Mode Control and Status Registers (CSR Addresses)
+  localparam logic [11:0] CSR_SSTATUS   = 12'h100;
+  localparam logic [11:0] CSR_SIE       = 12'h104;
+  localparam logic [11:0] CSR_STVEC     = 12'h105;
+  localparam logic [11:0] CSR_SCOUNTEREN= 12'h106;
+  localparam logic [11:0] CSR_STIMECMP  = 12'h14D;  // Sstc extension
+  localparam logic [11:0] CSR_SSCRATCH  = 12'h140;
+  localparam logic [11:0] CSR_SEPC      = 12'h141;
+  localparam logic [11:0] CSR_SCAUSE    = 12'h142;
+  localparam logic [11:0] CSR_STVAL     = 12'h143;
+  localparam logic [11:0] CSR_SIP       = 12'h144;
+  localparam logic [11:0] CSR_SATP      = 12'h180;
+
+  // Physical Memory Protection (PMP CSR Addresses)
+  localparam logic [11:0] CSR_PMPCFG0   = 12'h3A0;
+  localparam logic [11:0] CSR_PMPCFG2   = 12'h3A2;
+  localparam logic [11:0] CSR_PMPADDR0  = 12'h3B0;
+  localparam logic [11:0] CSR_PMPADDR1  = 12'h3B1;
+  localparam logic [11:0] CSR_PMPADDR2  = 12'h3B2;
+  localparam logic [11:0] CSR_PMPADDR3  = 12'h3B3;
+  localparam logic [11:0] CSR_PMPADDR4  = 12'h3B4;
+  localparam logic [11:0] CSR_PMPADDR5  = 12'h3B5;
+  localparam logic [11:0] CSR_PMPADDR6  = 12'h3B6;
+  localparam logic [11:0] CSR_PMPADDR7  = 12'h3B7;
+  localparam logic [11:0] CSR_PMPADDR8  = 12'h3B8;
+  localparam logic [11:0] CSR_PMPADDR9  = 12'h3B9;
+  localparam logic [11:0] CSR_PMPADDR10 = 12'h3BA;
+  localparam logic [11:0] CSR_PMPADDR11 = 12'h3BB;
+  localparam logic [11:0] CSR_PMPADDR12 = 12'h3BC;
+  localparam logic [11:0] CSR_PMPADDR13 = 12'h3BD;
+  localparam logic [11:0] CSR_PMPADDR14 = 12'h3BE;
+  localparam logic [11:0] CSR_PMPADDR15 = 12'h3BF;
 
   // Floating-point CSR
   localparam logic [11:0] CSR_FFLAGS    = 12'h001;
@@ -174,11 +255,18 @@ package moon_pkg;
   localparam logic [62:0] CAUSE_MISALIGNED_STORE    = 63'd6;
   localparam logic [62:0] CAUSE_STORE_ACCESS_FAULT  = 63'd7;
   localparam logic [62:0] CAUSE_ECALL_U_MODE        = 63'd8;
+  localparam logic [62:0] CAUSE_ECALL_S_MODE        = 63'd9;
   localparam logic [62:0] CAUSE_ECALL_M_MODE        = 63'd11;
+  localparam logic [62:0] CAUSE_PAGE_FAULT_FETCH    = 63'd12;
+  localparam logic [62:0] CAUSE_PAGE_FAULT_LOAD     = 63'd13;
+  localparam logic [62:0] CAUSE_PAGE_FAULT_STORE    = 63'd15;
 
   // Interrupt Causes
+  localparam logic [62:0] INT_SOFTWARE_S            = 63'd1;
   localparam logic [62:0] INT_SOFTWARE_M            = 63'd3;
+  localparam logic [62:0] INT_TIMER_S               = 63'd5;
   localparam logic [62:0] INT_TIMER_M               = 63'd7;
+  localparam logic [62:0] INT_EXTERNAL_S            = 63'd9;
   localparam logic [62:0] INT_EXTERNAL_M            = 63'd11;
 
   // --------------------------------------------------------------------------

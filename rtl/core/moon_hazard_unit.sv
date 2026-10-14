@@ -33,6 +33,7 @@ module moon_hazard_unit
   input  logic        trap_flush_i,
   input  logic        busy_div_i,
   input  logic        busy_mem_i,
+  input  logic        busy_mmu_i,
 
   // Forwarding outputs
   output fwd_sel_e    fwd_a_o,
@@ -82,7 +83,7 @@ module moon_hazard_unit
   // --------------------------------------------------------------------------
   // Stall and Flush Control
   // --------------------------------------------------------------------------
-  wire global_busy = busy_div_i || busy_mem_i;
+  wire global_busy = busy_div_i || busy_mem_i || busy_mmu_i;
 
   always_comb begin
     stall_if_o  = 1'b0;

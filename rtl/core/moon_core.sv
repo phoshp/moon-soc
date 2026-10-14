@@ -15,6 +15,8 @@
 `include "moon_wb_stage.sv"
 `include "moon_hazard_unit.sv"
 `include "moon_csr.sv"
+`include "moon_pmp.sv"
+`include "mmu/moon_mmu.sv"
 
 module moon_core
   import moon_pkg::*;
@@ -59,6 +61,7 @@ module moon_core
   // IF to ID
   logic [XLEN-1:0]  if_id_pc;
   logic [ILEN-1:0]  if_id_instr;
+  logic             if_id_is_c;
   logic             if_id_valid;
 
   // ID to Hazard Unit & EX
@@ -67,6 +70,7 @@ module moon_core
   logic             id_ex_valid;
   logic [XLEN-1:0]  id_ex_pc;
   logic [ILEN-1:0]  id_ex_instr;
+  logic             id_ex_is_c;
   logic [4:0]       id_ex_rd;
   logic [4:0]       id_ex_rs1;
   logic [4:0]       id_ex_rs2;
@@ -95,9 +99,11 @@ module moon_core
   logic [2:0]       id_ex_csr_op;
   logic [11:0]      id_ex_csr_addr;
   logic             id_ex_is_mret;
+  logic             id_ex_is_sret;
   logic             id_ex_is_ecall;
   logic             id_ex_is_ebreak;
   logic             id_ex_is_wfi;
+  logic             id_ex_is_sfence;
 
   // EX to IF, Hazard, MEM
   logic             branch_taken;
@@ -130,9 +136,31 @@ module moon_core
   logic [11:0]      ex_mem_csr_addr;
   logic [XLEN-1:0]  ex_mem_csr_wdata;
   logic             ex_mem_is_mret;
+  logic             ex_mem_is_sret;
   logic             ex_mem_is_ecall;
   logic             ex_mem_is_ebreak;
   logic             ex_mem_is_wfi;
+  logic             ex_mem_is_sfence;
+
+  // MMU & Translation Signals
+  logic             mmu_busy;
+  logic             ptw_mem_req;
+  logic [XLEN-1:0]  ptw_mem_addr;
+  logic             ptw_mem_valid;
+  logic [XLEN-1:0]  ptw_mem_rdata;
+  logic             mmu_fetch_hit;
+  logic [XLEN-1:0]  imem_vaddr;
+  logic [XLEN-1:0]  mmu_fetch_paddr;
+  logic             mmu_fetch_page_fault;
+  logic             core_dmem_req;
+  logic             core_dmem_we;
+  logic [XLEN-1:0]  dmem_vaddr;
+  logic [XLEN-1:0]  core_dmem_wdata;
+  logic [7:0]       core_dmem_wstrb;
+  logic             mmu_data_hit;
+  logic [XLEN-1:0]  mmu_data_paddr;
+  logic             mmu_load_page_fault;
+  logic             mmu_store_page_fault;
 
   // MEM to WB
   logic             mem_wb_valid;
@@ -193,6 +221,16 @@ module moon_core
   // CSR & Trap Interface
   logic [XLEN-1:0]  trap_vector;
   logic [XLEN-1:0]  mepc;
+  logic [XLEN-1:0]  sepc;
+  priv_lvl_e        priv_lvl;
+  logic [XLEN-1:0]  satp;
+  logic             sum;
+  logic             mxr;
+  logic [7:0]       pmpcfg [0:15];
+  logic [XLEN-1:0]  pmpaddr [0:15];
+  logic             pmp_fetch_fault;
+  logic             pmp_load_fault;
+  logic             pmp_store_fault;
   logic             trap_enter;
   logic             is_interrupt;
   logic [62:0]      trap_cause;
@@ -238,7 +276,13 @@ module moon_core
     end else if (ex_mem_valid && ex_mem_is_ecall) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
-      trap_cause   = CAUSE_ECALL_M_MODE;
+      if (priv_lvl == PRV_U) begin
+        trap_cause = CAUSE_ECALL_U_MODE;
+      end else if (priv_lvl == PRV_S) begin
+        trap_cause = CAUSE_ECALL_S_MODE;
+      end else begin
+        trap_cause = CAUSE_ECALL_M_MODE;
+      end
       trap_val     = '0;
       trap_pc      = ex_mem_pc;
     end else if (ex_mem_valid && ex_mem_is_ebreak) begin
@@ -247,6 +291,42 @@ module moon_core
       trap_cause   = CAUSE_BREAKPOINT;
       trap_val     = ex_mem_pc;
       trap_pc      = ex_mem_pc;
+    end else if (core_dmem_req && mmu_load_page_fault) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_PAGE_FAULT_LOAD;
+      trap_val     = dmem_vaddr;
+      trap_pc      = ex_mem_pc;
+    end else if (core_dmem_req && mmu_store_page_fault) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_PAGE_FAULT_STORE;
+      trap_val     = dmem_vaddr;
+      trap_pc      = ex_mem_pc;
+    end else if (imem_req_o && mmu_fetch_page_fault) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_PAGE_FAULT_FETCH;
+      trap_val     = imem_vaddr;
+      trap_pc      = if_id_pc;
+    end else if (pmp_load_fault) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_LOAD_ACCESS_FAULT;
+      trap_val     = dmem_addr_o;
+      trap_pc      = ex_mem_pc;
+    end else if (pmp_store_fault) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_STORE_ACCESS_FAULT;
+      trap_val     = dmem_addr_o;
+      trap_pc      = ex_mem_pc;
+    end else if (pmp_fetch_fault) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_FETCH_ACCESS_FAULT;
+      trap_val     = imem_addr_o;
+      trap_pc      = if_id_pc;
     end
   end
 
@@ -265,12 +345,15 @@ module moon_core
     .trap_vector_i   (trap_vector),
     .mret_i          (ex_mem_is_mret),
     .mepc_i          (mepc),
+    .sret_i          (ex_mem_is_sret),
+    .sepc_i          (sepc),
     .imem_req_o      (imem_req_o),
-    .imem_addr_o     (imem_addr_o),
-    .imem_valid_i    (imem_valid_i),
+    .imem_addr_o     (imem_vaddr),
+    .imem_valid_i    (imem_valid_i && mmu_fetch_hit),
     .imem_rdata_i    (imem_rdata_i),
     .if_id_pc_o      (if_id_pc),
     .if_id_instr_o   (if_id_instr),
+    .if_id_is_c_o    (if_id_is_c),
     .if_id_valid_o   (if_id_valid)
   );
 
@@ -284,6 +367,7 @@ module moon_core
     .flush_ex_i           (flush_ex),
     .if_id_pc_i           (if_id_pc),
     .if_id_instr_i        (if_id_instr),
+    .if_id_is_c_i         (if_id_is_c),
     .if_id_valid_i        (if_id_valid),
     .wb_regwrite_i        (wb_regwrite),
     .wb_rd_i              (wb_rd),
@@ -293,6 +377,7 @@ module moon_core
     .id_ex_valid_o        (id_ex_valid),
     .id_ex_pc_o           (id_ex_pc),
     .id_ex_instr_o        (id_ex_instr),
+    .id_ex_is_c_o         (id_ex_is_c),
     .id_ex_rd_o           (id_ex_rd),
     .id_ex_rs1_o          (id_ex_rs1),
     .id_ex_rs2_o          (id_ex_rs2),
@@ -321,9 +406,11 @@ module moon_core
     .id_ex_csr_op_o       (id_ex_csr_op),
     .id_ex_csr_addr_o     (id_ex_csr_addr),
     .id_ex_is_mret_o      (id_ex_is_mret),
+    .id_ex_is_sret_o      (id_ex_is_sret),
     .id_ex_is_ecall_o     (id_ex_is_ecall),
     .id_ex_is_ebreak_o    (id_ex_is_ebreak),
     .id_ex_is_wfi_o       (id_ex_is_wfi),
+    .id_ex_is_sfence_o    (id_ex_is_sfence),
     .wfi_o                ()
   );
 
@@ -358,6 +445,7 @@ module moon_core
     .id_ex_branch_type_i  (id_ex_branch_type),
     .id_ex_is_jal_i       (id_ex_is_jal),
     .id_ex_is_jalr_i      (id_ex_is_jalr),
+    .id_ex_is_c_i         (id_ex_is_c),
     .id_ex_is_load_i      (id_ex_is_load),
     .id_ex_is_store_i     (id_ex_is_store),
     .id_ex_mem_width_i    (id_ex_mem_width),
@@ -366,9 +454,11 @@ module moon_core
     .id_ex_csr_op_i       (id_ex_csr_op),
     .id_ex_csr_addr_i     (id_ex_csr_addr),
     .id_ex_is_mret_i      (id_ex_is_mret),
+    .id_ex_is_sret_i      (id_ex_is_sret),
     .id_ex_is_ecall_i     (id_ex_is_ecall),
     .id_ex_is_ebreak_i    (id_ex_is_ebreak),
     .id_ex_is_wfi_i       (id_ex_is_wfi),
+    .id_ex_is_sfence_i    (id_ex_is_sfence),
     .fwd_a_i              (fwd_a),
     .fwd_b_i              (fwd_b),
     .fwd_ex_data_i        (ex_fwd_val),
@@ -403,9 +493,11 @@ module moon_core
     .ex_mem_csr_addr_o    (ex_mem_csr_addr),
     .ex_mem_csr_wdata_o   (ex_mem_csr_wdata),
     .ex_mem_is_mret_o     (ex_mem_is_mret),
+    .ex_mem_is_sret_o     (ex_mem_is_sret),
     .ex_mem_is_ecall_o    (ex_mem_is_ecall),
     .ex_mem_is_ebreak_o   (ex_mem_is_ebreak),
-    .ex_mem_is_wfi_o      (ex_mem_is_wfi)
+    .ex_mem_is_wfi_o      (ex_mem_is_wfi),
+    .ex_mem_is_sfence_o   (ex_mem_is_sfence)
   );
 
   // --------------------------------------------------------------------------
@@ -444,12 +536,12 @@ module moon_core
     .ex_mem_is_mret_i    (ex_mem_is_mret),
     .ex_mem_is_ecall_i   (ex_mem_is_ecall),
     .ex_mem_is_ebreak_i  (ex_mem_is_ebreak),
-    .dmem_req_o          (dmem_req_o),
-    .dmem_we_o           (dmem_we_o),
-    .dmem_addr_o         (dmem_addr_o),
-    .dmem_wdata_o        (dmem_wdata_o),
-    .dmem_wstrb_o        (dmem_wstrb_o),
-    .dmem_valid_i        (dmem_valid_i),
+    .dmem_req_o          (core_dmem_req),
+    .dmem_we_o           (core_dmem_we),
+    .dmem_addr_o         (dmem_vaddr),
+    .dmem_wdata_o        (core_dmem_wdata),
+    .dmem_wstrb_o        (core_dmem_wstrb),
+    .dmem_valid_i        (dmem_valid_i && mmu_data_hit && !mmu_busy),
     .dmem_rdata_i        (dmem_rdata_i),
     .inv_valid_i         (inv_valid_i),
     .inv_addr_i          (inv_addr_i),
@@ -523,9 +615,10 @@ module moon_core
     .ex_mem_regwrite_i  (ex_mem_regwrite),
     .mem_wb_regwrite_i  (mem_wb_regwrite),
     .branch_taken_i     (branch_taken),
-    .trap_flush_i       (trap_enter || ex_mem_is_mret),
+    .trap_flush_i       (trap_enter || ex_mem_is_mret || ex_mem_is_sret),
     .busy_div_i         (busy_div),
     .busy_mem_i         ((imem_req_o && !imem_valid_i) || (dmem_req_o && !dmem_valid_i)),
+    .busy_mmu_i         (mmu_busy || (!mmu_fetch_hit && imem_req_o) || (!mmu_data_hit && core_dmem_req)),
     .fwd_a_o            (fwd_a),
     .fwd_b_o            (fwd_b),
     .stall_if_o         (stall_if),
@@ -562,14 +655,87 @@ module moon_core
     .trap_pc_i           (trap_pc),
     .trap_val_i          (trap_val),
     .mret_i              (ex_mem_is_mret),
+    .sret_i              (ex_mem_is_sret),
     .trap_vector_o       (trap_vector),
     .mepc_o              (mepc),
+    .sepc_o              (sepc),
+    .priv_lvl_o          (priv_lvl),
+    .satp_o              (satp),
+    .sum_o               (sum),
+    .mxr_o               (mxr),
+    .pmpcfg_o            (pmpcfg),
+    .pmpaddr_o           (pmpaddr),
     .interrupt_pending_o (interrupt_pending),
     .interrupt_cause_o   (interrupt_cause),
     .fpu_flags_i         (5'b0),
     .fpu_flags_we_i      (1'b0),
     .frm_o               (unused_frm)
   );
+
+  // --------------------------------------------------------------------------
+  // 8. Physical Memory Protection (PMP) Unit
+  // --------------------------------------------------------------------------
+  moon_pmp #(
+    .NUM_ENTRIES (16)
+  ) u_pmp (
+    .priv_lvl_i    (priv_lvl),
+    .pmpcfg_i      (pmpcfg),
+    .pmpaddr_i     (pmpaddr),
+    .fetch_addr_i  (imem_addr_o),
+    .fetch_req_i   (imem_req_o),
+    .fetch_fault_o (pmp_fetch_fault),
+    .data_addr_i   (dmem_addr_o),
+    .data_req_i    (dmem_req_o),
+    .data_we_i     (dmem_we_o),
+    .load_fault_o  (pmp_load_fault),
+    .store_fault_o (pmp_store_fault)
+  );
+
+  // --------------------------------------------------------------------------
+  // 9. Memory Management Unit (Sv39 MMU, ITLB, DTLB, PTW)
+  // --------------------------------------------------------------------------
+  moon_mmu #(
+    .TLB_ENTRIES (16)
+  ) u_mmu (
+    .clk_i               (clk_i),
+    .rst_ni              (rst_ni),
+    .priv_lvl_i          (priv_lvl),
+    .satp_i              (satp),
+    .sum_i               (sum),
+    .mxr_i               (mxr),
+    .sfence_vma_i        (ex_mem_is_sfence),
+    .sfence_vaddr_i      (ex_mem_alu_res),
+    .sfence_asid_i       (ex_mem_rs2_data[15:0]),
+    .fetch_req_i         (imem_req_o),
+    .fetch_vaddr_i       (imem_vaddr),
+    .fetch_hit_o         (mmu_fetch_hit),
+    .fetch_paddr_o       (mmu_fetch_paddr),
+    .fetch_page_fault_o  (mmu_fetch_page_fault),
+    .data_req_i          (core_dmem_req),
+    .data_we_i           (core_dmem_we),
+    .data_vaddr_i        (dmem_vaddr),
+    .data_hit_o          (mmu_data_hit),
+    .data_paddr_o        (mmu_data_paddr),
+    .load_page_fault_o   (mmu_load_page_fault),
+    .store_page_fault_o  (mmu_store_page_fault),
+    .mmu_busy_o          (mmu_busy),
+    .ptw_mem_req_o       (ptw_mem_req),
+    .ptw_mem_addr_o      (ptw_mem_addr),
+    .ptw_mem_valid_i     (ptw_mem_valid),
+    .ptw_mem_rdata_i     (ptw_mem_rdata)
+  );
+
+  // Memory Bus Multiplexing (PTW vs Core)
+  assign dmem_req_o   = mmu_busy ? ptw_mem_req   : (core_dmem_req && mmu_data_hit);
+  assign dmem_we_o    = mmu_busy ? 1'b0          : core_dmem_we;
+  assign dmem_addr_o  = mmu_busy ? ptw_mem_addr  : mmu_data_paddr;
+  assign dmem_wdata_o = mmu_busy ? '0            : core_dmem_wdata;
+  assign dmem_wstrb_o = mmu_busy ? 8'hFF         : core_dmem_wstrb;
+
+  assign ptw_mem_valid = mmu_busy && dmem_valid_i;
+  assign ptw_mem_rdata = dmem_rdata_i;
+
+  assign imem_addr_o  = mmu_fetch_paddr;
 
   assign interrupt_pending_o = interrupt_pending;
   assign wfi_o = (ex_mem_valid && ex_mem_is_wfi) || (id_ex_valid && id_ex_is_wfi) || (if_id_valid && if_id_instr == 32'h1050_0073);

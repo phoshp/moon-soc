@@ -48,6 +48,7 @@ module moon_ex_stage
   input  branch_type_e     id_ex_branch_type_i,
   input  logic             id_ex_is_jal_i,
   input  logic             id_ex_is_jalr_i,
+  input  logic             id_ex_is_c_i,
   input  logic             id_ex_is_load_i,
   input  logic             id_ex_is_store_i,
   input  mem_width_e       id_ex_mem_width_i,
@@ -56,9 +57,11 @@ module moon_ex_stage
   input  logic [2:0]       id_ex_csr_op_i,
   input  logic [11:0]      id_ex_csr_addr_i,
   input  logic             id_ex_is_mret_i,
+  input  logic             id_ex_is_sret_i,
   input  logic             id_ex_is_ecall_i,
   input  logic             id_ex_is_ebreak_i,
   input  logic             id_ex_is_wfi_i,
+  input  logic             id_ex_is_sfence_i,
 
   // Forwarding Inputs from Hazard Unit
   input  fwd_sel_e         fwd_a_i,
@@ -101,9 +104,11 @@ module moon_ex_stage
   output logic [11:0]      ex_mem_csr_addr_o,
   output logic [XLEN-1:0]  ex_mem_csr_wdata_o,
   output logic             ex_mem_is_mret_o,
+  output logic             ex_mem_is_sret_o,
   output logic             ex_mem_is_ecall_o,
   output logic             ex_mem_is_ebreak_o,
-  output logic             ex_mem_is_wfi_o
+  output logic             ex_mem_is_wfi_o,
+  output logic             ex_mem_is_sfence_o
 );
 
   // --------------------------------------------------------------------------
@@ -225,8 +230,8 @@ module moon_ex_stage
     end
   end
 
-  // Link address for JAL / JALR (PC + 4)
-  wire [XLEN-1:0] link_pc = id_ex_pc_i + 64'd4;
+  // Link address for JAL / JALR (PC + 2 for compressed, PC + 4 for 32-bit)
+  wire [XLEN-1:0] link_pc = id_ex_pc_i + (id_ex_is_c_i ? 64'd2 : 64'd4);
 
   // --------------------------------------------------------------------------
   // EX/MEM Pipeline Register
@@ -260,9 +265,11 @@ module moon_ex_stage
       ex_mem_csr_addr_o  <= '0;
       ex_mem_csr_wdata_o <= '0;
       ex_mem_is_mret_o   <= 1'b0;
+      ex_mem_is_sret_o   <= 1'b0;
       ex_mem_is_ecall_o  <= 1'b0;
       ex_mem_is_ebreak_o <= 1'b0;
       ex_mem_is_wfi_o    <= 1'b0;
+      ex_mem_is_sfence_o <= 1'b0;
     end else if (flush_mem_i) begin
       ex_mem_valid_o     <= 1'b0;
       ex_mem_pc_o        <= '0;
@@ -291,9 +298,11 @@ module moon_ex_stage
       ex_mem_csr_addr_o  <= '0;
       ex_mem_csr_wdata_o <= '0;
       ex_mem_is_mret_o   <= 1'b0;
+      ex_mem_is_sret_o   <= 1'b0;
       ex_mem_is_ecall_o  <= 1'b0;
       ex_mem_is_ebreak_o <= 1'b0;
       ex_mem_is_wfi_o    <= 1'b0;
+      ex_mem_is_sfence_o <= 1'b0;
     end else if (!stall_mem_i) begin
       ex_mem_valid_o     <= id_ex_valid_i;
       ex_mem_pc_o        <= id_ex_pc_i;
@@ -322,9 +331,11 @@ module moon_ex_stage
       ex_mem_csr_addr_o  <= id_ex_csr_addr_i;
       ex_mem_csr_wdata_o <= id_ex_csr_op_i[2] ? id_ex_imm_i : operand_a_fwd;
       ex_mem_is_mret_o   <= id_ex_is_mret_i;
+      ex_mem_is_sret_o   <= id_ex_is_sret_i;
       ex_mem_is_ecall_o  <= id_ex_is_ecall_i;
       ex_mem_is_ebreak_o <= id_ex_is_ebreak_i;
       ex_mem_is_wfi_o    <= id_ex_is_wfi_i;
+      ex_mem_is_sfence_o <= id_ex_is_sfence_i;
     end
   end
 

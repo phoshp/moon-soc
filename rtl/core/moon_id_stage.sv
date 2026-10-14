@@ -23,6 +23,7 @@ module moon_id_stage
   // Inputs from IF Stage (IF/ID Register)
   input  logic [XLEN-1:0]  if_id_pc_i,
   input  logic [ILEN-1:0]  if_id_instr_i,
+  input  logic             if_id_is_c_i,
   input  logic             if_id_valid_i,
 
   // Register File Writeback Interface from WB Stage
@@ -60,6 +61,7 @@ module moon_id_stage
   output branch_type_e     id_ex_branch_type_o,
   output logic             id_ex_is_jal_o,
   output logic             id_ex_is_jalr_o,
+  output logic             id_ex_is_c_o,
   output logic             id_ex_is_load_o,
   output logic             id_ex_is_store_o,
   output mem_width_e       id_ex_mem_width_o,
@@ -68,9 +70,11 @@ module moon_id_stage
   output logic [2:0]       id_ex_csr_op_o,
   output logic [11:0]      id_ex_csr_addr_o,
   output logic             id_ex_is_mret_o,
+  output logic             id_ex_is_sret_o,
   output logic             id_ex_is_ecall_o,
   output logic             id_ex_is_ebreak_o,
   output logic             id_ex_is_wfi_o,
+  output logic             id_ex_is_sfence_o,
   output logic             wfi_o
 );
 
@@ -149,9 +153,11 @@ module moon_id_stage
   logic         dec_is_csr;
   logic [2:0]   dec_csr_op;
   logic         dec_is_mret;
+  logic         dec_is_sret;
   logic         dec_is_ecall;
   logic         dec_is_ebreak;
   logic         dec_is_wfi;
+  logic         dec_is_sfence;
 
   always_comb begin
     // Defaults
@@ -174,9 +180,11 @@ module moon_id_stage
     dec_is_csr         = 1'b0;
     dec_csr_op         = funct3;
     dec_is_mret        = 1'b0;
+    dec_is_sret        = 1'b0;
     dec_is_ecall       = 1'b0;
     dec_is_ebreak      = 1'b0;
     dec_is_wfi         = 1'b0;
+    dec_is_sfence      = 1'b0;
     selected_imm       = imm_i;
 
     case (opcode)
@@ -247,8 +255,41 @@ module moon_id_stage
           3'b100: dec_alu_op = ALU_XOR; // XORI
           3'b110: dec_alu_op = ALU_OR;  // ORI
           3'b111: dec_alu_op = ALU_AND; // ANDI
-          3'b001: dec_alu_op = ALU_SLL; // SLLI
-          3'b101: dec_alu_op = (funct7[5]) ? ALU_SRA : ALU_SRL; // SRAI / SRLI
+          3'b001: begin
+            if (funct7 == 7'b0110000) begin
+              case (rs2)
+                5'b00000: dec_alu_op = ALU_CLZ;    // CLZ
+                5'b00001: dec_alu_op = ALU_CTZ;    // CTZ
+                5'b00010: dec_alu_op = ALU_CPOP;   // CPOP
+                5'b00100: dec_alu_op = ALU_SEXT_B; // SEXT.B
+                5'b00101: dec_alu_op = ALU_SEXT_H; // SEXT.H
+                default:  dec_alu_op = ALU_ADD;
+              endcase
+            end else if (funct7[6:1] == 6'b001010) begin
+              dec_alu_op = ALU_BSET; // BSETI
+            end else if (funct7[6:1] == 6'b010010) begin
+              dec_alu_op = ALU_BCLR; // BCLRI
+            end else if (funct7[6:1] == 6'b011010) begin
+              dec_alu_op = ALU_BINV; // BINVI
+            end else begin
+              dec_alu_op = ALU_SLL; // SLLI
+            end
+          end
+          3'b101: begin
+            if (funct7 == 7'b0010100 && rs2 == 5'b00111) begin
+              dec_alu_op = ALU_ORC_B; // ORC.B
+            end else if (funct7 == 7'b0110101 && rs2 == 5'b11000) begin
+              dec_alu_op = ALU_REV8; // REV8
+            end else if (funct7[6:1] == 6'b011000) begin
+              dec_alu_op = ALU_ROR; // RORI
+            end else if (funct7[6:1] == 6'b010010) begin
+              dec_alu_op = ALU_BEXT; // BEXTI
+            end else if (funct7[6:1] == 6'b010000) begin
+              dec_alu_op = ALU_SRA; // SRAI
+            end else begin
+              dec_alu_op = ALU_SRL; // SRLI
+            end
+          end
           default: dec_alu_op = ALU_ADD;
         endcase
       end
@@ -260,13 +301,32 @@ module moon_id_stage
         dec_regwrite      = 1'b1;
         case (funct3)
           3'b000: dec_alu_op = ALU_ADDW; // ADDIW
-          3'b001: dec_alu_op = ALU_SLLW; // SLLIW
-          3'b101: dec_alu_op = (funct7[5]) ? ALU_SRAW : ALU_SRLW; // SRAIW / SRLIW
+          3'b001: begin
+            if (funct7[6:1] == 6'b000010) begin
+              dec_alu_op = ALU_SLLI_UW; // SLLI.UW
+            end else if (funct7 == 7'b0110000) begin
+              case (rs2)
+                5'b00000: dec_alu_op = ALU_CLZW;  // CLZW
+                5'b00001: dec_alu_op = ALU_CTZW;  // CTZW
+                5'b00010: dec_alu_op = ALU_CPOPW; // CPOPW
+                default:  dec_alu_op = ALU_ADDW;
+              endcase
+            end else begin
+              dec_alu_op = ALU_SLLW; // SLLIW
+            end
+          end
+          3'b101: begin
+            if (funct7 == 7'b0110000) begin
+              dec_alu_op = ALU_RORW; // RORIW
+            end else begin
+              dec_alu_op = (funct7[5]) ? ALU_SRAW : ALU_SRLW; // SRAIW / SRLIW
+            end
+          end
           default: dec_alu_op = ALU_ADDW;
         endcase
       end
 
-      // OP (64-bit register-register: RV64I & RV64M)
+      // OP (64-bit register-register: RV64I, RV64M, Zba, Zbb, Zbs)
       OPCODE_OP: begin
         dec_regwrite = 1'b1;
         if (funct7 == 7'b0000001) begin // RV64M extension
@@ -281,14 +341,54 @@ module moon_id_stage
             3'b111: dec_muldiv_op = MULDIV_REMU;
             default: ;
           endcase
-        end else begin // RV64I Base
+        end else if (funct7 == 7'b0010000) begin // Zba
           case (funct3)
-            3'b000: dec_alu_op = (funct7[5]) ? ALU_SUB : ALU_ADD;
+            3'b010: dec_alu_op = ALU_SH1ADD;
+            3'b100: dec_alu_op = ALU_SH2ADD;
+            3'b110: dec_alu_op = ALU_SH3ADD;
+            default: dec_alu_op = ALU_ADD;
+          endcase
+        end else if (funct7 == 7'b0000101) begin // Zbb (Min/Max)
+          case (funct3)
+            3'b100: dec_alu_op = ALU_MIN;
+            3'b101: dec_alu_op = ALU_MINU;
+            3'b110: dec_alu_op = ALU_MAX;
+            3'b111: dec_alu_op = ALU_MAXU;
+            default: dec_alu_op = ALU_ADD;
+          endcase
+        end else if (funct7 == 7'b0110000) begin // Zbb (Rotate)
+          case (funct3)
+            3'b001: dec_alu_op = ALU_ROL;
+            3'b101: dec_alu_op = ALU_ROR;
+            default: dec_alu_op = ALU_ADD;
+          endcase
+        end else if (funct7 == 7'b0100000) begin // SUB, SRA, and Zbb Logic with negate
+          case (funct3)
+            3'b000: dec_alu_op = ALU_SUB;
+            3'b100: dec_alu_op = ALU_XNOR;
+            3'b101: dec_alu_op = ALU_SRA;
+            3'b110: dec_alu_op = ALU_ORN;
+            3'b111: dec_alu_op = ALU_ANDN;
+            default: dec_alu_op = ALU_ADD;
+          endcase
+        end else if (funct7 == 7'b0010100) begin // Zbs
+          dec_alu_op = ALU_BSET;
+        end else if (funct7 == 7'b0100100) begin // Zbs
+          case (funct3)
+            3'b001: dec_alu_op = ALU_BCLR;
+            3'b101: dec_alu_op = ALU_BEXT;
+            default: dec_alu_op = ALU_ADD;
+          endcase
+        end else if (funct7 == 7'b0110100) begin // Zbs
+          dec_alu_op = ALU_BINV;
+        end else begin // RV64I Base (funct7 == 7'b0000000)
+          case (funct3)
+            3'b000: dec_alu_op = ALU_ADD;
             3'b001: dec_alu_op = ALU_SLL;
             3'b010: dec_alu_op = ALU_SLT;
             3'b011: dec_alu_op = ALU_SLTU;
             3'b100: dec_alu_op = ALU_XOR;
-            3'b101: dec_alu_op = (funct7[5]) ? ALU_SRA : ALU_SRL;
+            3'b101: dec_alu_op = ALU_SRL;
             3'b110: dec_alu_op = ALU_OR;
             3'b111: dec_alu_op = ALU_AND;
             default: ;
@@ -296,7 +396,7 @@ module moon_id_stage
         end
       end
 
-      // OP-32 (32-bit word register-register: RV64I & RV64M)
+      // OP-32 (32-bit word register-register: RV64I, RV64M, Zba, Zbb)
       OPCODE_OP_32: begin
         dec_regwrite = 1'b1;
         if (funct7 == 7'b0000001) begin // RV64M extension
@@ -307,6 +407,25 @@ module moon_id_stage
             3'b110: dec_muldiv_op = MULDIV_REMW;
             3'b111: dec_muldiv_op = MULDIV_REMUW;
             default: ;
+          endcase
+        end else if (funct7 == 7'b0010000) begin // Zba (*.uw)
+          case (funct3)
+            3'b010: dec_alu_op = ALU_SH1ADD_UW;
+            3'b100: dec_alu_op = ALU_SH2ADD_UW;
+            3'b110: dec_alu_op = ALU_SH3ADD_UW;
+            default: dec_alu_op = ALU_ADDW;
+          endcase
+        end else if (funct7 == 7'b0000100) begin // Zba (add.uw) & Zbb (zext.h)
+          case (funct3)
+            3'b000: dec_alu_op = ALU_ADD_UW;
+            3'b100: dec_alu_op = ALU_ZEXT_H;
+            default: dec_alu_op = ALU_ADDW;
+          endcase
+        end else if (funct7 == 7'b0110000) begin // Zbb (rolw/rorw)
+          case (funct3)
+            3'b001: dec_alu_op = ALU_ROLW;
+            3'b101: dec_alu_op = ALU_RORW;
+            default: dec_alu_op = ALU_ADDW;
           endcase
         end else begin
           case (funct3)
@@ -339,16 +458,21 @@ module moon_id_stage
         dec_regwrite      = 1'b0;
       end
 
-      // SYSTEM (CSR, ECALL, EBREAK, MRET, WFI)
+      // SYSTEM (CSR, ECALL, EBREAK, MRET, SRET, WFI, SFENCE.VMA)
       OPCODE_SYSTEM: begin
         if (funct3 == 3'b000) begin
-          case (if_id_instr_i[31:20])
-            12'h000: dec_is_ecall  = 1'b1;
-            12'h001: dec_is_ebreak = 1'b1;
-            12'h302: dec_is_mret   = 1'b1;
-            12'h105: dec_is_wfi    = 1'b1; // WFI (Wait For Interrupt)
-            default: ;
-          endcase
+          if (funct7 == 7'b0001001) begin
+            dec_is_sfence = 1'b1;
+          end else begin
+            case (if_id_instr_i[31:20])
+              12'h000: dec_is_ecall  = 1'b1;
+              12'h001: dec_is_ebreak = 1'b1;
+              12'h302: dec_is_mret   = 1'b1;
+              12'h102: dec_is_sret   = 1'b1; // SRET (Supervisor Return)
+              12'h105: dec_is_wfi    = 1'b1; // WFI (Wait For Interrupt)
+              default: ;
+            endcase
+          end
         end else begin
           dec_is_csr   = 1'b1;
           dec_regwrite = 1'b1;
@@ -392,6 +516,7 @@ module moon_id_stage
       id_ex_branch_type_o  <= BRANCH_BEQ;
       id_ex_is_jal_o       <= 1'b0;
       id_ex_is_jalr_o      <= 1'b0;
+      id_ex_is_c_o         <= 1'b0;
       id_ex_is_load_o      <= 1'b0;
       id_ex_is_store_o     <= 1'b0;
       id_ex_mem_width_o    <= MEM_WORD;
@@ -400,9 +525,11 @@ module moon_id_stage
       id_ex_csr_op_o       <= '0;
       id_ex_csr_addr_o     <= '0;
       id_ex_is_mret_o      <= 1'b0;
+      id_ex_is_sret_o      <= 1'b0;
       id_ex_is_ecall_o     <= 1'b0;
       id_ex_is_ebreak_o    <= 1'b0;
       id_ex_is_wfi_o       <= 1'b0;
+      id_ex_is_sfence_o    <= 1'b0;
     end else if (flush_ex_i) begin
       id_ex_valid_o        <= 1'b0;
       id_ex_pc_o           <= '0;
@@ -427,6 +554,7 @@ module moon_id_stage
       id_ex_branch_type_o  <= BRANCH_BEQ;
       id_ex_is_jal_o       <= 1'b0;
       id_ex_is_jalr_o      <= 1'b0;
+      id_ex_is_c_o         <= 1'b0;
       id_ex_is_load_o      <= 1'b0;
       id_ex_is_store_o     <= 1'b0;
       id_ex_mem_width_o    <= MEM_WORD;
@@ -435,9 +563,11 @@ module moon_id_stage
       id_ex_csr_op_o       <= '0;
       id_ex_csr_addr_o     <= '0;
       id_ex_is_mret_o      <= 1'b0;
+      id_ex_is_sret_o      <= 1'b0;
       id_ex_is_ecall_o     <= 1'b0;
       id_ex_is_ebreak_o    <= 1'b0;
       id_ex_is_wfi_o       <= 1'b0;
+      id_ex_is_sfence_o    <= 1'b0;
     end else if (!stall_ex_i) begin
       id_ex_valid_o        <= if_id_valid_i;
       id_ex_pc_o           <= if_id_pc_i;
@@ -473,6 +603,7 @@ module moon_id_stage
       id_ex_branch_type_o  <= dec_branch_type;
       id_ex_is_jal_o       <= dec_is_jal;
       id_ex_is_jalr_o      <= dec_is_jalr;
+      id_ex_is_c_o         <= if_id_is_c_i;
       id_ex_is_load_o      <= dec_is_load || dec_is_lr || (dec_is_amo && !dec_is_sc);
       id_ex_is_store_o     <= dec_is_store;
       id_ex_mem_width_o    <= dec_mem_width;
@@ -481,9 +612,11 @@ module moon_id_stage
       id_ex_csr_op_o       <= dec_csr_op;
       id_ex_csr_addr_o     <= csr_addr;
       id_ex_is_mret_o      <= dec_is_mret;
+      id_ex_is_sret_o      <= dec_is_sret;
       id_ex_is_ecall_o     <= dec_is_ecall;
       id_ex_is_ebreak_o    <= dec_is_ebreak;
       id_ex_is_wfi_o       <= dec_is_wfi;
+      id_ex_is_sfence_o    <= dec_is_sfence;
     end
   end
 
