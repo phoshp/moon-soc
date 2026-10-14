@@ -148,6 +148,13 @@ _start:
     vmv.x.s a2, v3
     li   t1, 0x40
     bne  a2, t1, fail
+    li   a0, 1
+    vmv.v.x v1, a0
+    li   a1, 2
+    vmsltu.vx v5, v1, a1
+    vmv.x.s a2, v5
+    li   t1, -1
+    bne  a2, t1, fail
 
     vsetvli t0, zero, e16, m1, ta, ma
     li   t1, 8
@@ -169,6 +176,15 @@ _start:
     vsra.vi v3, v1, 1
     vmv.x.s a2, v3
     li   t1, -16384
+    bne  a2, t1, fail
+    li   a0, 0x8001
+    vmv.v.x v1, a0
+    li   a0, 0
+    vmv.v.x v5, a0
+    li   a1, 1
+    vmslt.vx v5, v1, a1
+    vmv.x.s a2, v5
+    li   t1, 255
     bne  a2, t1, fail
 
     vsetvli t0, zero, e64, m1, ta, ma
