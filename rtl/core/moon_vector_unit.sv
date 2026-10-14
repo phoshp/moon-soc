@@ -22,6 +22,8 @@ module moon_vector_unit (
   logic [4:0]   vlmax;
   logic [2:0]   vsew_q;
   logic         is_vsetvli;
+  logic         is_vsetivli;
+  logic         is_vset_config;
   logic         is_vmv_x_s;
   logic         is_vmv_v_x;
   logic         is_vadd_vv;
@@ -215,6 +217,9 @@ module moon_vector_unit (
   endfunction
 
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
+  assign is_vsetivli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111) &&
+                       (instr_i[31:30] == 2'b11);
+  assign is_vset_config = is_vsetivli || (is_vsetvli && !instr_i[31]);
   assign is_vmv_x_s = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010000) &&
                       instr_i[25] && (instr_i[14:12] == 3'b010) && (instr_i[19:15] == 5'd0);
   assign is_vmv_v_x = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010111) &&
@@ -263,10 +268,14 @@ module moon_vector_unit (
   always_comb begin
     vl = vl_q;
     vlmax = 5'd0;
-    if (is_vsetvli) begin
+    if (is_vset_config) begin
       if ((instr_i[22:20] == 3'b000) && (instr_i[25:23] <= 3'b011)) begin
         vlmax = 5'd16 >> instr_i[25:23];
-        if (instr_i[19:15] == 5'd0) begin
+        if (is_vsetivli) begin
+          if (instr_i[19:15] == 5'd0) vl = 5'd0;
+          else if (instr_i[19:15] >= vlmax) vl = vlmax;
+          else vl = instr_i[19:15];
+        end else if (instr_i[19:15] == 5'd0) begin
           vl = (instr_i[11:7] == 5'd0) ? vl_q : vlmax;
         end else if (scalar_rs1_i == 64'd0) begin
           vl = 5'd0;
@@ -284,7 +293,7 @@ module moon_vector_unit (
   always_comb begin
     scalar_result_valid_o = 1'b0;
     scalar_result_o = '0;
-    if (valid_i && is_vsetvli) begin
+    if (valid_i && is_vset_config) begin
       scalar_result_valid_o = 1'b1;
       scalar_result_o = {61'd0, vl};
     end else if (valid_i && is_vmv_x_s) begin
@@ -304,7 +313,7 @@ module moon_vector_unit (
       vsew_q <= 3'b010;
       for (int i = 0; i < 32; i++) vreg[i] <= '0;
     end else if (valid_i && advance_i) begin
-      if (is_vsetvli) begin
+      if (is_vset_config) begin
         vl_q <= vl;
         if (vlmax != 0) vsew_q <= instr_i[25:23];
       end else if (is_vmv_v_x) begin
