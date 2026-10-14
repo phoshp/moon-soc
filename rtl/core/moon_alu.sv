@@ -36,6 +36,7 @@ module moon_alu
   logic [63:0] sha512_sig0, sha512_sig1, sha512_sum0, sha512_sum1;
   logic [7:0] aes_byte0, aes_byte1, aes_byte2, aes_byte3;
   logic [31:0] aes_ks1_word, aes_rcon;
+  logic [63:0] aes_state_fwd, aes_state_inv;
 
   function automatic logic [31:0] ror32(input logic [31:0] value, input integer amount);
     ror32 = (value >> amount) | (value << (32 - amount));
@@ -54,8 +55,8 @@ module moon_alu
     return product;
   endfunction
 
-  function automatic logic [7:0] aes_sbox(input logic [7:0] value);
-    logic [7:0] x2, x4, x8, x16, x32, x64, x128, inv;
+  function automatic logic [7:0] aes_gf_inverse(input logic [7:0] value);
+    logic [7:0] x2, x4, x8, x16, x32, x64, x128;
     x2 = aes_gf_mul(value, value);
     x4 = aes_gf_mul(x2, x2);
     x8 = aes_gf_mul(x4, x4);
@@ -63,9 +64,59 @@ module moon_alu
     x32 = aes_gf_mul(x16, x16);
     x64 = aes_gf_mul(x32, x32);
     x128 = aes_gf_mul(x64, x64);
-    inv = aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(x2, x4), x8), x16), x32), x64), x128);
+    return aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(aes_gf_mul(x2, x4), x8), x16), x32), x64), x128);
+  endfunction
+
+  function automatic logic [7:0] aes_sbox(input logic [7:0] value);
+    logic [7:0] inv;
+    inv = aes_gf_inverse(value);
     return inv ^ {inv[6:0], inv[7]} ^ {inv[5:0], inv[7:6]} ^
            {inv[4:0], inv[7:5]} ^ {inv[3:0], inv[7:4]} ^ 8'h63;
+  endfunction
+
+  function automatic logic [7:0] aes_sbox_inv(input logic [7:0] value);
+    logic [7:0] affine_inverse;
+    affine_inverse = {value[6:0], value[7]} ^ {value[4:0], value[7:5]} ^
+                     {value[1:0], value[7:2]} ^ 8'h05;
+    return aes_gf_inverse(affine_inverse);
+  endfunction
+
+  function automatic logic [63:0] aes_shiftrows_fwd(input logic [63:0] rs2, input logic [63:0] rs1);
+    return {rs1[31:24], rs2[55:48], rs2[15:8], rs1[39:32],
+            rs2[63:56], rs2[23:16], rs1[47:40], rs1[7:0]};
+  endfunction
+
+  function automatic logic [63:0] aes_shiftrows_inv(input logic [63:0] rs2, input logic [63:0] rs1);
+    return {rs2[31:24], rs2[55:48], rs1[15:8], rs1[39:32],
+            rs1[63:56], rs2[23:16], rs2[47:40], rs1[7:0]};
+  endfunction
+
+  function automatic logic [63:0] aes_apply_sbox64(input logic [63:0] value, input logic inverse);
+    logic [63:0] result;
+    for (int i = 0; i < 8; i++) begin
+      result[i*8 +: 8] = inverse ? aes_sbox_inv(value[i*8 +: 8]) : aes_sbox(value[i*8 +: 8]);
+    end
+    return result;
+  endfunction
+
+  function automatic logic [31:0] aes_mixcolumn_fwd(input logic [31:0] x);
+    logic [7:0] s0, s1, s2, s3, b0, b1, b2, b3;
+    s0=x[7:0]; s1=x[15:8]; s2=x[23:16]; s3=x[31:24];
+    b0=aes_gf_mul(s0,8'h02)^aes_gf_mul(s1,8'h03)^s2^s3;
+    b1=s0^aes_gf_mul(s1,8'h02)^aes_gf_mul(s2,8'h03)^s3;
+    b2=s0^s1^aes_gf_mul(s2,8'h02)^aes_gf_mul(s3,8'h03);
+    b3=aes_gf_mul(s0,8'h03)^s1^s2^aes_gf_mul(s3,8'h02);
+    return {b3,b2,b1,b0};
+  endfunction
+
+  function automatic logic [31:0] aes_mixcolumn_inv(input logic [31:0] x);
+    logic [7:0] s0, s1, s2, s3, b0, b1, b2, b3;
+    s0=x[7:0]; s1=x[15:8]; s2=x[23:16]; s3=x[31:24];
+    b0=aes_gf_mul(s0,8'h0e)^aes_gf_mul(s1,8'h0b)^aes_gf_mul(s2,8'h0d)^aes_gf_mul(s3,8'h09);
+    b1=aes_gf_mul(s0,8'h09)^aes_gf_mul(s1,8'h0e)^aes_gf_mul(s2,8'h0b)^aes_gf_mul(s3,8'h0d);
+    b2=aes_gf_mul(s0,8'h0d)^aes_gf_mul(s1,8'h09)^aes_gf_mul(s2,8'h0e)^aes_gf_mul(s3,8'h0b);
+    b3=aes_gf_mul(s0,8'h0b)^aes_gf_mul(s1,8'h0d)^aes_gf_mul(s2,8'h09)^aes_gf_mul(s3,8'h0e);
+    return {b3,b2,b1,b0};
   endfunction
 
   function automatic logic [31:0] aes_rcon_lookup(input logic [3:0] round);
@@ -105,6 +156,8 @@ module moon_alu
   assign aes_ks1_word = (operand_b_i[3:0] == 4'd10) ? operand_a_i[63:32] :
                        {operand_a_i[39:32], operand_a_i[63:40]};
   assign aes_rcon = aes_rcon_lookup(operand_b_i[3:0]);
+  assign aes_state_fwd = aes_apply_sbox64(aes_shiftrows_fwd(operand_b_i, operand_a_i), 1'b0);
+  assign aes_state_inv = aes_apply_sbox64(aes_shiftrows_inv(operand_b_i, operand_a_i), 1'b1);
 
   assign shamt64 = operand_b_i[5:0];
   assign shamt32 = operand_b_i[4:0];
@@ -293,6 +346,14 @@ module moon_alu
         (aes_byte3 ^ aes_rcon[31:24]), (aes_byte2 ^ aes_rcon[23:16]),
         (aes_byte1 ^ aes_rcon[15:8]), (aes_byte0 ^ aes_rcon[7:0])
       };
+      ALU_AES64IM: result_o = {aes_mixcolumn_inv(operand_a_i[63:32]),
+                               aes_mixcolumn_inv(operand_a_i[31:0])};
+      ALU_AES64ES: result_o = aes_apply_sbox64(aes_shiftrows_fwd(operand_b_i, operand_a_i), 1'b0);
+      ALU_AES64ESM: result_o = {aes_mixcolumn_fwd(aes_state_fwd[63:32]),
+                                aes_mixcolumn_fwd(aes_state_fwd[31:0])};
+      ALU_AES64DS: result_o = aes_state_inv;
+      ALU_AES64DSM: result_o = {aes_mixcolumn_inv(aes_state_inv[63:32]),
+                                aes_mixcolumn_inv(aes_state_inv[31:0])};
 
       default:       result_o = '0;
     endcase

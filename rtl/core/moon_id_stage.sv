@@ -337,7 +337,9 @@ module moon_id_stage
           3'b110: dec_alu_op = ALU_OR;  // ORI
           3'b111: dec_alu_op = ALU_AND; // ANDI
           3'b001: begin
-            if (funct7 == 7'b0011000 && rs2[3:0] <= 4'd10) begin // Zkne/Zknd AES key schedule
+            if ((funct7 == 7'b0011000) && (rs2 == 5'd0)) begin // Zknd AES inverse mix columns
+              dec_alu_op = ALU_AES64IM;
+            end else if (funct7 == 7'b0011000 && rs2[4] && rs2[3:0] <= 4'd10) begin // AES key schedule
               dec_alu_op = ALU_AES64KS1I;
             end else if (funct7 == 7'b0001000) begin // Zknh SHA-256 word operations
               dec_alu_src_b_imm = 1'b0;
@@ -427,6 +429,14 @@ module moon_id_stage
         dec_regwrite = 1'b1;
         if (funct7 == 7'b0111111 && funct3 == 3'b000) begin // Zkne/Zknd AES key schedule
           dec_alu_op = ALU_AES64KS2;
+        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011001)) begin
+          dec_alu_op = ALU_AES64ES;
+        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011011)) begin
+          dec_alu_op = ALU_AES64ESM;
+        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011101)) begin
+          dec_alu_op = ALU_AES64DS;
+        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011111)) begin
+          dec_alu_op = ALU_AES64DSM;
         end else if (funct7 == 7'b0000001) begin // RV64M extension
           case (funct3)
             3'b000: dec_muldiv_op = MULDIV_MUL;

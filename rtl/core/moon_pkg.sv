@@ -49,7 +49,7 @@ package moon_pkg;
   // --------------------------------------------------------------------------
   // ALU Operation Codes
   // --------------------------------------------------------------------------
-  typedef enum logic [5:0] {
+  typedef enum logic [6:0] {
     ALU_ADD    = 6'd0,
     ALU_SUB    = 6'd1,
     ALU_AND    = 6'd2,
@@ -115,7 +115,12 @@ package moon_pkg;
     ALU_SHA512SIG0 = 6'd57,
     ALU_SHA512SIG1 = 6'd58,
     ALU_SHA512SUM0 = 6'd59,
-    ALU_SHA512SUM1 = 6'd60
+    ALU_SHA512SUM1 = 7'd60,
+    ALU_AES64IM = 7'd61,
+    ALU_AES64ES = 7'd62,
+    ALU_AES64ESM = 7'd63,
+    ALU_AES64DS = 7'd64,
+    ALU_AES64DSM = 7'd65
   } alu_op_e;
 
   // --------------------------------------------------------------------------
