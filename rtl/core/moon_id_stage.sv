@@ -69,7 +69,9 @@ module moon_id_stage
   output logic [11:0]      id_ex_csr_addr_o,
   output logic             id_ex_is_mret_o,
   output logic             id_ex_is_ecall_o,
-  output logic             id_ex_is_ebreak_o
+  output logic             id_ex_is_ebreak_o,
+  output logic             id_ex_is_wfi_o,
+  output logic             wfi_o
 );
 
   // --------------------------------------------------------------------------
@@ -149,6 +151,7 @@ module moon_id_stage
   logic         dec_is_mret;
   logic         dec_is_ecall;
   logic         dec_is_ebreak;
+  logic         dec_is_wfi;
 
   always_comb begin
     // Defaults
@@ -173,6 +176,7 @@ module moon_id_stage
     dec_is_mret        = 1'b0;
     dec_is_ecall       = 1'b0;
     dec_is_ebreak      = 1'b0;
+    dec_is_wfi         = 1'b0;
     selected_imm       = imm_i;
 
     case (opcode)
@@ -335,13 +339,14 @@ module moon_id_stage
         dec_regwrite      = 1'b0;
       end
 
-      // SYSTEM (CSR, ECALL, EBREAK, MRET)
+      // SYSTEM (CSR, ECALL, EBREAK, MRET, WFI)
       OPCODE_SYSTEM: begin
         if (funct3 == 3'b000) begin
           case (if_id_instr_i[31:20])
             12'h000: dec_is_ecall  = 1'b1;
             12'h001: dec_is_ebreak = 1'b1;
             12'h302: dec_is_mret   = 1'b1;
+            12'h105: dec_is_wfi    = 1'b1; // WFI (Wait For Interrupt)
             default: ;
           endcase
         end else begin
@@ -356,6 +361,8 @@ module moon_id_stage
       default: ;
     endcase
   end
+
+  assign wfi_o = if_id_valid_i && dec_is_wfi;
 
   // --------------------------------------------------------------------------
   // ID/EX Pipeline Register
@@ -395,6 +402,7 @@ module moon_id_stage
       id_ex_is_mret_o      <= 1'b0;
       id_ex_is_ecall_o     <= 1'b0;
       id_ex_is_ebreak_o    <= 1'b0;
+      id_ex_is_wfi_o       <= 1'b0;
     end else if (flush_ex_i) begin
       id_ex_valid_o        <= 1'b0;
       id_ex_pc_o           <= '0;
@@ -429,6 +437,7 @@ module moon_id_stage
       id_ex_is_mret_o      <= 1'b0;
       id_ex_is_ecall_o     <= 1'b0;
       id_ex_is_ebreak_o    <= 1'b0;
+      id_ex_is_wfi_o       <= 1'b0;
     end else if (!stall_ex_i) begin
       id_ex_valid_o        <= if_id_valid_i;
       id_ex_pc_o           <= if_id_pc_i;
@@ -474,6 +483,7 @@ module moon_id_stage
       id_ex_is_mret_o      <= dec_is_mret;
       id_ex_is_ecall_o     <= dec_is_ecall;
       id_ex_is_ebreak_o    <= dec_is_ebreak;
+      id_ex_is_wfi_o       <= dec_is_wfi;
     end
   end
 

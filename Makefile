@@ -7,7 +7,7 @@ SIM ?= verilator
 TEST_HEX ?= $(PWD)/sw/tests/asm/test_rv64_all.hex
 SIM_BUILD ?= sim_build
 
-.PHONY: all test sim verbose-test pytest soc-test soc-periph-test clean
+.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test clean
 
 all: test soc-test
 
@@ -24,6 +24,10 @@ soc-test:
 # Run SoC Peripherals verification test
 soc-periph-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_soc_periphs.hex
+
+# Run SoC WFI and PMU clock-gating wake-up test
+soc-wfi-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_wfi_pmu.hex
 
 # Run simulation with verbose cycle trace
 verbose-test:

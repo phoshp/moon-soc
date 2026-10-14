@@ -74,7 +74,35 @@ delay_loop:
     bne  a1, a0, fail_plic
 
     # -------------------------------------------------------------------------
-    # All peripheral tests passed! Write CAFE_BABE to 0x8000_1000
+    # 5. Test Clock & Reset Generator (CRG at 0x1000_5000)
+    # -------------------------------------------------------------------------
+    li   t6, 0x10005000         # CRG Base
+    lw   a0, 4(t6)              # CRG_PLL_STATUS (offset 0x04)
+    andi a1, a0, 1              # Check PLL locked bit
+    beqz a1, fail_crg_lock
+
+    li   a2, 7                  # CRG_CLK_GATE (offset 0x08)
+    sw   a2, 8(t6)
+    lw   a3, 8(t6)
+    andi a3, a3, 7
+    bne  a3, a2, fail_crg_gate
+
+    # -------------------------------------------------------------------------
+    # 6. Test Power Management Unit (PMU at 0x1000_5080)
+    # -------------------------------------------------------------------------
+    li   t6, 0x10005080         # PMU Base
+    lw   a0, 4(t6)              # PMU_STATUS (offset 0x04)
+    andi a1, a0, 3              # Check state is STATE_RUN (0)
+    bnez a1, fail_pmu_status
+
+    li   a2, 0x0A               # PMU_CTRL (offset 0x00): target=2, wake_en=1
+    sw   a2, 0(t6)
+    lw   a3, 0(t6)
+    andi a3, a3, 0x0B
+    bne  a3, a2, fail_pmu_ctrl
+
+    # -------------------------------------------------------------------------
+    # All peripheral, CRG, and PMU tests passed! Write CAFE_BABE to 0x8000_1000
     # -------------------------------------------------------------------------
     lui  a2, 0x80001
     li   a3, 0xCAFEBABE
@@ -94,6 +122,18 @@ fail_clint:
     j    fail_loop
 fail_plic:
     li   gp, 4
+    j    fail_loop
+fail_crg_lock:
+    li   gp, 5
+    j    fail_loop
+fail_crg_gate:
+    li   gp, 6
+    j    fail_loop
+fail_pmu_status:
+    li   gp, 7
+    j    fail_loop
+fail_pmu_ctrl:
+    li   gp, 8
     j    fail_loop
 
 fail_loop:

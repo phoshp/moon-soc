@@ -58,6 +58,7 @@ module moon_ex_stage
   input  logic             id_ex_is_mret_i,
   input  logic             id_ex_is_ecall_i,
   input  logic             id_ex_is_ebreak_i,
+  input  logic             id_ex_is_wfi_i,
 
   // Forwarding Inputs from Hazard Unit
   input  fwd_sel_e         fwd_a_i,
@@ -101,7 +102,8 @@ module moon_ex_stage
   output logic [XLEN-1:0]  ex_mem_csr_wdata_o,
   output logic             ex_mem_is_mret_o,
   output logic             ex_mem_is_ecall_o,
-  output logic             ex_mem_is_ebreak_o
+  output logic             ex_mem_is_ebreak_o,
+  output logic             ex_mem_is_wfi_o
 );
 
   // --------------------------------------------------------------------------
@@ -260,6 +262,7 @@ module moon_ex_stage
       ex_mem_is_mret_o   <= 1'b0;
       ex_mem_is_ecall_o  <= 1'b0;
       ex_mem_is_ebreak_o <= 1'b0;
+      ex_mem_is_wfi_o    <= 1'b0;
     end else if (flush_mem_i) begin
       ex_mem_valid_o     <= 1'b0;
       ex_mem_pc_o        <= '0;
@@ -290,6 +293,7 @@ module moon_ex_stage
       ex_mem_is_mret_o   <= 1'b0;
       ex_mem_is_ecall_o  <= 1'b0;
       ex_mem_is_ebreak_o <= 1'b0;
+      ex_mem_is_wfi_o    <= 1'b0;
     end else if (!stall_mem_i) begin
       ex_mem_valid_o     <= id_ex_valid_i;
       ex_mem_pc_o        <= id_ex_pc_i;
@@ -320,6 +324,7 @@ module moon_ex_stage
       ex_mem_is_mret_o   <= id_ex_is_mret_i;
       ex_mem_is_ecall_o  <= id_ex_is_ecall_i;
       ex_mem_is_ebreak_o <= id_ex_is_ebreak_i;
+      ex_mem_is_wfi_o    <= id_ex_is_wfi_i;
     end
   end
 

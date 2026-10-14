@@ -46,7 +46,11 @@ module moon_core
 
   // Coherence Invalidation Line from Snooping / Shared L2
   input  logic             inv_valid_i,
-  input  logic [XLEN-1:0]  inv_addr_i
+  input  logic [XLEN-1:0]  inv_addr_i,
+
+  // Power Management & Hardware Status Signals
+  output logic             wfi_o,
+  output logic             interrupt_pending_o
 );
 
   // --------------------------------------------------------------------------
@@ -93,6 +97,7 @@ module moon_core
   logic             id_ex_is_mret;
   logic             id_ex_is_ecall;
   logic             id_ex_is_ebreak;
+  logic             id_ex_is_wfi;
 
   // EX to IF, Hazard, MEM
   logic             branch_taken;
@@ -127,6 +132,7 @@ module moon_core
   logic             ex_mem_is_mret;
   logic             ex_mem_is_ecall;
   logic             ex_mem_is_ebreak;
+  logic             ex_mem_is_wfi;
 
   // MEM to WB
   logic             mem_wb_valid;
@@ -212,7 +218,14 @@ module moon_core
       is_interrupt = 1'b1;
       trap_cause   = interrupt_cause;
       // For interrupts, pick the PC of the oldest unretired valid instruction in pipeline
-      if (ex_mem_valid) begin
+      // If taking an interrupt on WFI, mepc points to instruction after WFI (WFI PC + 4)
+      if (ex_mem_valid && ex_mem_is_wfi) begin
+        trap_pc = ex_mem_pc + 64'd4;
+      end else if (id_ex_valid && id_ex_is_wfi) begin
+        trap_pc = id_ex_pc + 64'd4;
+      end else if (if_id_valid && if_id_instr == 32'h1050_0073) begin
+        trap_pc = if_id_pc + 64'd4;
+      end else if (ex_mem_valid) begin
         trap_pc = ex_mem_pc;
       end else if (id_ex_valid) begin
         trap_pc = id_ex_pc;
@@ -309,7 +322,9 @@ module moon_core
     .id_ex_csr_addr_o     (id_ex_csr_addr),
     .id_ex_is_mret_o      (id_ex_is_mret),
     .id_ex_is_ecall_o     (id_ex_is_ecall),
-    .id_ex_is_ebreak_o    (id_ex_is_ebreak)
+    .id_ex_is_ebreak_o    (id_ex_is_ebreak),
+    .id_ex_is_wfi_o       (id_ex_is_wfi),
+    .wfi_o                ()
   );
 
   // --------------------------------------------------------------------------
@@ -353,6 +368,7 @@ module moon_core
     .id_ex_is_mret_i      (id_ex_is_mret),
     .id_ex_is_ecall_i     (id_ex_is_ecall),
     .id_ex_is_ebreak_i    (id_ex_is_ebreak),
+    .id_ex_is_wfi_i       (id_ex_is_wfi),
     .fwd_a_i              (fwd_a),
     .fwd_b_i              (fwd_b),
     .fwd_ex_data_i        (ex_fwd_val),
@@ -388,7 +404,8 @@ module moon_core
     .ex_mem_csr_wdata_o   (ex_mem_csr_wdata),
     .ex_mem_is_mret_o     (ex_mem_is_mret),
     .ex_mem_is_ecall_o    (ex_mem_is_ecall),
-    .ex_mem_is_ebreak_o   (ex_mem_is_ebreak)
+    .ex_mem_is_ebreak_o   (ex_mem_is_ebreak),
+    .ex_mem_is_wfi_o      (ex_mem_is_wfi)
   );
 
   // --------------------------------------------------------------------------
@@ -553,6 +570,9 @@ module moon_core
     .fpu_flags_we_i      (1'b0),
     .frm_o               (unused_frm)
   );
+
+  assign interrupt_pending_o = interrupt_pending;
+  assign wfi_o = (ex_mem_valid && ex_mem_is_wfi) || (id_ex_valid && id_ex_is_wfi) || (if_id_valid && if_id_instr == 32'h1050_0073);
 
 endmodule : moon_core
 

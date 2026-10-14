@@ -4,6 +4,8 @@
 //              P0: CLINT (0x0200_0000)
 //              P1: PLIC  (0x0C00_0000)
 //              P2: UART  (0x1000_0000)
+//              P3: CRG   (0x1000_5000)
+//              P4: PMU   (0x1000_5080)
 // ============================================================================
 
 `ifndef APB_CROSSBAR_SV
@@ -14,7 +16,7 @@
 module apb_crossbar
   import axi_pkg::*;
 #(
-  parameter int NUM_PERIPHS = 3
+  parameter int NUM_PERIPHS = 5
 )(
   // Master input (from axi_to_apb_bridge)
   input  apb_req_t               m_req_i,
@@ -34,6 +36,10 @@ module apb_crossbar
       periph_sel = 1; // PLIC
     end else if (m_req_i.addr >= 32'h1000_0000 && m_req_i.addr <= 32'h1000_0FFF) begin
       periph_sel = 2; // UART
+    end else if (m_req_i.addr >= 32'h1000_5000 && m_req_i.addr <= 32'h1000_507F) begin
+      periph_sel = 3; // CRG
+    end else if (m_req_i.addr >= 32'h1000_5080 && m_req_i.addr <= 32'h1000_50FF) begin
+      periph_sel = 4; // PMU
     end else begin
       periph_sel = -1; // Unmapped
     end

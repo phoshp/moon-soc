@@ -13,6 +13,8 @@ def run_soc_test(test_hex=None, waves=False, verbose=False):
         repo_root / "rtl" / "soc" / "interconnect",
         repo_root / "rtl" / "soc" / "memory",
         repo_root / "rtl" / "soc" / "periph",
+        repo_root / "rtl" / "soc" / "clock",
+        repo_root / "rtl" / "soc" / "pmu",
         repo_root / "rtl" / "soc" / "adapter",
         repo_root / "rtl" / "soc" / "top",
         repo_root / "tb" / "sv" / "soc",

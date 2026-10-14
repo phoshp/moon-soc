@@ -14,7 +14,8 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 - **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/cocotb/run_test.py sw/tests/asm/test_rv64_all.hex`.
 - **Run full suite (core + SoC)**: `make all`.
 - **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/cocotb/soc/run_soc_test.py` with `test_rv64_all.hex`).
-- **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC).
+- **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC, CRG, PMU).
+- **Run SoC WFI & PMU clock-gating test**: `make soc-wfi-test` (verifies WFI execution, PMU clock-gating, and timer wake-up).
 - **Run with verbose cycle trace**: `make verbose-test`.
 - **Run via pytest**: `make pytest` (runs both core and SoC regression testbenches).
 - **Run a specific firmware test**:
@@ -92,6 +93,14 @@ The core is structured across five sequential pipeline stages connected through 
 - **Memory Subsystem (`rtl/soc/memory/`)**:
   - `moon_bootrom.sv`: 32 KB Boot ROM at `0x0000_1000`.
   - `moon_sram_ctrl.sv`: 128 KB On-Chip SRAM controller at `0x7000_0000`.
+- **Clock Subsystem (`rtl/soc/clock/`)**:
+  - `moon_pll_model.sv`: Digital behavioral PLL frequency synthesizer with lock detection and programmable dividers.
+  - `clk_mux_glitchless.sv`: Dual-input glitchless clock multiplexer for safe dynamic clock switching between reference and PLL clocks.
+  - `cg_cell.sv`: Integrated Clock Gating (ICG) latch cell for glitch-free dynamic clock gating.
+  - `moon_crg.sv`: Clock & Reset Generator with APB registers (`0x1000_5000`) for PLL control and domain clock gating.
+- **Power Management Subsystem (`rtl/soc/pmu/`)**:
+  - `moon_reset_ctrl.sv`: Central reset sequencer with 2-stage synchronizers and multi-cycle domain reset release (AON -> Memory/Periph -> Core).
+  - `moon_pmu.sv`: Multi-state Power Management Unit (`0x1000_5080`) handling RUN, WFI clock gating, SLEEP, DEEP-SLEEP, and wake-up interrupt routing.
 - **Peripherals Subsystem (`rtl/soc/periph/`)**:
   - `moon_clint.sv`: Core-Local Interruptor (`mtime`, `mtimecmp`, `msip`) at `0x0200_0000`.
   - `moon_plic.sv`: Platform-Level Interrupt Controller at `0x0C00_0000`.

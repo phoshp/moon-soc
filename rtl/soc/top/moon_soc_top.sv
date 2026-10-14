@@ -20,6 +20,9 @@
 `include "moon_clint.sv"
 `include "moon_plic.sv"
 `include "moon_uart.sv"
+`include "moon_crg.sv"
+`include "moon_reset_ctrl.sv"
+`include "moon_pmu.sv"
 
 module moon_soc_top
   import moon_pkg::*;
@@ -64,6 +67,29 @@ module moon_soc_top
   logic uart_irq;
 
   // --------------------------------------------------------------------------
+  // Domain Clocks & Resets
+  // --------------------------------------------------------------------------
+  logic clk_aon;
+  logic clk_core;
+  logic clk_peri;
+  logic clk_mem;
+
+  logic rst_aon_n;
+  logic rst_core_n;
+  logic rst_peri_n;
+  logic rst_mem_n;
+
+  // --------------------------------------------------------------------------
+  // PMU & CRG Signals
+  // --------------------------------------------------------------------------
+  logic core_clk_gate_req;
+  logic peri_clk_gate_req;
+  logic pll_pwr_down_req;
+  logic sw_rst_req;
+  logic wfi_core;
+  logic irq_pending_core;
+
+  // --------------------------------------------------------------------------
   // Core Memory Signals
   // --------------------------------------------------------------------------
   logic             imem_req;
@@ -80,29 +106,45 @@ module moon_soc_top
   logic [XLEN-1:0]  dmem_rdata;
 
   // --------------------------------------------------------------------------
+  // 0. Reset Controller & Sequencer
+  // --------------------------------------------------------------------------
+  moon_reset_ctrl u_reset_ctrl (
+    .clk_aon_i     (clk_aon),
+    .raw_rst_ni    (rst_ni),
+    .sw_rst_req_i  (sw_rst_req),
+    .wdt_rst_req_i (1'b0),
+    .rst_aon_no    (rst_aon_n),
+    .rst_core_no   (rst_core_n),
+    .rst_peri_no   (rst_peri_n),
+    .rst_mem_no    (rst_mem_n)
+  );
+
+  // --------------------------------------------------------------------------
   // 1. CPU Core Instantiation
   // --------------------------------------------------------------------------
   moon_core #(
     .HART_ID(HART_ID)
   ) u_core (
-    .clk_i          (clk_i),
-    .rst_ni         (rst_ni),
-    .imem_req_o     (imem_req),
-    .imem_addr_o    (imem_addr),
-    .imem_valid_i   (imem_valid),
-    .imem_rdata_i   (imem_rdata),
-    .dmem_req_o     (dmem_req),
-    .dmem_we_o      (dmem_we),
-    .dmem_addr_o    (dmem_addr),
-    .dmem_wdata_o   (dmem_wdata),
-    .dmem_wstrb_o   (dmem_wstrb),
-    .dmem_valid_i   (dmem_valid),
-    .dmem_rdata_i   (dmem_rdata),
-    .timer_irq_i    (timer_irq),
-    .software_irq_i (software_irq),
-    .external_irq_i (external_irq),
-    .inv_valid_i    (1'b0),
-    .inv_addr_i     ('0)
+    .clk_i               (clk_core),
+    .rst_ni              (rst_core_n),
+    .imem_req_o          (imem_req),
+    .imem_addr_o         (imem_addr),
+    .imem_valid_i        (imem_valid),
+    .imem_rdata_i        (imem_rdata),
+    .dmem_req_o          (dmem_req),
+    .dmem_we_o           (dmem_we),
+    .dmem_addr_o         (dmem_addr),
+    .dmem_wdata_o        (dmem_wdata),
+    .dmem_wstrb_o        (dmem_wstrb),
+    .dmem_valid_i        (dmem_valid),
+    .dmem_rdata_i        (dmem_rdata),
+    .timer_irq_i         (timer_irq),
+    .software_irq_i      (software_irq),
+    .external_irq_i      (external_irq),
+    .inv_valid_i         (1'b0),
+    .inv_addr_i          ('0),
+    .wfi_o               (wfi_core),
+    .interrupt_pending_o (irq_pending_core)
   );
 
   // --------------------------------------------------------------------------
@@ -121,8 +163,8 @@ module moon_soc_top
   logic    [1:0] core_b_ready;
 
   moon_core_axi_adapter u_core_adapter (
-    .clk_i         (clk_i),
-    .rst_ni        (rst_ni),
+    .clk_i         (clk_core),
+    .rst_ni        (rst_core_n),
     .imem_req_i    (imem_req),
     .imem_addr_i   (imem_addr),
     .imem_valid_o  (imem_valid),
@@ -173,8 +215,8 @@ module moon_soc_top
     .NUM_MASTERS(2),
     .NUM_SLAVES(4)
   ) u_axi_crossbar (
-    .clk_i        (clk_i),
-    .rst_ni       (rst_ni),
+    .clk_i        (clk_core),
+    .rst_ni       (rst_core_n),
     .m_ar_i       (core_ar),
     .m_ar_ready_o (core_ar_ready),
     .m_r_o        (core_r),
@@ -204,8 +246,8 @@ module moon_soc_top
     .ROM_SIZE_BYTES(ROM_SIZE_BYTES),
     .BASE_ADDR(64'h0000_1000)
   ) u_bootrom (
-    .clk_i        (clk_i),
-    .rst_ni       (rst_ni),
+    .clk_i        (clk_mem),
+    .rst_ni       (rst_mem_n),
     .s_ar_i       (s_ar[0]),
     .s_ar_ready_o (s_ar_ready[0]),
     .s_r_o        (s_r[0]),
@@ -225,8 +267,8 @@ module moon_soc_top
     .SRAM_SIZE_BYTES(SRAM_SIZE_BYTES),
     .BASE_ADDR(64'h7000_0000)
   ) u_sram (
-    .clk_i        (clk_i),
-    .rst_ni       (rst_ni),
+    .clk_i        (clk_mem),
+    .rst_ni       (rst_mem_n),
     .s_ar_i       (s_ar[1]),
     .s_ar_ready_o (s_ar_ready[1]),
     .s_r_o        (s_r[1]),
@@ -246,8 +288,8 @@ module moon_soc_top
   apb_resp_t bridge_apb_resp;
 
   axi_to_apb_bridge u_axi_to_apb (
-    .clk_i        (clk_i),
-    .rst_ni       (rst_ni),
+    .clk_i        (clk_peri),
+    .rst_ni       (rst_peri_n),
     .s_ar_i       (s_ar[2]),
     .s_ar_ready_o (s_ar_ready[2]),
     .s_r_o        (s_r[2]),
@@ -262,12 +304,12 @@ module moon_soc_top
     .apb_resp_i   (bridge_apb_resp)
   );
 
-  // APB Peripherals: P0: CLINT, P1: PLIC, P2: UART
-  apb_req_t  [2:0] p_req;
-  apb_resp_t [2:0] p_resp;
+  // APB Peripherals: P0: CLINT, P1: PLIC, P2: UART, P3: CRG, P4: PMU
+  apb_req_t  [4:0] p_req;
+  apb_resp_t [4:0] p_resp;
 
   apb_crossbar #(
-    .NUM_PERIPHS(3)
+    .NUM_PERIPHS(5)
   ) u_apb_crossbar (
     .m_req_i  (bridge_apb_req),
     .m_resp_o (bridge_apb_resp),
@@ -277,8 +319,8 @@ module moon_soc_top
 
   // P0: CLINT (0x0200_0000)
   moon_clint u_clint (
-    .clk_i          (clk_i),
-    .rst_ni         (rst_ni),
+    .clk_i          (clk_peri),
+    .rst_ni         (rst_peri_n),
     .req_i          (p_req[0]),
     .resp_o         (p_resp[0]),
     .timer_irq_o    (timer_irq),
@@ -291,8 +333,8 @@ module moon_soc_top
   moon_plic #(
     .NUM_SOURCES(31)
   ) u_plic (
-    .clk_i          (clk_i),
-    .rst_ni         (rst_ni),
+    .clk_i          (clk_peri),
+    .rst_ni         (rst_peri_n),
     .req_i          (p_req[1]),
     .resp_o         (p_resp[1]),
     .irq_sources_i  (plic_irq_sources),
@@ -301,13 +343,43 @@ module moon_soc_top
 
   // P2: UART 16550 (0x1000_0000)
   moon_uart u_uart (
-    .clk_i      (clk_i),
-    .rst_ni     (rst_ni),
+    .clk_i      (clk_peri),
+    .rst_ni     (rst_peri_n),
     .req_i      (p_req[2]),
     .resp_o     (p_resp[2]),
     .uart_rx_i  (uart_rx_i),
     .uart_tx_o  (uart_tx_o),
     .uart_irq_o (uart_irq)
+  );
+
+  // P3: CRG (0x1000_5000)
+  moon_crg u_crg (
+    .ref_clk_i       (clk_i),
+    .rst_aon_ni      (rst_aon_n),
+    .req_i           (p_req[3]),
+    .resp_o          (p_resp[3]),
+    .core_clk_gate_i (core_clk_gate_req),
+    .peri_clk_gate_i (peri_clk_gate_req),
+    .pll_pwr_down_i  (pll_pwr_down_req),
+    .clk_aon_o       (clk_aon),
+    .clk_core_o      (clk_core),
+    .clk_peri_o      (clk_peri),
+    .clk_mem_o       (clk_mem),
+    .sw_rst_req_o    (sw_rst_req)
+  );
+
+  // P4: PMU (0x1000_5080)
+  moon_pmu u_pmu (
+    .clk_aon_i           (clk_aon),
+    .rst_aon_ni          (rst_aon_n),
+    .req_i               (p_req[4]),
+    .resp_o              (p_resp[4]),
+    .wfi_i               (wfi_core),
+    .irq_pending_i       (irq_pending_core || timer_irq || software_irq || external_irq),
+    .core_clk_gate_req_o (core_clk_gate_req),
+    .peri_clk_gate_req_o (peri_clk_gate_req),
+    .pll_pwr_down_req_o  (pll_pwr_down_req),
+    .current_state_o     ()
   );
 
   // --------------------------------------------------------------------------
