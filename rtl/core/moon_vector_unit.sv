@@ -1669,13 +1669,13 @@ module moon_vector_unit (
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
-                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15])[7:0];
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
               3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
-                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15])[15:0];
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
               3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
-                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15])[31:0];
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
@@ -1689,19 +1689,19 @@ module moon_vector_unit (
               3'b000: vreg[vd][i*8 +: 8] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
-                vsew_q, instr_i[31:26])[7:0];
+                vsew_q, instr_i[31:26]);
               3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
-                vsew_q, instr_i[31:26])[15:0];
+                vsew_q, instr_i[31:26]);
               3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
-                vsew_q, instr_i[31:26])[31:0];
+                vsew_q, instr_i[31:26]);
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
-                vsew_q, instr_i[31:26])[63:0];
+                vsew_q, instr_i[31:26]);
             endcase
           end
         end
