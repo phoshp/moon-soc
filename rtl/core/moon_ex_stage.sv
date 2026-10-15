@@ -385,7 +385,9 @@ module moon_ex_stage
     .valid_i                (id_ex_valid_i),
     .advance_i              (!stall_mem_i && !flush_mem_i),
     .instr_i                (id_ex_instr_i),
-    .scalar_rs1_i           (operand_a_fwd),
+    .scalar_rs1_i           (((id_ex_instr_i[6:0] == 7'b1010111) &&
+                              (id_ex_instr_i[14:12] == 3'b101)) ?
+                             id_ex_rs1_data_i : operand_a_fwd),
     .scalar_rs2_i           (operand_b_fwd),
     .frm_i                  (frm_i),
     .vector_vstart_i        (vector_vstart_i),

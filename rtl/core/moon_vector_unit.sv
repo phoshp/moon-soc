@@ -74,6 +74,7 @@ module moon_vector_unit (
   logic         is_vector_fp_not_equal;
   logic         is_vector_fp_minmax;
   logic         is_vector_fp_signinj;
+  logic         is_vector_fp_scalar_form;
   logic         is_vector_fp_op;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
@@ -784,24 +785,25 @@ module moon_vector_unit (
                         ((instr_i[31:26] == 6'b011110) ||
                          (instr_i[31:26] == 6'b011111)) &&
                         ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011)));
+  assign is_vector_fp_scalar_form = instr_i[14:12] == 3'b101;
   assign is_vector_fp_compare = (instr_i[6:0] == 7'b1010111) &&
                                 ((instr_i[31:26] == 6'b011000) ||
                                  (instr_i[31:26] == 6'b011001) ||
                                  (instr_i[31:26] == 6'b011011) ||
                                  (instr_i[31:26] == 6'b011100)) &&
-                                (instr_i[14:12] == 3'b001) &&
+                                ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                                 ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_not_equal = instr_i[31:26] == 6'b011100;
   assign is_vector_fp_minmax = (instr_i[6:0] == 7'b1010111) &&
                                ((instr_i[31:26] == 6'b000100) ||
                                 (instr_i[31:26] == 6'b000110)) &&
-                               (instr_i[14:12] == 3'b001) &&
+                               ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                                ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_signinj = (instr_i[6:0] == 7'b1010111) &&
                                 ((instr_i[31:26] == 6'b001000) ||
                                  (instr_i[31:26] == 6'b001001) ||
                                  (instr_i[31:26] == 6'b001010)) &&
-                                (instr_i[14:12] == 3'b001) &&
+                                ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                                 ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vminmax = (instr_i[6:0] == 7'b1010111) &&
                       ((instr_i[31:26] == 6'b000100) ||
@@ -829,15 +831,15 @@ module moon_vector_unit (
   assign is_vector_fp_addsub = (instr_i[6:0] == 7'b1010111) &&
                                ((instr_i[31:26] == 6'b000000) ||
                                 (instr_i[31:26] == 6'b000010)) &&
-                               (instr_i[14:12] == 3'b001) &&
+                               ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                                ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_mul = (instr_i[6:0] == 7'b1010111) &&
                             (instr_i[31:26] == 6'b100100) &&
-                            (instr_i[14:12] == 3'b001) &&
+                            ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                             ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_div = (instr_i[6:0] == 7'b1010111) &&
                             (instr_i[31:26] == 6'b100000) &&
-                            (instr_i[14:12] == 3'b001) &&
+                            ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                             ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_sqrt = (instr_i[6:0] == 7'b1010111) &&
                              (instr_i[31:26] == 6'b010011) &&
@@ -853,7 +855,7 @@ module moon_vector_unit (
                              (instr_i[31:26] == 6'b101101) ||
                              (instr_i[31:26] == 6'b101110) ||
                              (instr_i[31:26] == 6'b101111)) &&
-                            (instr_i[14:12] == 3'b001) &&
+                            ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
                             ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_fma_dest_mult = (instr_i[31:29] == 3'b101) &&
                                       !instr_i[28];
@@ -966,21 +968,25 @@ module moon_vector_unit (
       if (vsew_q == 3'b010) begin
         if (is_vector_fp_fma_dest_mult) begin
           vector_fp_operand_a[i] = {32'hffff_ffff, vreg[vd][i*32 +: 32]};
-          vector_fp_operand_b[i] = {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
+          vector_fp_operand_b[i] = is_vector_fp_scalar_form ? scalar_rs1_i :
+                                   {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
           vector_fp_operand_c[i] = {32'hffff_ffff, vreg[vs2][i*32 +: 32]};
         end else begin
           vector_fp_operand_a[i] = {32'hffff_ffff, vreg[vs2][i*32 +: 32]};
-          vector_fp_operand_b[i] = {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
+          vector_fp_operand_b[i] = is_vector_fp_scalar_form ? scalar_rs1_i :
+                                   {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
           vector_fp_operand_c[i] = {32'hffff_ffff, vreg[vd][i*32 +: 32]};
         end
       end else if ((vsew_q == 3'b011) && (i < 2)) begin
         if (is_vector_fp_fma_dest_mult) begin
           vector_fp_operand_a[i] = vreg[vd][i*64 +: 64];
-          vector_fp_operand_b[i] = vreg[vs1][i*64 +: 64];
+          vector_fp_operand_b[i] = is_vector_fp_scalar_form ? scalar_rs1_i :
+                                   vreg[vs1][i*64 +: 64];
           vector_fp_operand_c[i] = vreg[vs2][i*64 +: 64];
         end else begin
           vector_fp_operand_a[i] = vreg[vs2][i*64 +: 64];
-          vector_fp_operand_b[i] = vreg[vs1][i*64 +: 64];
+          vector_fp_operand_b[i] = is_vector_fp_scalar_form ? scalar_rs1_i :
+                                   vreg[vs1][i*64 +: 64];
           vector_fp_operand_c[i] = vreg[vd][i*64 +: 64];
         end
       end
@@ -1397,21 +1403,27 @@ module moon_vector_unit (
             if (vsew_q == 3'b010) begin
               case (instr_i[31:26])
                 6'b001000: vreg[vd][i*32 +: 32] <=
-                  {vreg[vs1][i*32+31], vreg[vs2][i*32+30 -: 31]};
+                  {is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31],
+                   vreg[vs2][i*32+30 -: 31]};
                 6'b001001: vreg[vd][i*32 +: 32] <=
-                  {~vreg[vs1][i*32+31], vreg[vs2][i*32+30 -: 31]};
+                  {~(is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31]),
+                   vreg[vs2][i*32+30 -: 31]};
                 default: vreg[vd][i*32 +: 32] <=
-                  {vreg[vs2][i*32+31] ^ vreg[vs1][i*32+31],
+                  {vreg[vs2][i*32+31] ^
+                   (is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31]),
                    vreg[vs2][i*32+30 -: 31]};
               endcase
             end else if ((vsew_q == 3'b011) && (i < 2)) begin
               case (instr_i[31:26])
                 6'b001000: vreg[vd][i*64 +: 64] <=
-                  {vreg[vs1][i*64+63], vreg[vs2][i*64+62 -: 63]};
+                  {is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63],
+                   vreg[vs2][i*64+62 -: 63]};
                 6'b001001: vreg[vd][i*64 +: 64] <=
-                  {~vreg[vs1][i*64+63], vreg[vs2][i*64+62 -: 63]};
+                  {~(is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63]),
+                   vreg[vs2][i*64+62 -: 63]};
                 default: vreg[vd][i*64 +: 64] <=
-                  {vreg[vs2][i*64+63] ^ vreg[vs1][i*64+63],
+                  {vreg[vs2][i*64+63] ^
+                   (is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63]),
                    vreg[vs2][i*64+62 -: 63]};
               endcase
             end

@@ -122,6 +122,22 @@ module moon_id_stage
   assign csr_addr = if_id_instr_i[31:20];
   wire is_fp_fma_opcode = (opcode == 7'b1000011) || (opcode == 7'b1000111) ||
                           (opcode == 7'b1001011) || (opcode == 7'b1001111);
+  wire is_vector_fp_scalar_op = (opcode == 7'b1010111) && (funct3 == 3'b101) &&
+                                ((if_id_instr_i[31:26] == 6'b000000) ||
+                                 (if_id_instr_i[31:26] == 6'b000010) ||
+                                 (if_id_instr_i[31:26] == 6'b000100) ||
+                                 (if_id_instr_i[31:26] == 6'b000110) ||
+                                 (if_id_instr_i[31:26] == 6'b001000) ||
+                                 (if_id_instr_i[31:26] == 6'b001001) ||
+                                 (if_id_instr_i[31:26] == 6'b001010) ||
+                                 (if_id_instr_i[31:26] == 6'b011000) ||
+                                 (if_id_instr_i[31:26] == 6'b011001) ||
+                                 (if_id_instr_i[31:26] == 6'b011011) ||
+                                 (if_id_instr_i[31:26] == 6'b011100) ||
+                                 (if_id_instr_i[31:26] == 6'b100000) ||
+                                 (if_id_instr_i[31:26] == 6'b100100) ||
+                                 ((if_id_instr_i[31:26] >= 6'b101000) &&
+                                  (if_id_instr_i[31:26] <= 6'b101111)));
   wire is_vector_strided_store = (opcode == OPCODE_STORE_FP) &&
                                  (if_id_instr_i[27:26] == 2'b10);
 
@@ -129,7 +145,7 @@ module moon_id_stage
   assign id_rs2_o = rs2;
   assign id_fp_rs1_o = rs1;
   assign id_fp_rs1_en_o = if_id_valid_i &&
-                          (is_fp_fma_opcode ||
+                          (is_fp_fma_opcode || is_vector_fp_scalar_op ||
                            ((opcode == OPCODE_FP) &&
                             ((((funct7 == 7'b1110000) || (funct7 == 7'b1110001)) &&
                               (rs2 == 5'd0) && (funct3 <= 3'b001)) ||
@@ -867,7 +883,7 @@ module moon_id_stage
         id_ex_rs1_data_o <= {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]};
       end else if (dec_fmv_x_d) begin
         id_ex_rs1_data_o <= fp_rs1_data;
-      end else if (dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma || dec_fp_sign || dec_fp_class || dec_fp_cmp ||
+      end else if (is_vector_fp_scalar_op || dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma || dec_fp_sign || dec_fp_class || dec_fp_cmp ||
                    (dec_fp_cvt && dec_fp_cvt_src_fp)) begin
         id_ex_rs1_data_o <= fp_rs1_data;
       end else begin
