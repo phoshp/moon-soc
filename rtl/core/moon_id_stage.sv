@@ -122,6 +122,8 @@ module moon_id_stage
   assign csr_addr = if_id_instr_i[31:20];
   wire is_fp_fma_opcode = (opcode == 7'b1000011) || (opcode == 7'b1000111) ||
                           (opcode == 7'b1001011) || (opcode == 7'b1001111);
+  wire is_vector_strided_store = (opcode == OPCODE_STORE_FP) &&
+                                 (if_id_instr_i[27:26] == 2'b10);
 
   assign id_rs1_o = rs1;
   assign id_rs2_o = rs2;
@@ -146,7 +148,7 @@ module moon_id_stage
   assign id_fp_rs3_o = if_id_instr_i[31:27];
   assign id_fp_rs3_en_o = if_id_valid_i && is_fp_fma_opcode;
   assign id_fp_rs2_en_o = if_id_valid_i &&
-                          (((opcode == OPCODE_STORE_FP) &&
+                          (((opcode == OPCODE_STORE_FP) && !is_vector_strided_store &&
                             ((funct3 == 3'b010) || (funct3 == 3'b011))) ||
                            is_fp_fma_opcode ||
                            ((opcode == OPCODE_FP) &&
@@ -871,7 +873,7 @@ module moon_id_stage
         id_ex_rs1_data_o <= rf_rs1_data;
       end
       id_ex_fp_rs3_data_o  <= fp_rs3_data;
-      id_ex_rs2_data_o     <= ((opcode == OPCODE_STORE_FP) || dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma ||
+      id_ex_rs2_data_o     <= ((opcode == OPCODE_STORE_FP && !is_vector_strided_store) || dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma ||
                                dec_fp_sign || dec_fp_cmp) ?
                               fp_rs2_data : rf_rs2_data;
       id_ex_imm_o          <= selected_imm;

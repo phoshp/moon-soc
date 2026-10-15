@@ -13,6 +13,7 @@ module moon_vector_unit (
   input  logic        advance_i,
   input  logic [31:0] instr_i,
   input  logic [63:0] scalar_rs1_i,
+  input  logic [63:0] scalar_rs2_i,
   output logic        scalar_result_valid_o,
   output logic [63:0] scalar_result_o,
   output logic        mem_req_o,
@@ -45,10 +46,12 @@ module moon_vector_unit (
   logic         is_vmask_logic;
   logic [4:0]   vd, vs1, vs2;
   logic         is_vle_v, is_vse_v;
+  logic         vector_mem_strided;
   logic         vector_mem_active_q;
   logic         vector_mem_done_q;
   logic         vector_mem_store_q;
   logic [63:0]  vector_mem_base_q;
+  logic [63:0]  vector_mem_stride_q;
   logic [4:0]   vector_mem_count_q;
   logic [4:0]   vector_mem_vl_q;
   logic [2:0]   vector_mem_sew_q;
@@ -70,15 +73,24 @@ module moon_vector_unit (
 
   assign is_vle_v = (instr_i[6:0] == 7'b0000111) &&
                     (instr_i[31:29] == 3'b000) &&
-                    (instr_i[28:26] == 3'b000) &&
-                    (instr_i[24:20] == 5'b00000) &&
+                    (instr_i[28] == 1'b0) &&
+                    (((instr_i[27:26] == 2'b00) && (instr_i[24:20] == 5'b00000)) ||
+                     (instr_i[27:26] == 2'b10)) &&
                     (vector_mem_eew == vsew_q);
   assign is_vse_v = (instr_i[6:0] == 7'b0100111) &&
                     (instr_i[31:29] == 3'b000) &&
-                    (instr_i[28:26] == 3'b000) &&
+                    (instr_i[28] == 1'b0) &&
+                    ((instr_i[27:26] == 2'b00) || (instr_i[27:26] == 2'b10)) &&
                     (vector_mem_eew == vsew_q);
-  assign vector_mem_addr = vector_mem_base_q +
-                           ({59'd0, vector_mem_count_q} << vector_mem_sew_q);
+  assign vector_mem_strided = (instr_i[27:26] == 2'b10);
+  always_comb begin
+    if (vector_mem_strided)
+      vector_mem_addr = vector_mem_base_q +
+                        ($signed({59'd0, vector_mem_count_q}) * $signed(vector_mem_stride_q));
+    else
+      vector_mem_addr = vector_mem_base_q +
+                        ({59'd0, vector_mem_count_q} << vector_mem_sew_q);
+  end
   assign vector_mem_offset = vector_mem_addr[2:0];
   always_comb begin
     vector_mem_element = '0;
@@ -403,6 +415,7 @@ module moon_vector_unit (
       vector_mem_done_q <= 1'b0;
       vector_mem_store_q <= 1'b0;
       vector_mem_base_q <= '0;
+      vector_mem_stride_q <= '0;
       vector_mem_count_q <= '0;
       vector_mem_vl_q <= '0;
       vector_mem_sew_q <= '0;
@@ -416,6 +429,7 @@ module moon_vector_unit (
         vector_mem_active_q <= 1'b1;
         vector_mem_store_q <= is_vse_v;
         vector_mem_base_q <= scalar_rs1_i;
+        vector_mem_stride_q <= scalar_rs2_i;
         vector_mem_count_q <= '0;
         vector_mem_vl_q <= vl_q;
         vector_mem_sew_q <= vector_mem_eew;

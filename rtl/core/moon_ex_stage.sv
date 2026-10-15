@@ -376,6 +376,7 @@ module moon_ex_stage
     .advance_i              (!stall_mem_i && !flush_mem_i),
     .instr_i                (id_ex_instr_i),
     .scalar_rs1_i           (operand_a_fwd),
+    .scalar_rs2_i           (operand_b_fwd),
     .scalar_result_valid_o  (vector_scalar_result_valid),
     .scalar_result_o        (vector_scalar_result),
     .mem_req_o              (vector_unit_mem_req),
