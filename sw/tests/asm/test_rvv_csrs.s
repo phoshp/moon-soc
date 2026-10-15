@@ -15,7 +15,23 @@ _start:
     li   t1, 16
     bne  t0, t1, fail
 
+    csrr t0, mstatus
+    srli t0, t0, 9
+    andi t0, t0, 3
+    li   t1, 1
+    bne  t0, t1, fail_vs_initial
+
     vsetvli t0, zero, e32, m1, ta, ma
+    csrr t2, mstatus
+    srli t2, t2, 9
+    andi t2, t2, 3
+    li   t1, 3
+    bne  t2, t1, fail_vs_dirty
+    csrr t2, sstatus
+    srli t2, t2, 9
+    andi t2, t2, 3
+    bne  t2, t1, fail_sstatus
+
     li   t1, 4
     bne  t0, t1, fail
     csrr t0, vl
@@ -125,7 +141,18 @@ pass:
     sd   t0, 0(s0)
 1:  j    1b
 
+fail_vs_initial:
+    li   t0, 0xDEAD0101
+    j    fail_common
+fail_vs_dirty:
+    li   t0, 0xDEAD0102
+    j    fail_common
+fail_sstatus:
+    li   t0, 0xDEAD0103
+    j    fail_common
 fail:
     li   t0, 0xDEAD00FF
-    sd   t0, 0(s0)
+fail_common:
+    li   t1, 0x80001000
+    sd   t0, 0(t1)
 1:  j    1b
