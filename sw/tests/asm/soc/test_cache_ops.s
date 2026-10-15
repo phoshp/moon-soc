@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/test_cache_ops.s
+# File: sw/tests/asm/soc/test_cache_ops.s
 # Description: Directed test verifying Moon-SoC L1-I and L1-D Caches:
 #              - L1-I cache hits on loops
 #              - L1-D cache line write-allocate & write-back

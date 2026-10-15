@@ -89,7 +89,7 @@ module tb_moon_soc (
   int fd, r;
   logic [31:0] word;
   int rom_idx;
-  string hex_file = "sw/tests/asm/test_rv64_all.hex";
+  string hex_file = "sw/tests/asm/base/test_rv64_all.hex";
 
   initial begin
     test_passed     = 1'b0;

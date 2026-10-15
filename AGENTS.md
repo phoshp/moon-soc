@@ -22,7 +22,7 @@ The user prefers each minimal implementation and its regression to be committed 
 The project uses `cocotb`, Python, and Verilator for RTL simulation and verification.
 
 ### Cocotb Simulation
-- **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/core/run_test.py sw/tests/asm/test_rv64_all.hex`.
+- **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/core/run_test.py sw/tests/asm/base/test_rv64_all.hex`.
 - **Run full suite (core + SoC)**: `make all`.
 - **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/soc/run_soc_test.py` with `test_rv64_all.hex`).
 - **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC, CRG, PMU).

@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/test_pmp.s
+# File: sw/tests/asm/privileged/test_pmp.s
 # Description: Self-checking directed test suite for Physical Memory Protection
 #              (PMP & Smepmp):
 #              - Configuration of pmpcfg0 and pmpaddr registers

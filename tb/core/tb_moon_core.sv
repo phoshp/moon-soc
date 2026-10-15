@@ -136,7 +136,7 @@ module tb_moon_core (
     end
   end
 
-  string hex_file = "sw/tests/asm/test_rv64_all.hex";
+  string hex_file = "sw/tests/asm/base/test_rv64_all.hex";
   int fd, r;
   logic [31:0] word;
   int addr;

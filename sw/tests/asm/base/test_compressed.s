@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/test_compressed.s
+# File: sw/tests/asm/base/test_compressed.s
 # Description: Self-checking directed test suite for RISC-V RVA23 Compressed
 #              extensions: Zca (Standard 16-bit) and Zcb (Byte/Halfword & Bitops).
 #              Verifies decompression, execution, and unaligned fetch buffering.

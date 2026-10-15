@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/test_mmu_sv39.s
+# File: sw/tests/asm/privileged/test_mmu_sv39.s
 # Description: Self-checking directed test suite for RISC-V RVA23 Sv39 Virtual
 #              Memory Translation:
 #              - Construction of 3-level Sv39 page tables in memory

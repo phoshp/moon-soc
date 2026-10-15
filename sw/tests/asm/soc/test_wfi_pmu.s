@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/test_wfi_pmu.s
+# File: sw/tests/asm/soc/test_wfi_pmu.s
 # Description: Self-checking test verifying WFI (Wait-For-Interrupt) execution,
 #              PMU sleep transition, clock gating, and timer interrupt wake-up.
 # ============================================================================
