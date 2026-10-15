@@ -69,6 +69,7 @@ module moon_vector_unit (
   logic         is_vector_fp_div;
   logic         is_vector_fp_sqrt;
   logic         is_vector_fp_mac;
+  logic         is_vector_fp_fma_dest_mult;
   logic         is_vector_fp_op;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
@@ -819,18 +820,24 @@ module moon_vector_unit (
                              (instr_i[14:12] == 3'b001) &&
                              ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_mac = (instr_i[6:0] == 7'b1010111) &&
-                            ((instr_i[31:26] == 6'b101100) ||
+                            ((instr_i[31:26] == 6'b101000) ||
+                             (instr_i[31:26] == 6'b101001) ||
+                             (instr_i[31:26] == 6'b101010) ||
+                             (instr_i[31:26] == 6'b101011) ||
+                             (instr_i[31:26] == 6'b101100) ||
                              (instr_i[31:26] == 6'b101101) ||
                              (instr_i[31:26] == 6'b101110) ||
                              (instr_i[31:26] == 6'b101111)) &&
                             (instr_i[14:12] == 3'b001) &&
                             ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  assign is_vector_fp_fma_dest_mult = (instr_i[31:29] == 3'b101) &&
+                                      !instr_i[28];
   always_comb begin
     case (instr_i[31:26])
-      6'b101110: vector_fp_mac_opcode = 7'b1000111; // vfmsac: a*b-c
-      6'b101111: vector_fp_mac_opcode = 7'b1001011; // vfnmsac: -a*b+c
-      6'b101101: vector_fp_mac_opcode = 7'b1001111; // vfnmacc: -a*b-c
-      default:   vector_fp_mac_opcode = 7'b1000011; // vfmacc: a*b+c
+      6'b101010, 6'b101110: vector_fp_mac_opcode = 7'b1000111;
+      6'b101001, 6'b101111: vector_fp_mac_opcode = 7'b1001011;
+      6'b101011, 6'b101101: vector_fp_mac_opcode = 7'b1001111;
+      default:             vector_fp_mac_opcode = 7'b1000011;
     endcase
   end
   assign is_vector_fp_op = is_vector_fp_addsub || is_vector_fp_mul ||
@@ -920,13 +927,25 @@ module moon_vector_unit (
       vector_fp_operand_b[i] = 64'd0;
       vector_fp_operand_c[i] = 64'd0;
       if (vsew_q == 3'b010) begin
-        vector_fp_operand_a[i] = {32'hffff_ffff, vreg[vs2][i*32 +: 32]};
-        vector_fp_operand_b[i] = {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
-        vector_fp_operand_c[i] = {32'hffff_ffff, vreg[vd][i*32 +: 32]};
+        if (is_vector_fp_fma_dest_mult) begin
+          vector_fp_operand_a[i] = {32'hffff_ffff, vreg[vd][i*32 +: 32]};
+          vector_fp_operand_b[i] = {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
+          vector_fp_operand_c[i] = {32'hffff_ffff, vreg[vs2][i*32 +: 32]};
+        end else begin
+          vector_fp_operand_a[i] = {32'hffff_ffff, vreg[vs2][i*32 +: 32]};
+          vector_fp_operand_b[i] = {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
+          vector_fp_operand_c[i] = {32'hffff_ffff, vreg[vd][i*32 +: 32]};
+        end
       end else if ((vsew_q == 3'b011) && (i < 2)) begin
-        vector_fp_operand_a[i] = vreg[vs2][i*64 +: 64];
-        vector_fp_operand_b[i] = vreg[vs1][i*64 +: 64];
-        vector_fp_operand_c[i] = vreg[vd][i*64 +: 64];
+        if (is_vector_fp_fma_dest_mult) begin
+          vector_fp_operand_a[i] = vreg[vd][i*64 +: 64];
+          vector_fp_operand_b[i] = vreg[vs1][i*64 +: 64];
+          vector_fp_operand_c[i] = vreg[vs2][i*64 +: 64];
+        end else begin
+          vector_fp_operand_a[i] = vreg[vs2][i*64 +: 64];
+          vector_fp_operand_b[i] = vreg[vs1][i*64 +: 64];
+          vector_fp_operand_c[i] = vreg[vd][i*64 +: 64];
+        end
       end
     end
   end
