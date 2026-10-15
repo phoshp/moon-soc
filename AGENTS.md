@@ -42,7 +42,7 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 ### Test Assembly & Hex Conversion
 Software tests are assembled into raw flat binaries and converted to little-endian hex files:
 - **Convert binary to simulation hex**: `python3 tb/bin2hex.py <input.bin> <output.hex>`
-- **Linker script**: `tb/common/link_test.ld` defines:
+- **Linker script**: `tb/link_test.ld` defines:
   - Reset vector / `.text`: `0x00001000`
   - Data / `.data` & `.bss`: `0x80000000`
 
