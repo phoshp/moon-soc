@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/privileged/test_smode.s
+# File: tb/tests/asm/privileged/test_smode.s
 # Description: Self-checking directed test suite for RISC-V RVA23 Privileged
 #              Architecture & Supervisor Mode:
 #              - S-mode CSR read/write (sstatus, stvec, sscratch, sepc, satp)

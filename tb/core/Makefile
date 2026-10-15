@@ -13,7 +13,7 @@ COCOTB_TEST_MODULES = test_moon_core
 EXTRA_ARGS += -I$(REPO_ROOT)/rtl/core -I$(REPO_ROOT)/tb/core
 EXTRA_ARGS += -Wno-fatal -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-UNUSED
 
-TEST_HEX ?= $(REPO_ROOT)/sw/tests/asm/base/test_rv64_all.hex
+TEST_HEX ?= $(REPO_ROOT)/tb/tests/asm/base/test_rv64_all.hex
 COCOTB_PLUSARGS += +hex_file=$(TEST_HEX)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

@@ -122,7 +122,7 @@ All simulation commands can be run from the root directory:
 
 Testbench files are grouped by target: `tb/core/` contains the standalone core cocotb runner and SystemVerilog harness, while `tb/soc/` contains the SoC equivalents. `tb/bin2hex.py` converts firmware binaries to simulation hex images.
 
-Firmware regressions are grouped under `sw/tests/asm/` by area (`base/`, `privileged/`, `crypto/`, `fp/`, `rvv/`, and `soc/`). Each tracked test keeps its assembly source and simulation images together.
+Firmware regressions are grouped under `tb/tests/asm/` by area (`base/`, `privileged/`, `crypto/`, `fp/`, `rvv/`, and `soc/`). Each tracked test keeps its assembly source and simulation images together.
 
 ---
 

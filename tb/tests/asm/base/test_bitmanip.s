@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/base/test_bitmanip.s
+# File: tb/tests/asm/base/test_bitmanip.s
 # Description: Self-checking directed test suite for RISC-V RVA23 Bitmanipulation
 #              extensions: Zba (Address Generation), Zbb (Basic Bitmanip),
 #              and Zbs (Single-Bit Operations).

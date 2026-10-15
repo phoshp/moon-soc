@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/soc/test_soc_periphs.s
+# File: tb/tests/asm/soc/test_soc_periphs.s
 # Description: Self-checking test verifying Moon-SoC Top-Level Peripherals:
 #              - UART 16550 Console Output (0x1000_0000)
 #              - On-Chip SRAM read/write (0x7000_0000)

@@ -1,5 +1,5 @@
 # ============================================================================
-# File: sw/tests/asm/base/test_rv64_all.s
+# File: tb/tests/asm/base/test_rv64_all.s
 # Description: Self-checking directed test suite for RV64I, RV64M, and RV64A
 # ============================================================================
 
