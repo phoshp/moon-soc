@@ -113,6 +113,7 @@ module moon_ex_stage
   output logic [XLEN-1:0]  vector_vl_o,
   output logic [XLEN-1:0]  vector_vtype_o,
   output logic             vector_vstart_clear_o,
+  output logic             vector_vxsat_set_o,
   output logic [XLEN-1:0]  vector_mem_vstart_o,
 
   // Outputs to MEM Stage (EX/MEM Pipeline Register)
@@ -386,6 +387,7 @@ module moon_ex_stage
     .vector_vstart_i        (vector_vstart_i),
     .vector_mem_fault_i     (vector_mem_fault_i),
     .vector_vstart_clear_o  (vector_vstart_clear_o),
+    .vector_vxsat_set_o     (vector_vxsat_set_o),
     .vector_mem_vstart_o    (vector_mem_vstart_o),
     .vector_vl_o            (vector_vl_o),
     .vector_vtype_o         (vector_vtype_o),

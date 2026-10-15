@@ -17,6 +17,7 @@ module moon_vector_unit (
   input  logic [63:0] vector_vstart_i,
   input  logic        vector_mem_fault_i,
   output logic        vector_vstart_clear_o,
+  output logic        vector_vxsat_set_o,
   output logic [63:0] vector_mem_vstart_o,
   output logic [63:0] vector_vl_o,
   output logic [63:0] vector_vtype_o,
@@ -57,6 +58,9 @@ module moon_vector_unit (
   logic         is_vmulhsu_vx;
   logic         is_vdivrem_vv;
   logic         is_vdivrem_vx;
+  logic         is_vsat_vv;
+  logic         is_vsat_vx;
+  logic         is_vector_sat;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
   logic         is_vlogic;
@@ -330,6 +334,96 @@ module moon_vector_unit (
           result = operation[1] ? (unsigned_a % unsigned_b) : (unsigned_a / unsigned_b);
       end
       vector_divrem = result & mask;
+    end
+  endfunction
+
+  function automatic logic [64:0] vector_sat_result(
+    input logic [63:0] operand_a,
+    input logic [63:0] operand_b,
+    input logic [2:0] sew,
+    input logic [5:0] operation
+  );
+    logic signed [127:0] signed_a;
+    logic signed [127:0] signed_b;
+    logic signed [127:0] signed_result;
+    logic [127:0] unsigned_a;
+    logic [127:0] unsigned_b;
+    logic [127:0] unsigned_result;
+    logic signed [127:0] signed_max;
+    logic signed [127:0] signed_min;
+    logic [127:0] unsigned_max;
+    logic signed_mode;
+    logic subtract_mode;
+    logic saturated;
+    logic [63:0] result;
+    begin
+      case (sew)
+        3'b000: begin
+          signed_a = {{120{operand_a[7]}}, operand_a[7:0]};
+          signed_b = {{120{operand_b[7]}}, operand_b[7:0]};
+          unsigned_a = {120'd0, operand_a[7:0]};
+          unsigned_b = {120'd0, operand_b[7:0]};
+          signed_max = 127;
+          signed_min = -128;
+          unsigned_max = 255;
+        end
+        3'b001: begin
+          signed_a = {{112{operand_a[15]}}, operand_a[15:0]};
+          signed_b = {{112{operand_b[15]}}, operand_b[15:0]};
+          unsigned_a = {112'd0, operand_a[15:0]};
+          unsigned_b = {112'd0, operand_b[15:0]};
+          signed_max = 32767;
+          signed_min = -32768;
+          unsigned_max = 65535;
+        end
+        3'b010: begin
+          signed_a = {{96{operand_a[31]}}, operand_a[31:0]};
+          signed_b = {{96{operand_b[31]}}, operand_b[31:0]};
+          unsigned_a = {96'd0, operand_a[31:0]};
+          unsigned_b = {96'd0, operand_b[31:0]};
+          signed_max = 2147483647;
+          signed_min = -2147483648;
+          unsigned_max = 32'hffff_ffff;
+        end
+        default: begin
+          signed_a = {{64{operand_a[63]}}, operand_a};
+          signed_b = {{64{operand_b[63]}}, operand_b};
+          unsigned_a = {64'd0, operand_a};
+          unsigned_b = {64'd0, operand_b};
+          signed_max = 128'h7fff_ffff_ffff_ffff;
+          signed_min = -128'sd9223372036854775808;
+          unsigned_max = 64'hffff_ffff_ffff_ffff;
+        end
+      endcase
+      signed_mode = operation[0];
+      subtract_mode = operation[1];
+      saturated = 1'b0;
+      result = 64'd0;
+      if (signed_mode) begin
+        signed_result = subtract_mode ? (signed_a - signed_b) : (signed_a + signed_b);
+        if (signed_result > signed_max) begin
+          result = signed_max[63:0];
+          saturated = 1'b1;
+        end else if (signed_result < signed_min) begin
+          result = signed_min[63:0];
+          saturated = 1'b1;
+        end else begin
+          result = signed_result[63:0];
+        end
+      end else if (subtract_mode && (unsigned_a < unsigned_b)) begin
+        result = 64'd0;
+        saturated = 1'b1;
+      end else begin
+        unsigned_result = subtract_mode ? (unsigned_a - unsigned_b) :
+                                          (unsigned_a + unsigned_b);
+        if (!subtract_mode && (unsigned_result > unsigned_max)) begin
+          result = unsigned_max[63:0];
+          saturated = 1'b1;
+        end else begin
+          result = unsigned_result[63:0];
+        end
+      end
+      vector_sat_result = {saturated, result};
     end
   endfunction
 
@@ -611,6 +705,11 @@ module moon_vector_unit (
                          (instr_i[31:28] == 4'b1000) && (instr_i[14:12] == 3'b010);
   assign is_vdivrem_vx = (instr_i[6:0] == 7'b1010111) &&
                          (instr_i[31:28] == 4'b1000) && (instr_i[14:12] == 3'b110);
+  assign is_vsat_vv = (instr_i[6:0] == 7'b1010111) &&
+                      (instr_i[31:28] == 4'b1000) && (instr_i[14:12] == 3'b000);
+  assign is_vsat_vx = (instr_i[6:0] == 7'b1010111) &&
+                      (instr_i[31:28] == 4'b1000) && (instr_i[14:12] == 3'b100);
+  assign is_vector_sat = is_vsat_vv || is_vsat_vx;
   assign is_vsub_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
                       (instr_i[14:12] == 3'b000);
   assign is_vsub_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
@@ -678,6 +777,7 @@ module moon_vector_unit (
                              is_vmulh_vv || is_vmulh_vx || is_vmulhu_vv ||
                              is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx ||
                              is_vdivrem_vv || is_vdivrem_vx ||
+                             is_vector_sat ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare;
@@ -738,6 +838,24 @@ module moon_vector_unit (
       end
     end
     vector_reduce_result = vector_reduce_accum;
+  end
+
+  always_comb begin : detect_vector_saturation
+    logic [64:0] saturated_element;
+    saturated_element = 65'd0;
+    vector_vxsat_set_o = 1'b0;
+    if (valid_i && advance_i && is_vector_sat) begin
+      for (int i = 0; i < 16; i++) begin
+        if ((i < vl_q) && (i >= vector_vstart_i) &&
+            (instr_i[25] || vreg[0][i])) begin
+          saturated_element = vector_sat_result(
+            vector_element(vreg[vs2], i[4:0], vsew_q),
+            is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+            vsew_q, instr_i[31:26]);
+          vector_vxsat_set_o = vector_vxsat_set_o | saturated_element[64];
+        end
+      end
+    end
   end
 
   always_comb begin
@@ -980,6 +1098,29 @@ module moon_vector_unit (
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
+            endcase
+          end
+        end
+      end else if (is_vector_sat) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_sat_result(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26])[7:0];
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_sat_result(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26])[15:0];
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_sat_result(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26])[31:0];
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_sat_result(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26])[63:0];
             endcase
           end
         end

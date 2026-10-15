@@ -67,6 +67,7 @@ module moon_csr
   input  logic [XLEN-1:0]  vector_vl_i,
   input  logic [XLEN-1:0]  vector_vtype_i,
   input  logic             vector_vstart_clear_i,
+  input  logic             vector_vxsat_set_i,
   input  logic             vector_vstart_fault_i,
   input  logic [XLEN-1:0]  vector_vstart_fault_value_i,
   output logic [XLEN-1:0]  vector_vstart_o,
@@ -519,6 +520,8 @@ module moon_csr
           (csr_we_i && ((csr_addr_i == 12'h008) || (csr_addr_i == 12'h009) ||
                         (csr_addr_i == 12'h00A) || (csr_addr_i == 12'h00F))))
         mstatus_vs <= 2'b11;
+
+      if (vector_vxsat_set_i) vxsat_q <= 1'b1;
 
       if (vector_vstart_fault_i) vstart_q <= vector_vstart_fault_value_i;
       else if (vector_vstart_clear_i) vstart_q <= '0;

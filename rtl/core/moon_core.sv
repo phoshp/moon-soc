@@ -203,6 +203,7 @@ module moon_core
   logic [XLEN-1:0]  vector_vtype;
   logic [XLEN-1:0]  vector_vstart;
   logic             vector_vstart_clear;
+  logic             vector_vxsat_set;
   logic             vector_mem_fault;
   logic [XLEN-1:0]  vector_mem_vstart;
   logic             vector_vxsat;
@@ -588,6 +589,7 @@ module moon_core
     .vector_vl_o          (vector_vl),
     .vector_vtype_o       (vector_vtype),
     .vector_vstart_clear_o(vector_vstart_clear),
+    .vector_vxsat_set_o  (vector_vxsat_set),
     .vector_mem_vstart_o  (vector_mem_vstart),
     .ex_mem_valid_o       (ex_mem_valid),
     .ex_mem_pc_o          (ex_mem_pc),
@@ -822,6 +824,7 @@ module moon_core
     .vector_vl_i         (vector_vl),
     .vector_vtype_i      (vector_vtype),
     .vector_vstart_clear_i(vector_vstart_clear),
+    .vector_vxsat_set_i  (vector_vxsat_set),
     .vector_vstart_fault_i(vector_mem_fault),
     .vector_vstart_fault_value_i(vector_mem_vstart),
     .vector_vstart_o     (vector_vstart),
