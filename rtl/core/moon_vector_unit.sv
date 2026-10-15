@@ -509,36 +509,48 @@ module moon_vector_unit (
     input logic [2:0]  sew,
     input logic [5:0]  operation
   );
-    case (operation)
-      6'b011000: begin
-        case (sew)
-          3'b000: vector_compare = operand_a[7:0] == operand_b[7:0];
-          3'b001: vector_compare = operand_a[15:0] == operand_b[15:0];
-          3'b010: vector_compare = operand_a[31:0] == operand_b[31:0];
-          default: vector_compare = operand_a == operand_b;
-        endcase
-      end
-      6'b011001: begin
-        case (sew)
-          3'b000: vector_compare = operand_a[7:0] != operand_b[7:0];
-          3'b001: vector_compare = operand_a[15:0] != operand_b[15:0];
-          3'b010: vector_compare = operand_a[31:0] != operand_b[31:0];
-          default: vector_compare = operand_a != operand_b;
-        endcase
-      end
-      default: begin
-        case (sew)
-          3'b000: vector_compare = (operation == 6'b011010) ? (operand_a[7:0] < operand_b[7:0]) :
-                                                               ($signed(operand_a[7:0]) < $signed(operand_b[7:0]));
-          3'b001: vector_compare = (operation == 6'b011010) ? (operand_a[15:0] < operand_b[15:0]) :
-                                                               ($signed(operand_a[15:0]) < $signed(operand_b[15:0]));
-          3'b010: vector_compare = (operation == 6'b011010) ? (operand_a[31:0] < operand_b[31:0]) :
-                                                               ($signed(operand_a[31:0]) < $signed(operand_b[31:0]));
-          default: vector_compare = (operation == 6'b011010) ? (operand_a < operand_b) :
-                                                               ($signed(operand_a) < $signed(operand_b));
-        endcase
-      end
-    endcase
+    logic [63:0] unsigned_a;
+    logic [63:0] unsigned_b;
+    logic signed [63:0] signed_a;
+    logic signed [63:0] signed_b;
+    begin
+      case (sew)
+        3'b000: begin
+          unsigned_a = {56'd0, operand_a[7:0]};
+          unsigned_b = {56'd0, operand_b[7:0]};
+          signed_a = {{56{operand_a[7]}}, operand_a[7:0]};
+          signed_b = {{56{operand_b[7]}}, operand_b[7:0]};
+        end
+        3'b001: begin
+          unsigned_a = {48'd0, operand_a[15:0]};
+          unsigned_b = {48'd0, operand_b[15:0]};
+          signed_a = {{48{operand_a[15]}}, operand_a[15:0]};
+          signed_b = {{48{operand_b[15]}}, operand_b[15:0]};
+        end
+        3'b010: begin
+          unsigned_a = {32'd0, operand_a[31:0]};
+          unsigned_b = {32'd0, operand_b[31:0]};
+          signed_a = {{32{operand_a[31]}}, operand_a[31:0]};
+          signed_b = {{32{operand_b[31]}}, operand_b[31:0]};
+        end
+        default: begin
+          unsigned_a = operand_a;
+          unsigned_b = operand_b;
+          signed_a = operand_a;
+          signed_b = operand_b;
+        end
+      endcase
+      case (operation)
+        6'b011000: vector_compare = unsigned_a == unsigned_b;
+        6'b011001: vector_compare = unsigned_a != unsigned_b;
+        6'b011010: vector_compare = unsigned_a < unsigned_b;
+        6'b011011: vector_compare = signed_a < signed_b;
+        6'b011100: vector_compare = unsigned_a <= unsigned_b;
+        6'b011101: vector_compare = signed_a <= signed_b;
+        6'b011110: vector_compare = unsigned_a > unsigned_b;
+        default:   vector_compare = signed_a > signed_b;
+      endcase
+    end
   endfunction
 
   function automatic logic [63:0] vector_minmax(
@@ -731,7 +743,15 @@ module moon_vector_unit (
                         (instr_i[31:26] == 6'b011001) ||
                         (instr_i[31:26] == 6'b011010) ||
                         (instr_i[31:26] == 6'b011011)) &&
-                       ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100));
+                       ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100)) ||
+                       ((instr_i[6:0] == 7'b1010111) &&
+                        ((instr_i[31:26] == 6'b011100) ||
+                         (instr_i[31:26] == 6'b011101)) &&
+                        ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100))) ||
+                       ((instr_i[6:0] == 7'b1010111) &&
+                        ((instr_i[31:26] == 6'b011110) ||
+                         (instr_i[31:26] == 6'b011111)) &&
+                        ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011)));
   assign is_vminmax = (instr_i[6:0] == 7'b1010111) &&
                       ((instr_i[31:26] == 6'b000100) ||
                        (instr_i[31:26] == 6'b000101) ||
@@ -1276,14 +1296,26 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i] <= vector_compare(vreg[vs2][i*8 +: 8],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]);
-              3'b001: vreg[vd][i] <= vector_compare(vreg[vs2][i*16 +: 16],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*16 +: 16], vsew_q, instr_i[31:26]);
-              3'b010: vreg[vd][i] <= vector_compare(vreg[vs2][i*32 +: 32],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*32 +: 32], vsew_q, instr_i[31:26]);
-              default: if (i < 2) vreg[vd][i] <= vector_compare(vreg[vs2][i*64 +: 64],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*64 +: 64], vsew_q, instr_i[31:26]);
+              3'b000: vreg[vd][i] <= vector_compare(
+                  vector_element(vreg[vs2], i[4:0], vsew_q),
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
+                   vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
+              3'b001: if (i < 8) vreg[vd][i] <= vector_compare(
+                  vector_element(vreg[vs2], i[4:0], vsew_q),
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
+                   vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
+              3'b010: if (i < 4) vreg[vd][i] <= vector_compare(
+                  vector_element(vreg[vs2], i[4:0], vsew_q),
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
+                   vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
+              default: if (i < 2) vreg[vd][i] <= vector_compare(
+                  vector_element(vreg[vs2], i[4:0], vsew_q),
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
+                   vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
             endcase
           end
         end
