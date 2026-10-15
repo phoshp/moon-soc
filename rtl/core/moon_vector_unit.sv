@@ -54,6 +54,7 @@ module moon_vector_unit (
   logic         is_vcompare;
   logic         is_vminmax;
   logic         is_vmask_logic;
+  logic         is_vector_reduction;
   logic         is_vector_data_op;
   logic         is_vector_mask_result_op;
   logic [4:0]   vd, vs1, vs2;
@@ -83,6 +84,8 @@ module moon_vector_unit (
   logic [4:0]   mask_first_index;
   logic         mask_first_found;
   logic [63:0]  mask_query_result;
+  logic [63:0]  vector_reduce_result;
+  logic [63:0]  vector_reduce_accum;
 
   always_comb begin
     case (instr_i[14:12])
@@ -365,6 +368,19 @@ module moon_vector_unit (
     end
   endfunction
 
+  function automatic logic [63:0] vector_element(
+    input logic [127:0] source,
+    input logic [4:0]   index,
+    input logic [2:0]   sew
+  );
+    case (sew)
+      3'b000: vector_element = {56'd0, source[int'(index) * 8 +: 8]};
+      3'b001: vector_element = {48'd0, source[int'(index) * 16 +: 16]};
+      3'b010: vector_element = {32'd0, source[int'(index) * 32 +: 32]};
+      default: vector_element = source[int'(index) * 64 +: 64];
+    endcase
+  endfunction
+
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
   assign is_vsetivli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111) &&
                        (instr_i[31:30] == 2'b11);
@@ -426,6 +442,9 @@ module moon_vector_unit (
                            (instr_i[31:26] == 6'b011101) ||
                            (instr_i[31:26] == 6'b011110) ||
                            (instr_i[31:26] == 6'b011111));
+  assign is_vector_reduction = (instr_i[6:0] == 7'b1010111) &&
+                               (instr_i[14:12] == 3'b010) &&
+                               (instr_i[31:29] == 3'b000);
   assign is_vector_data_op = is_vmv_v_x || is_vadd_vv || is_vadd_vx ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax;
@@ -454,6 +473,39 @@ module moon_vector_unit (
           mask_query_result = {59'd0, i[4:0]};
       end
     end
+  end
+
+  always_comb begin
+    vector_reduce_accum = '0;
+    case (vsew_q)
+      3'b000: vector_reduce_accum[7:0] = vreg[vs1][7:0];
+      3'b001: vector_reduce_accum[15:0] = vreg[vs1][15:0];
+      3'b010: vector_reduce_accum[31:0] = vreg[vs1][31:0];
+      default: vector_reduce_accum = vreg[vs1][63:0];
+    endcase
+    for (int i = 0; i < 16; i++) begin
+      if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+        case (instr_i[31:26])
+          6'b000000: vector_reduce_accum = vector_addsub(
+                        vector_reduce_accum,
+                        vector_element(vreg[vs2], i[4:0], vsew_q),
+                        vsew_q, 1'b0);
+          6'b000001: vector_reduce_accum = vector_reduce_accum &
+                        vector_element(vreg[vs2], i[4:0], vsew_q);
+          6'b000010: vector_reduce_accum = vector_reduce_accum |
+                        vector_element(vreg[vs2], i[4:0], vsew_q);
+          6'b000011: vector_reduce_accum = vector_reduce_accum ^
+                        vector_element(vreg[vs2], i[4:0], vsew_q);
+          6'b000100, 6'b000101, 6'b000110, 6'b000111:
+            vector_reduce_accum = vector_minmax(
+                        vector_reduce_accum,
+                        vector_element(vreg[vs2], i[4:0], vsew_q),
+                        vsew_q, instr_i[31:26]);
+          default: vector_reduce_accum = vector_reduce_accum;
+        endcase
+      end
+    end
+    vector_reduce_result = vector_reduce_accum;
   end
 
   always_comb begin
@@ -655,6 +707,28 @@ module moon_vector_unit (
             if (vtype_q[6]) vreg[vd][i] <= 1'b1;
           end
         end
+      end else if (is_vector_reduction) begin
+        case (vsew_q)
+          3'b000: begin
+            vreg[vd][7:0] <= vector_reduce_result[7:0];
+            if (vtype_q[6])
+              for (int i = 1; i < 16; i++) vreg[vd][i*8 +: 8] <= 8'hff;
+          end
+          3'b001: begin
+            vreg[vd][15:0] <= vector_reduce_result[15:0];
+            if (vtype_q[6])
+              for (int i = 1; i < 8; i++) vreg[vd][i*16 +: 16] <= 16'hffff;
+          end
+          3'b010: begin
+            vreg[vd][31:0] <= vector_reduce_result[31:0];
+            if (vtype_q[6])
+              for (int i = 1; i < 4; i++) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+          end
+          default: begin
+            vreg[vd][63:0] <= vector_reduce_result;
+            if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
+          end
+        endcase
       end else if (is_vadd_vv) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
