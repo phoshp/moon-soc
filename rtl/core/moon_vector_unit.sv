@@ -73,6 +73,7 @@ module moon_vector_unit (
   logic         is_vector_fp_compare;
   logic         is_vector_fp_not_equal;
   logic         is_vector_fp_minmax;
+  logic         is_vector_fp_signinj;
   logic         is_vector_fp_op;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
@@ -796,6 +797,12 @@ module moon_vector_unit (
                                 (instr_i[31:26] == 6'b000110)) &&
                                (instr_i[14:12] == 3'b001) &&
                                ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  assign is_vector_fp_signinj = (instr_i[6:0] == 7'b1010111) &&
+                                ((instr_i[31:26] == 6'b001000) ||
+                                 (instr_i[31:26] == 6'b001001) ||
+                                 (instr_i[31:26] == 6'b001010)) &&
+                                (instr_i[14:12] == 3'b001) &&
+                                ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vminmax = (instr_i[6:0] == 7'b1010111) &&
                       ((instr_i[31:26] == 6'b000100) ||
                        (instr_i[31:26] == 6'b000101) ||
@@ -887,6 +894,7 @@ module moon_vector_unit (
                              is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx ||
                              is_vdivrem_vv || is_vdivrem_vx ||
                              is_vector_sat || is_vector_fp_op || is_vector_fp_minmax ||
+                             is_vector_fp_signinj ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare || is_vector_fp_compare;
@@ -1380,6 +1388,33 @@ module moon_vector_unit (
               vreg[vd][i*32 +: 32] <= vector_fp_compare_result[i][31:0];
             else if ((vsew_q == 3'b011) && (i < 2))
               vreg[vd][i*64 +: 64] <= vector_fp_compare_result[i];
+          end
+        end
+      end else if (is_vector_fp_signinj) begin
+        for (int i = 0; i < 4; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) &&
+              (instr_i[25] || vreg[0][i])) begin
+            if (vsew_q == 3'b010) begin
+              case (instr_i[31:26])
+                6'b001000: vreg[vd][i*32 +: 32] <=
+                  {vreg[vs1][i*32+31], vreg[vs2][i*32+30 -: 31]};
+                6'b001001: vreg[vd][i*32 +: 32] <=
+                  {~vreg[vs1][i*32+31], vreg[vs2][i*32+30 -: 31]};
+                default: vreg[vd][i*32 +: 32] <=
+                  {vreg[vs2][i*32+31] ^ vreg[vs1][i*32+31],
+                   vreg[vs2][i*32+30 -: 31]};
+              endcase
+            end else if ((vsew_q == 3'b011) && (i < 2)) begin
+              case (instr_i[31:26])
+                6'b001000: vreg[vd][i*64 +: 64] <=
+                  {vreg[vs1][i*64+63], vreg[vs2][i*64+62 -: 63]};
+                6'b001001: vreg[vd][i*64 +: 64] <=
+                  {~vreg[vs1][i*64+63], vreg[vs2][i*64+62 -: 63]};
+                default: vreg[vd][i*64 +: 64] <=
+                  {vreg[vs2][i*64+63] ^ vreg[vs1][i*64+63],
+                   vreg[vs2][i*64+62 -: 63]};
+              endcase
+            end
           end
         end
       end else if (is_vector_fp_op) begin
