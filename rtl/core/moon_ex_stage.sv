@@ -184,6 +184,8 @@ module moon_ex_stage
   logic [XLEN-1:0] alu_result;
   logic [XLEN-1:0] vector_scalar_result;
   logic            vector_scalar_result_valid;
+  logic [4:0]      vector_fp_flags;
+  logic            vector_fp_flags_we;
   logic            vector_unit_mem_req;
   logic            vector_unit_mem_we;
   logic [XLEN-1:0] vector_unit_mem_addr;
@@ -355,7 +357,8 @@ module moon_ex_stage
     else if (vector_scalar_result_valid) fp_result_selected = vector_scalar_result;
     else fp_result_selected = alu_result;
 
-    if (fp_fma_instruction) fp_flags_selected = fp_fma_flags;
+    if (vector_fp_flags_we) fp_flags_selected = vector_fp_flags;
+    else if (fp_fma_instruction) fp_flags_selected = fp_fma_flags;
     else if (id_ex_fp_cvt_i)
       fp_flags_selected = fp_int_cvt_instruction ? fp_int_cvt_flags : fp_cvt_flags;
     else if (id_ex_fp_div_i)
@@ -384,10 +387,13 @@ module moon_ex_stage
     .instr_i                (id_ex_instr_i),
     .scalar_rs1_i           (operand_a_fwd),
     .scalar_rs2_i           (operand_b_fwd),
+    .frm_i                  (frm_i),
     .vector_vstart_i        (vector_vstart_i),
     .vector_mem_fault_i     (vector_mem_fault_i),
     .vector_vstart_clear_o  (vector_vstart_clear_o),
     .vector_vxsat_set_o     (vector_vxsat_set_o),
+    .vector_fp_flags_o      (vector_fp_flags),
+    .vector_fp_flags_we_o   (vector_fp_flags_we),
     .vector_mem_vstart_o    (vector_mem_vstart_o),
     .vector_vl_o            (vector_vl_o),
     .vector_vtype_o         (vector_vtype_o),
@@ -601,7 +607,7 @@ module moon_ex_stage
       ex_mem_fp_flags_o  <= fp_flags_selected;
       ex_mem_fp_flags_we_o <= id_ex_fp_add_i || id_ex_fp_mul_i ||
                               id_ex_fp_div_i || id_ex_fp_cvt_i || id_ex_fp_cmp_i ||
-                              fp_fma_instruction;
+                              fp_fma_instruction || vector_fp_flags_we;
       ex_mem_is_csr_o    <= id_ex_is_csr_i;
       ex_mem_csr_op_o    <= id_ex_csr_op_i;
       ex_mem_csr_addr_o  <= id_ex_csr_addr_i;
