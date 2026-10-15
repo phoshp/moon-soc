@@ -74,6 +74,7 @@ module moon_vector_unit (
   logic [4:0]   vector_mem_count_q;
   logic [4:0]   vector_mem_vl_q;
   logic [2:0]   vector_mem_sew_q;
+  logic [2:0]   vector_mem_index_sew_q;
   logic [2:0]   vector_mem_eew;
   logic [4:0]   vector_mem_vd_q;
   logic [63:0]  vector_mem_addr;
@@ -99,13 +100,13 @@ module moon_vector_unit (
                     (((instr_i[27:26] == 2'b00) && (instr_i[24:20] == 5'b00000)) ||
                      (instr_i[27:26] == 2'b10) ||
                      (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11)) &&
-                    (vector_mem_eew == vsew_q);
+                    (vector_mem_indexed || (vector_mem_eew == vsew_q));
   assign is_vse_v = (instr_i[6:0] == 7'b0100111) &&
                     (instr_i[31:29] == 3'b000) &&
                     (instr_i[28] == 1'b0) &&
                     ((instr_i[27:26] == 2'b00) || (instr_i[27:26] == 2'b10) ||
                      (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11)) &&
-                    (vector_mem_eew == vsew_q);
+                    (vector_mem_indexed || (vector_mem_eew == vsew_q));
   assign is_vlm_v = (instr_i[6:0] == 7'b0000111) &&
                     (instr_i[31:28] == 4'b0000) &&
                     (instr_i[27:26] == 2'b00) && (instr_i[25]) &&
@@ -121,7 +122,7 @@ module moon_vector_unit (
   assign vector_mem_indexed = (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11);
   always_comb begin
     if (vector_mem_indexed_q) begin
-      case (vector_mem_sew_q)
+      case (vector_mem_index_sew_q)
         3'b000: vector_mem_addr = vector_mem_base_q +
                                   {56'd0, vreg[vector_mem_index_reg_q][int'(vector_mem_count_q) * 8 +: 8]};
         3'b001: vector_mem_addr = vector_mem_base_q +
@@ -520,6 +521,7 @@ module moon_vector_unit (
       vector_mem_count_q <= '0;
       vector_mem_vl_q <= '0;
       vector_mem_sew_q <= '0;
+      vector_mem_index_sew_q <= '0;
       vector_mem_vd_q <= '0;
       for (int i = 0; i < 32; i++) vreg[i] <= '0;
     end else begin
@@ -543,7 +545,9 @@ module moon_vector_unit (
         vector_mem_index_reg_q <= instr_i[24:20];
         vector_mem_count_q <= vector_vstart_i[4:0];
         vector_mem_vl_q <= is_vector_mask_mem ? ((vl_q + 5'd7) >> 3) : vl_q;
-        vector_mem_sew_q <= is_vector_mask_mem ? 3'b000 : vector_mem_eew;
+        vector_mem_sew_q <= is_vector_mask_mem ? 3'b000 :
+                             (vector_mem_indexed ? vsew_q : vector_mem_eew);
+        vector_mem_index_sew_q <= vector_mem_eew;
         vector_mem_vd_q <= instr_i[11:7];
         if ((vl_q == 0) || (vector_vstart_i >=
             {59'd0, (is_vector_mask_mem ? ((vl_q + 5'd7) >> 3) : vl_q)})) begin
