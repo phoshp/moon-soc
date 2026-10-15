@@ -58,6 +58,8 @@ module moon_vector_unit (
   logic         is_vector_mask_result_op;
   logic [4:0]   vd, vs1, vs2;
   logic         is_vle_v, is_vse_v;
+  logic         is_vlm_v, is_vsm_v;
+  logic         is_vector_mask_mem;
   logic         vector_mem_strided;
   logic         vector_mem_indexed;
   logic         vector_mem_active_q;
@@ -65,6 +67,7 @@ module moon_vector_unit (
   logic         vector_mem_store_q;
   logic         vector_mem_strided_q;
   logic         vector_mem_indexed_q;
+  logic         vector_mem_mask_q;
   logic [63:0]  vector_mem_base_q;
   logic [63:0]  vector_mem_stride_q;
   logic [4:0]   vector_mem_index_reg_q;
@@ -103,6 +106,17 @@ module moon_vector_unit (
                     ((instr_i[27:26] == 2'b00) || (instr_i[27:26] == 2'b10) ||
                      (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11)) &&
                     (vector_mem_eew == vsew_q);
+  assign is_vlm_v = (instr_i[6:0] == 7'b0000111) &&
+                    (instr_i[31:28] == 4'b0000) &&
+                    (instr_i[27:26] == 2'b00) && (instr_i[25]) &&
+                    (instr_i[24:20] == 5'b01011) &&
+                    (instr_i[14:12] == 3'b000);
+  assign is_vsm_v = (instr_i[6:0] == 7'b0100111) &&
+                    (instr_i[31:28] == 4'b0000) &&
+                    (instr_i[27:26] == 2'b00) && (instr_i[25]) &&
+                    (instr_i[24:20] == 5'b01011) &&
+                    (instr_i[14:12] == 3'b000);
+  assign is_vector_mask_mem = is_vlm_v || is_vsm_v;
   assign vector_mem_strided = (instr_i[27:26] == 2'b10);
   assign vector_mem_indexed = (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11);
   always_comb begin
@@ -137,12 +151,12 @@ module moon_vector_unit (
   always_comb begin
     vector_vstart_clear_o = valid_i && advance_i &&
                             ((instr_i[6:0] == 7'b1010111) ||
-                             ((is_vle_v || is_vse_v) && vector_mem_done_q));
+                             ((is_vle_v || is_vse_v || is_vector_mask_mem) && vector_mem_done_q));
   end
   always_comb begin
     mem_req_o = vector_mem_active_q &&
                 (vector_mem_count_q < vector_mem_vl_q) &&
-                (instr_i[25] || vreg[0][vector_mem_count_q]);
+                (vector_mem_mask_q || instr_i[25] || vreg[0][vector_mem_count_q]);
     mem_we_o = vector_mem_store_q;
     mem_addr_o = vector_mem_addr;
     mem_wdata_o = '0;
@@ -166,7 +180,8 @@ module moon_vector_unit (
       end
     endcase
     mem_busy_o = vector_mem_active_q ||
-                 (valid_i && !vector_mem_done_q && (is_vle_v || is_vse_v));
+                 (valid_i && !vector_mem_done_q &&
+                  (is_vle_v || is_vse_v || is_vector_mask_mem));
   end
 
   function automatic logic [63:0] vector_addsub(
@@ -498,6 +513,7 @@ module moon_vector_unit (
       vector_mem_store_q <= 1'b0;
       vector_mem_strided_q <= 1'b0;
       vector_mem_indexed_q <= 1'b0;
+      vector_mem_mask_q <= 1'b0;
       vector_mem_base_q <= '0;
       vector_mem_stride_q <= '0;
       vector_mem_index_reg_q <= '0;
@@ -510,22 +526,27 @@ module moon_vector_unit (
       if (vector_mem_fault_i) begin
         vector_mem_active_q <= 1'b0;
         vector_mem_done_q <= 1'b0;
-      end else if (!valid_i || !(is_vle_v || is_vse_v)) begin
+      end else if (vector_mem_done_q && valid_i && advance_i) begin
+        vector_mem_active_q <= 1'b0;
+        vector_mem_done_q <= 1'b0;
+      end else if (!valid_i || !(is_vle_v || is_vse_v || is_vector_mask_mem)) begin
         vector_mem_active_q <= 1'b0;
         vector_mem_done_q <= 1'b0;
       end else if (!vector_mem_active_q && !vector_mem_done_q) begin
         vector_mem_active_q <= 1'b1;
-        vector_mem_store_q <= is_vse_v;
-        vector_mem_strided_q <= vector_mem_strided;
-        vector_mem_indexed_q <= vector_mem_indexed;
+        vector_mem_store_q <= is_vse_v || is_vsm_v;
+        vector_mem_strided_q <= is_vector_mask_mem ? 1'b0 : vector_mem_strided;
+        vector_mem_indexed_q <= is_vector_mask_mem ? 1'b0 : vector_mem_indexed;
+        vector_mem_mask_q <= is_vector_mask_mem;
         vector_mem_base_q <= scalar_rs1_i;
         vector_mem_stride_q <= scalar_rs2_i;
         vector_mem_index_reg_q <= instr_i[24:20];
         vector_mem_count_q <= vector_vstart_i[4:0];
-        vector_mem_vl_q <= vl_q;
-        vector_mem_sew_q <= vector_mem_eew;
+        vector_mem_vl_q <= is_vector_mask_mem ? ((vl_q + 5'd7) >> 3) : vl_q;
+        vector_mem_sew_q <= is_vector_mask_mem ? 3'b000 : vector_mem_eew;
         vector_mem_vd_q <= instr_i[11:7];
-        if ((vl_q == 0) || (vector_vstart_i >= {59'd0, vl_q})) begin
+        if ((vl_q == 0) || (vector_vstart_i >=
+            {59'd0, (is_vector_mask_mem ? ((vl_q + 5'd7) >> 3) : vl_q)})) begin
           vector_mem_active_q <= 1'b0;
           vector_mem_done_q <= 1'b1;
         end
