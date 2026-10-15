@@ -71,7 +71,7 @@ module moon_fpu_cmp
           if (is_single_i) result_o = {32'hffff_ffff, single_result[31], 31'd0};
           else result_o = {(operation_i == 3'd0) ? (sign_a || sign_b) : (sign_a && sign_b), 63'd0};
         end else begin
-          if (sign_a != sign_b) choose_a = sign_a;
+          if (sign_a != sign_b) choose_a = (operation_i == 3'd0) ? sign_a : !sign_a;
           else if (operation_i == 3'd0) choose_a = sign_a ? !magnitude_less : magnitude_less;
           else choose_a = sign_a ? magnitude_less : !magnitude_less;
           result_o = choose_a ? operand_a_i : operand_b_i;
