@@ -69,6 +69,7 @@ module moon_vector_unit (
   logic         is_vminmax;
   logic         is_vmask_logic;
   logic         is_vector_reduction;
+  logic         is_vector_widen_reduction;
   logic         is_vslideup;
   logic         is_vslidedown;
   logic         is_vslide1up;
@@ -106,6 +107,7 @@ module moon_vector_unit (
   logic [63:0]  mask_query_result;
   logic [63:0]  vector_reduce_result;
   logic [63:0]  vector_reduce_accum;
+  logic [63:0]  vector_widen_reduce_result;
   logic [63:0]  vector_perm_offset;
 
   always_comb begin
@@ -771,6 +773,10 @@ module moon_vector_unit (
   assign is_vector_reduction = (instr_i[6:0] == 7'b1010111) &&
                                (instr_i[14:12] == 3'b010) &&
                                (instr_i[31:29] == 3'b000);
+  assign is_vector_widen_reduction = (instr_i[6:0] == 7'b1010111) &&
+                                     (instr_i[14:12] == 3'b000) &&
+                                     ((instr_i[31:26] == 6'b110000) ||
+                                      (instr_i[31:26] == 6'b110001));
   assign is_vslideup = (instr_i[6:0] == 7'b1010111) &&
                        (instr_i[31:26] == 6'b001110) &&
                        ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
@@ -858,6 +864,62 @@ module moon_vector_unit (
       end
     end
     vector_reduce_result = vector_reduce_accum;
+  end
+
+  always_comb begin : calculate_vector_widen_reduction
+    logic signed [127:0] signed_accumulator;
+    logic signed [127:0] signed_element;
+    logic [127:0] unsigned_accumulator;
+    logic [127:0] unsigned_element;
+    signed_accumulator = 128'd0;
+    signed_element = 128'd0;
+    unsigned_accumulator = 128'd0;
+    unsigned_element = 128'd0;
+    vector_widen_reduce_result = 64'd0;
+    if (is_vector_widen_reduction && (vsew_q != 3'b011)) begin
+      case (vsew_q)
+        3'b000: begin
+          if (instr_i[26]) signed_accumulator = $signed(vreg[vs1][15:0]);
+          else unsigned_accumulator = {112'd0, vreg[vs1][15:0]};
+        end
+        3'b001: begin
+          if (instr_i[26]) signed_accumulator = $signed(vreg[vs1][31:0]);
+          else unsigned_accumulator = {96'd0, vreg[vs1][31:0]};
+        end
+        default: begin
+          if (instr_i[26]) signed_accumulator = $signed(vreg[vs1][63:0]);
+          else unsigned_accumulator = {64'd0, vreg[vs1][63:0]};
+        end
+      endcase
+      for (int i = 0; i < 16; i++) begin
+        if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          case (vsew_q)
+            3'b000: begin
+              signed_element = {{120{vreg[vs2][i*8+7]}}, vreg[vs2][i*8 +: 8]};
+              unsigned_element = {120'd0, vreg[vs2][i*8 +: 8]};
+            end
+            3'b001: begin
+              signed_element = {{112{vreg[vs2][i*16+15]}}, vreg[vs2][i*16 +: 16]};
+              unsigned_element = {112'd0, vreg[vs2][i*16 +: 16]};
+            end
+            default: begin
+              signed_element = {{96{vreg[vs2][i*32+31]}}, vreg[vs2][i*32 +: 32]};
+              unsigned_element = {96'd0, vreg[vs2][i*32 +: 32]};
+            end
+          endcase
+          if (instr_i[26]) signed_accumulator = signed_accumulator + signed_element;
+          else unsigned_accumulator = unsigned_accumulator + unsigned_element;
+        end
+      end
+      case (vsew_q)
+        3'b000: vector_widen_reduce_result = instr_i[26] ? signed_accumulator[15:0] :
+                                                              unsigned_accumulator[15:0];
+        3'b001: vector_widen_reduce_result = instr_i[26] ? signed_accumulator[31:0] :
+                                                              unsigned_accumulator[31:0];
+        default: vector_widen_reduce_result = instr_i[26] ? signed_accumulator[63:0] :
+                                                               unsigned_accumulator[63:0];
+      endcase
+    end
   end
 
   always_comb begin : detect_vector_saturation
@@ -1096,6 +1158,23 @@ module moon_vector_unit (
           end
           default: begin
             vreg[vd][63:0] <= vector_reduce_result;
+            if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
+          end
+        endcase
+      end else if (is_vector_widen_reduction && (vsew_q != 3'b011)) begin
+        case (vsew_q)
+          3'b000: begin
+            vreg[vd][15:0] <= vector_widen_reduce_result[15:0];
+            if (vtype_q[6])
+              for (int i = 1; i < 8; i++) vreg[vd][i*16 +: 16] <= 16'hffff;
+          end
+          3'b001: begin
+            vreg[vd][31:0] <= vector_widen_reduce_result[31:0];
+            if (vtype_q[6])
+              for (int i = 1; i < 4; i++) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+          end
+          default: begin
+            vreg[vd][63:0] <= vector_widen_reduce_result;
             if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
           end
         endcase
