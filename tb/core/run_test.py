@@ -14,7 +14,7 @@ def run_test(test_hex=None, waves=False, verbose=False):
 
     if test_hex is None:
         test_hex = os.environ.get(
-            "TEST_HEX", str(repo_root / "sw" / "tests" / "asm" / "test_rv64_all.hex")
+            "TEST_HEX", str(repo_root / "tb" / "tests" / "asm" / "base" / "test_rv64_all.hex")
         )
     test_hex = str(Path(test_hex).resolve())
 
