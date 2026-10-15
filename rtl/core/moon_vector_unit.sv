@@ -49,6 +49,12 @@ module moon_vector_unit (
   logic         is_vadd_vx;
   logic         is_vmul_vv;
   logic         is_vmul_vx;
+  logic         is_vmulh_vv;
+  logic         is_vmulh_vx;
+  logic         is_vmulhu_vv;
+  logic         is_vmulhu_vx;
+  logic         is_vmulhsu_vv;
+  logic         is_vmulhsu_vx;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
   logic         is_vlogic;
@@ -212,6 +218,59 @@ module moon_vector_unit (
                                         {32'd0, (operand_a[31:0] + operand_b[31:0])};
       default: vector_addsub = subtract ? operand_a - operand_b : operand_a + operand_b;
     endcase
+  endfunction
+
+  function automatic logic [63:0] vector_mul_high(
+    input logic [63:0] operand_a,
+    input logic [63:0] operand_b,
+    input logic [2:0] sew,
+    input logic [5:0] operation
+  );
+    logic signed [127:0] signed_a;
+    logic signed [127:0] signed_b;
+    logic [127:0] unsigned_a;
+    logic [127:0] unsigned_b;
+    logic signed [127:0] product;
+    logic signed_a_enable;
+    logic signed_b_enable;
+    begin
+      case (sew)
+        3'b000: begin
+          signed_a = {{120{operand_a[7]}}, operand_a[7:0]};
+          signed_b = {{120{operand_b[7]}}, operand_b[7:0]};
+          unsigned_a = {120'd0, operand_a[7:0]};
+          unsigned_b = {120'd0, operand_b[7:0]};
+        end
+        3'b001: begin
+          signed_a = {{112{operand_a[15]}}, operand_a[15:0]};
+          signed_b = {{112{operand_b[15]}}, operand_b[15:0]};
+          unsigned_a = {112'd0, operand_a[15:0]};
+          unsigned_b = {112'd0, operand_b[15:0]};
+        end
+        3'b010: begin
+          signed_a = {{96{operand_a[31]}}, operand_a[31:0]};
+          signed_b = {{96{operand_b[31]}}, operand_b[31:0]};
+          unsigned_a = {96'd0, operand_a[31:0]};
+          unsigned_b = {96'd0, operand_b[31:0]};
+        end
+        default: begin
+          signed_a = {{64{operand_a[63]}}, operand_a};
+          signed_b = {{64{operand_b[63]}}, operand_b};
+          unsigned_a = {64'd0, operand_a};
+          unsigned_b = {64'd0, operand_b};
+        end
+      endcase
+      signed_a_enable = (operation == 6'b100111) || (operation == 6'b100110);
+      signed_b_enable = (operation == 6'b100111);
+      product = (signed_a_enable ? signed_a : $signed(unsigned_a)) *
+                (signed_b_enable ? signed_b : $signed(unsigned_b));
+      case (sew)
+        3'b000: vector_mul_high = (operation == 6'b100100) ? (product >> 8) : (product >>> 8);
+        3'b001: vector_mul_high = (operation == 6'b100100) ? (product >> 16) : (product >>> 16);
+        3'b010: vector_mul_high = (operation == 6'b100100) ? (product >> 32) : (product >>> 32);
+        default: vector_mul_high = (operation == 6'b100100) ? (product >> 64) : (product >>> 64);
+      endcase
+    end
   endfunction
 
   function automatic logic [63:0] vector_logic(
@@ -476,6 +535,18 @@ module moon_vector_unit (
                       (instr_i[31:26] == 6'b100101) && (instr_i[14:12] == 3'b010);
   assign is_vmul_vx = (instr_i[6:0] == 7'b1010111) &&
                       (instr_i[31:26] == 6'b100101) && (instr_i[14:12] == 3'b110);
+  assign is_vmulh_vv = (instr_i[6:0] == 7'b1010111) &&
+                       (instr_i[31:26] == 6'b100111) && (instr_i[14:12] == 3'b010);
+  assign is_vmulh_vx = (instr_i[6:0] == 7'b1010111) &&
+                       (instr_i[31:26] == 6'b100111) && (instr_i[14:12] == 3'b110);
+  assign is_vmulhu_vv = (instr_i[6:0] == 7'b1010111) &&
+                        (instr_i[31:26] == 6'b100100) && (instr_i[14:12] == 3'b010);
+  assign is_vmulhu_vx = (instr_i[6:0] == 7'b1010111) &&
+                        (instr_i[31:26] == 6'b100100) && (instr_i[14:12] == 3'b110);
+  assign is_vmulhsu_vv = (instr_i[6:0] == 7'b1010111) &&
+                         (instr_i[31:26] == 6'b100110) && (instr_i[14:12] == 3'b010);
+  assign is_vmulhsu_vx = (instr_i[6:0] == 7'b1010111) &&
+                         (instr_i[31:26] == 6'b100110) && (instr_i[14:12] == 3'b110);
   assign is_vsub_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
                       (instr_i[14:12] == 3'b000);
   assign is_vsub_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
@@ -540,6 +611,8 @@ module moon_vector_unit (
                               {59'd0, instr_i[19:15]} : scalar_rs1_i;
   assign is_vector_data_op = is_vmv_v_x || is_vadd_vv || is_vadd_vx ||
                              is_vmul_vv || is_vmul_vx ||
+                             is_vmulh_vv || is_vmulh_vx || is_vmulhu_vv ||
+                             is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare;
@@ -842,6 +915,30 @@ module moon_vector_unit (
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
+            endcase
+          end
+        end
+      end else if (is_vmulh_vv || is_vmulh_vx || is_vmulhu_vv ||
+                   is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_mul_high(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26]);
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_mul_high(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26]);
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_mul_high(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26]);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_mul_high(
+                vector_element(vreg[vs2], i[4:0], vsew_q),
+                (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
+                vsew_q, instr_i[31:26]);
             endcase
           end
         end
