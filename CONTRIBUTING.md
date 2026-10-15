@@ -22,7 +22,7 @@ Ensure you have the required toolchain installed:
 - **Python**: Python 3.10+ with `pip`.
 - **Verification Libraries**:
   ```bash
-  pip install cocotb pytest
+  python3 -m pip install -r requirements.txt
   ```
 
 ### Fork & Clone
