@@ -42,6 +42,8 @@ module moon_vector_unit (
   logic         is_vsetivli;
   logic         is_vset_config;
   logic         is_vmv_x_s;
+  logic         is_vmask_prefix;
+  logic         is_vmask_query;
   logic         is_vmv_v_x;
   logic         is_vadd_vv;
   logic         is_vadd_vx;
@@ -74,6 +76,9 @@ module moon_vector_unit (
   logic [63:0]  vector_mem_addr;
   logic [2:0]   vector_mem_offset;
   logic [63:0]  vector_mem_element;
+  logic [4:0]   mask_first_index;
+  logic         mask_first_found;
+  logic [63:0]  mask_query_result;
 
   always_comb begin
     case (instr_i[14:12])
@@ -350,6 +355,17 @@ module moon_vector_unit (
   assign is_vset_config = is_vsetivli || (is_vsetvli && !instr_i[31]);
   assign is_vmv_x_s = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010000) &&
                       instr_i[25] && (instr_i[14:12] == 3'b010) && (instr_i[19:15] == 5'd0);
+  assign is_vmask_prefix = (instr_i[6:0] == 7'b1010111) &&
+                           (instr_i[31:26] == 6'b010100) &&
+                           (instr_i[14:12] == 3'b010) &&
+                           ((instr_i[19:15] == 5'd1) ||
+                            (instr_i[19:15] == 5'd2) ||
+                            (instr_i[19:15] == 5'd3));
+  assign is_vmask_query = (instr_i[6:0] == 7'b1010111) &&
+                          (instr_i[31:26] == 6'b010000) &&
+                          (instr_i[14:12] == 3'b010) &&
+                          ((instr_i[19:15] == 5'b10000) ||
+                           (instr_i[19:15] == 5'b10001));
   assign is_vmv_v_x = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b010111) &&
                       instr_i[25] && (instr_i[14:12] == 3'b100) && (instr_i[24:20] == 5'd0);
   assign is_vadd_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
@@ -407,6 +423,24 @@ module moon_vector_unit (
   assign vector_mem_vstart_o = {59'd0, vector_mem_count_q};
 
   always_comb begin
+    mask_first_index = 5'd0;
+    mask_first_found = 1'b0;
+    mask_query_result = (instr_i[19:15] == 5'b10001) ? 64'hffff_ffff_ffff_ffff : 64'd0;
+    for (int i = 0; i < 16; i++) begin
+      if ((i < vl_q) && (instr_i[25] || vreg[0][i]) && vreg[vs2][i]) begin
+        if (!mask_first_found) begin
+          mask_first_index = i[4:0];
+          mask_first_found = 1'b1;
+        end
+        if (instr_i[19:15] == 5'b10000)
+          mask_query_result = mask_query_result + 64'd1;
+        else if (mask_query_result == 64'hffff_ffff_ffff_ffff)
+          mask_query_result = {59'd0, i[4:0]};
+      end
+    end
+  end
+
+  always_comb begin
     vl = vl_q;
     vlmax = 5'd0;
     vtype_legal = 1'b0;
@@ -448,6 +482,9 @@ module moon_vector_unit (
         3'b010: scalar_result_o = {{32{vreg[vs2][31]}}, vreg[vs2][31:0]};
         default: scalar_result_o = vreg[vs2][63:0];
       endcase
+    end else if (valid_i && is_vmask_query) begin
+      scalar_result_valid_o = 1'b1;
+      scalar_result_o = mask_query_result;
     end
   end
 
@@ -574,6 +611,23 @@ module moon_vector_unit (
               6'b011110: vreg[vd][i] <= ~(vreg[vs2][i] | vreg[vs1][i]);
               default:   vreg[vd][i] <= vreg[vs2][i] | ~vreg[vs1][i];
             endcase
+          end
+        end
+      end else if (is_vmask_prefix) begin
+        for (int i = 0; i < 16; i++) begin
+          if (i < vl_q) begin
+            if (instr_i[25] || vreg[0][i]) begin
+              case (instr_i[19:15])
+                5'd1: vreg[vd][i] <= !mask_first_found || (i < mask_first_index);
+                5'd2: vreg[vd][i] <= mask_first_found && (i == mask_first_index);
+                default: vreg[vd][i] <= !mask_first_found || (i <= mask_first_index);
+              endcase
+            end else if (vtype_q[7]) begin
+              vreg[vd][i] <= 1'b1;
+            end
+          end else begin
+            // Mask-manipulation tails follow vta; with tu they are preserved.
+            if (vtype_q[6]) vreg[vd][i] <= 1'b1;
           end
         end
       end else if (is_vadd_vv) begin
