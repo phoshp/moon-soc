@@ -131,6 +131,7 @@ module moon_vector_unit (
   logic [63:0]  vector_fp_mac_result [0:3];
   logic [4:0]   vector_fp_mac_flags [0:3];
   logic [63:0]  vector_fp_operand_c [0:3];
+  logic [6:0]   vector_fp_mac_opcode;
 
   always_comb begin
     case (instr_i[14:12])
@@ -818,9 +819,20 @@ module moon_vector_unit (
                              (instr_i[14:12] == 3'b001) &&
                              ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_mac = (instr_i[6:0] == 7'b1010111) &&
-                            (instr_i[31:26] == 6'b101100) &&
+                            ((instr_i[31:26] == 6'b101100) ||
+                             (instr_i[31:26] == 6'b101101) ||
+                             (instr_i[31:26] == 6'b101110) ||
+                             (instr_i[31:26] == 6'b101111)) &&
                             (instr_i[14:12] == 3'b001) &&
                             ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  always_comb begin
+    case (instr_i[31:26])
+      6'b101110: vector_fp_mac_opcode = 7'b1000111; // vfmsac: a*b-c
+      6'b101111: vector_fp_mac_opcode = 7'b1001011; // vfnmsac: -a*b+c
+      6'b101101: vector_fp_mac_opcode = 7'b1001111; // vfnmacc: -a*b-c
+      default:   vector_fp_mac_opcode = 7'b1000011; // vfmacc: a*b+c
+    endcase
+  end
   assign is_vector_fp_op = is_vector_fp_addsub || is_vector_fp_mul ||
                            is_vector_fp_div || is_vector_fp_sqrt || is_vector_fp_mac;
   assign is_vslideup = (instr_i[6:0] == 7'b1010111) &&
@@ -895,7 +907,7 @@ module moon_vector_unit (
       .operand_b_i      (vector_fp_operand_b[fp_lane]),
       .operand_c_i      (vector_fp_operand_c[fp_lane]),
       .format_i         ((vsew_q == 3'b010) ? 2'b00 : 2'b01),
-      .opcode_i         (instr_i[6:0]),
+      .opcode_i         (vector_fp_mac_opcode),
       .rounding_mode_i  (frm_i),
       .result_o         (vector_fp_mac_result[fp_lane]),
       .flags_o          (vector_fp_mac_flags[fp_lane])
