@@ -52,6 +52,8 @@ module moon_vector_unit (
   logic         is_vcompare;
   logic         is_vminmax;
   logic         is_vmask_logic;
+  logic         is_vector_data_op;
+  logic         is_vector_mask_result_op;
   logic [4:0]   vd, vs1, vs2;
   logic         is_vle_v, is_vse_v;
   logic         vector_mem_strided;
@@ -392,6 +394,10 @@ module moon_vector_unit (
                            (instr_i[31:26] == 6'b011101) ||
                            (instr_i[31:26] == 6'b011110) ||
                            (instr_i[31:26] == 6'b011111));
+  assign is_vector_data_op = is_vmv_v_x || is_vadd_vv || is_vadd_vx ||
+                             is_vsub_vv || is_vsub_vx || is_vlogic ||
+                             is_vshift || is_vminmax;
+  assign is_vector_mask_result_op = is_vmask_logic || is_vcompare;
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
@@ -512,6 +518,30 @@ module moon_vector_unit (
           vector_mem_done_q <= 1'b1;
         end else begin
           vector_mem_count_q <= vector_mem_count_q + 1'b1;
+        end
+      end
+
+      if (vector_mem_active_q && !vector_mem_store_q &&
+          vector_mem_count_q < vector_mem_vl_q && !instr_i[25] &&
+          !vreg[0][vector_mem_count_q] && vtype_q[7]) begin
+        case (vector_mem_sew_q)
+          3'b000: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 8 +: 8] <= 8'hff;
+          3'b001: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 16 +: 16] <= 16'hffff;
+          3'b010: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 32 +: 32] <= 32'hffff_ffff;
+          default: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+        endcase
+      end
+
+      if (valid_i && advance_i && vector_mem_done_q && !vector_mem_store_q && vtype_q[6]) begin
+        for (int i = 0; i < 16; i++) begin
+          if (i >= vector_mem_vl_q) begin
+            case (vector_mem_sew_q)
+              3'b000: vreg[vector_mem_vd_q][i*8 +: 8] <= 8'hff;
+              3'b001: if (i < 8) vreg[vector_mem_vd_q][i*16 +: 16] <= 16'hffff;
+              3'b010: if (i < 4) vreg[vector_mem_vd_q][i*32 +: 32] <= 32'hffff_ffff;
+              default: if (i < 2) vreg[vector_mem_vd_q][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+            endcase
+          end
         end
       end
 
@@ -660,6 +690,49 @@ module moon_vector_unit (
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_minmax(vreg[vs2][i*64 +: 64],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*64 +: 64], vsew_q, instr_i[31:26]);
             endcase
+          end
+        end
+      end
+
+      if (vtype_q[7:6] != 2'b00 && (is_vector_data_op || is_vector_mask_result_op)) begin
+        if (is_vector_mask_result_op) begin
+          for (int i = 0; i < 16; i++) begin
+            if ((i >= vector_vstart_i) &&
+                ((vsew_q == 3'b000) ||
+                 ((vsew_q == 3'b001) && (i < 8)) ||
+                 ((vsew_q == 3'b010) && (i < 4)) ||
+                 ((vsew_q == 3'b011) && (i < 2)))) begin
+              if ((i >= vl_q) && vtype_q[6]) vreg[vd][i] <= 1'b1;
+              else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                vreg[vd][i] <= 1'b1;
+            end
+          end
+        end else begin
+          for (int i = 0; i < 16; i++) begin
+            if (i >= vector_vstart_i) begin
+              case (vsew_q)
+                3'b000: begin
+                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*8 +: 8] <= 8'hff;
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                    vreg[vd][i*8 +: 8] <= 8'hff;
+                end
+                3'b001: if (i < 8) begin
+                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*16 +: 16] <= 16'hffff;
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                    vreg[vd][i*16 +: 16] <= 16'hffff;
+                end
+                3'b010: if (i < 4) begin
+                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                    vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+                end
+                default: if (i < 2) begin
+                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                    vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                end
+              endcase
+            end
           end
         end
       end
