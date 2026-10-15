@@ -22,9 +22,9 @@ The user prefers each minimal implementation and its regression to be committed 
 The project uses `cocotb`, Python, and Verilator for RTL simulation and verification.
 
 ### Cocotb Simulation
-- **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/cocotb/run_test.py sw/tests/asm/test_rv64_all.hex`.
+- **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/core/run_test.py sw/tests/asm/test_rv64_all.hex`.
 - **Run full suite (core + SoC)**: `make all`.
-- **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/cocotb/soc/run_soc_test.py` with `test_rv64_all.hex`).
+- **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/soc/run_soc_test.py` with `test_rv64_all.hex`).
 - **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC, CRG, PMU).
 - **Run SoC WFI & PMU clock-gating test**: `make soc-wfi-test` (verifies WFI execution, PMU clock-gating, and timer wake-up).
 - **Run SoC L1 Cache verification**: `make soc-cache-test` (verifies 32KB L1-I and L1-D caches, writeback, eviction, hits).
@@ -34,20 +34,20 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 - **Run with verbose cycle trace**: `make verbose-test`.
 - **Run via pytest**: `make pytest` (runs both core and SoC regression testbenches).
 - **Run a specific firmware test**:
-  `python3 tb/cocotb/run_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
+  `python3 tb/core/run_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
   or for SoC top-level:
-  `python3 tb/cocotb/soc/run_soc_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
+  `python3 tb/soc/run_soc_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
 - **Clean build artifacts**: `make clean` (deletes `sim_build/`, `sim_build_soc/`, `obj_dir/`, caches).
 
 ### Test Assembly & Hex Conversion
 Software tests are assembled into raw flat binaries and converted to little-endian hex files:
-- **Convert binary to simulation hex**: `python3 scripts/bin2hex.py <input.bin> <output.hex>`
+- **Convert binary to simulation hex**: `python3 tb/bin2hex.py <input.bin> <output.hex>`
 - **Linker script**: `sw/common/link_test.ld` defines:
   - Reset vector / `.text`: `0x00001000`
   - Data / `.data` & `.bss`: `0x80000000`
 
 ### Simulation Pass/Fail Protocol
-In the testbench (`tb/sv/tb_moon_core.sv`), the core signals test completion by writing to physical memory address `0x80001000`:
+In the testbench (`tb/core/tb_moon_core.sv`), the core signals test completion by writing to physical memory address `0x80001000`:
 - `0xCAFEBABE`: Test Passed.
 - Any other value (e.g. `0xDEAD00xx`): Test Failed with error code.
 
@@ -127,8 +127,8 @@ The core is structured across five sequential pipeline stages connected through 
   - `moon_uart.sv`: 16550 UART console controller at `0x1000_0000`.
 
 ### Testbench Hierarchy
-- `tb/sv/tb_moon_core.sv`: Standalone core memory harness.
-- `tb/sv/soc/tb_moon_soc.sv`: Full SoC simulation harness integrating Boot ROM, external AXI RAM model, and UART sink.
-- `tb/cocotb/test_moon_core.py` & `tb/cocotb/run_test.py`: Standalone core testbench runner.
-- `tb/cocotb/soc/test_moon_soc.py` & `tb/cocotb/soc/run_soc_test.py`: Full SoC testbench runner.
-- `tb/cocotb/Makefile`: Standard cocotb Makefile integrating `Makefile.sim`.
+- `tb/core/tb_moon_core.sv`: Standalone core memory harness.
+- `tb/soc/tb_moon_soc.sv`: Full SoC simulation harness integrating Boot ROM, external AXI RAM model, and UART sink.
+- `tb/core/test_moon_core.py` & `tb/core/run_test.py`: Standalone core testbench runner.
+- `tb/soc/test_moon_soc.py` & `tb/soc/run_soc_test.py`: Full SoC testbench runner.
+- `tb/core/Makefile`: Standard cocotb Makefile integrating `Makefile.sim`.

@@ -1,5 +1,5 @@
 // ============================================================================
-// File: tb/sv/soc/tb_moon_soc.sv
+// File: tb/soc/tb_moon_soc.sv
 // Description: Standalone SystemVerilog testbench for moon_soc_top integrating
 //              AXI4 external RAM model, Boot ROM, UART capture, and test status.
 // ============================================================================

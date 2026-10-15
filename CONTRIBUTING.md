@@ -60,7 +60,7 @@ Before submitting a pull request, ensure all tests pass locally.
   ```
 - **Run a specific test firmware image**:
   ```bash
-  python3 tb/cocotb/run_test.py path/to/test.hex
+  python3 tb/core/run_test.py path/to/test.hex
   ```
 
 ---
@@ -82,7 +82,7 @@ Before submitting a pull request, ensure all tests pass locally.
   - Use `always_comb` for pure combinational logic with blocking assignments (`=`).
 - **Data Types**: Use SystemVerilog types (`logic`, `bit`, `enum`, `typedef struct`). Avoid legacy `wire`/`reg`.
 
-### Verification & Tests (`tb/cocotb/`)
+### Verification & Tests (`tb/`)
 
 - Write tests asynchronously using `cocotb` coroutines (`@cocotb.test()`, `async def`, `await`).
 - Use clear assertions with informative failure messages when conditions fail.

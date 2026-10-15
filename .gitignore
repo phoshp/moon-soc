@@ -2,9 +2,9 @@
 obj_dir/
 sim_build/
 sim_build_soc/
-tb/cocotb/sim_build/
 results.xml
-tb/cocotb/results.xml
+tb/core/sim_build/
+tb/core/results.xml
 *.vcd
 *.fst
 

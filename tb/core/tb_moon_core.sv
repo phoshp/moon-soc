@@ -1,5 +1,5 @@
 // ============================================================================
-// File: tb/sv/tb_moon_core.sv
+// File: tb/core/tb_moon_core.sv
 // Description: Standalone SystemVerilog testbench for moon_core verifying
 //              RV64I, RV64M, and RV64A instruction execution.
 // ============================================================================

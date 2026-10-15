@@ -1,5 +1,5 @@
 # ============================================================================
-# File: tb/cocotb/soc/test_moon_soc.py
+# File: tb/soc/test_moon_soc.py
 # Description: Cocotb test routines for Moon-SoC Top-Level verification.
 # ============================================================================
 

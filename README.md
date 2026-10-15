@@ -102,23 +102,25 @@ All simulation commands can be run from the root directory:
    ```bash
    make pytest
    # or directly:
-   pytest tb/cocotb/run_test.py
+   pytest tb/core/run_test.py
    ```
 
 4. **Run a Custom Firmware Image**:
    ```bash
-   python3 tb/cocotb/run_test.py path/to/firmware.hex
+   python3 tb/core/run_test.py path/to/firmware.hex
    ```
 
 5. **Generate Waveforms**:
    ```bash
-   python3 tb/cocotb/run_test.py --waves
+   python3 tb/core/run_test.py --waves
    ```
 
 6. **Clean Build Directory**:
    ```bash
    make clean
    ```
+
+Testbench files are grouped by target: `tb/core/` contains the standalone core cocotb runner and SystemVerilog harness, while `tb/soc/` contains the SoC equivalents. `tb/bin2hex.py` converts firmware binaries to simulation hex images.
 
 ---
 
