@@ -66,6 +66,7 @@ module moon_vector_unit (
   logic         is_vector_sat;
   logic         is_vector_fp_addsub;
   logic         is_vector_fp_mul;
+  logic         is_vector_fp_div;
   logic         is_vector_fp_op;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
@@ -121,6 +122,8 @@ module moon_vector_unit (
   logic [4:0]   vector_fp_lane_flags [0:3];
   logic [63:0]  vector_fp_mul_result [0:3];
   logic [4:0]   vector_fp_mul_flags [0:3];
+  logic [63:0]  vector_fp_div_result [0:3];
+  logic [4:0]   vector_fp_div_flags [0:3];
 
   always_comb begin
     case (instr_i[14:12])
@@ -798,7 +801,11 @@ module moon_vector_unit (
                             (instr_i[31:26] == 6'b100100) &&
                             (instr_i[14:12] == 3'b001) &&
                             ((vsew_q == 3'b010) || (vsew_q == 3'b011));
-  assign is_vector_fp_op = is_vector_fp_addsub || is_vector_fp_mul;
+  assign is_vector_fp_div = (instr_i[6:0] == 7'b1010111) &&
+                            (instr_i[31:26] == 6'b100000) &&
+                            (instr_i[14:12] == 3'b001) &&
+                            ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  assign is_vector_fp_op = is_vector_fp_addsub || is_vector_fp_mul || is_vector_fp_div;
   assign is_vslideup = (instr_i[6:0] == 7'b1010111) &&
                        (instr_i[31:26] == 6'b001110) &&
                        ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
@@ -851,6 +858,14 @@ module moon_vector_unit (
       .result_o         (vector_fp_mul_result[fp_lane]),
       .flags_o          (vector_fp_mul_flags[fp_lane])
     );
+    moon_fpu_div u_vector_fpu_div (
+      .operand_a_i      (vector_fp_operand_a[fp_lane]),
+      .operand_b_i      (vector_fp_operand_b[fp_lane]),
+      .is_single_i      (vsew_q == 3'b010),
+      .rounding_mode_i  (frm_i),
+      .result_o         (vector_fp_div_result[fp_lane]),
+      .flags_o          (vector_fp_div_flags[fp_lane])
+    );
   end
 
   always_comb begin : prepare_vector_fp_add
@@ -876,6 +891,8 @@ module moon_vector_unit (
           ((vsew_q == 3'b010) || (i < 2))) begin
         if (is_vector_fp_mul)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_mul_flags[i];
+        else if (is_vector_fp_div)
+          vector_fp_flags_o = vector_fp_flags_o | vector_fp_div_flags[i];
         else
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_lane_flags[i];
       end
@@ -1254,12 +1271,16 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010)
-              vreg[vd][i*32 +: 32] <= is_vector_fp_mul ?
+              vreg[vd][i*32 +: 32] <= is_vector_fp_div ?
+                                       vector_fp_div_result[i][31:0] :
+                                       (is_vector_fp_mul ?
                                        vector_fp_mul_result[i][31:0] :
-                                       vector_fp_result[i][31:0];
+                                       vector_fp_result[i][31:0]);
             else if ((vsew_q == 3'b011) && (i < 2))
-              vreg[vd][i*64 +: 64] <= is_vector_fp_mul ?
-                                       vector_fp_mul_result[i] : vector_fp_result[i];
+              vreg[vd][i*64 +: 64] <= is_vector_fp_div ?
+                                       vector_fp_div_result[i] :
+                                       (is_vector_fp_mul ?
+                                        vector_fp_mul_result[i] : vector_fp_result[i]);
           end
         end
       end else if (is_vector_permute) begin
