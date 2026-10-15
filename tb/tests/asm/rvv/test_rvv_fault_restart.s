@@ -48,7 +48,7 @@ _start:
     csrw mtvec, t0
     la   t0, supervisor_test
     csrw mepc, t0
-    li   t0, (1 << 11) | (1 << 7)
+    li   t0, (1 << 11) | (1 << 9) | (1 << 7)
     csrw mstatus, t0
     mret
 
