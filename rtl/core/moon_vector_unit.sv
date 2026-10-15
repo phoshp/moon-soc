@@ -47,6 +47,8 @@ module moon_vector_unit (
   logic         is_vmv_v_x;
   logic         is_vadd_vv;
   logic         is_vadd_vx;
+  logic         is_vmul_vv;
+  logic         is_vmul_vx;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
   logic         is_vlogic;
@@ -470,6 +472,10 @@ module moon_vector_unit (
                       (instr_i[14:12] == 3'b000);
   assign is_vadd_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000000) &&
                       ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
+  assign is_vmul_vv = (instr_i[6:0] == 7'b1010111) &&
+                      (instr_i[31:26] == 6'b100101) && (instr_i[14:12] == 3'b010);
+  assign is_vmul_vx = (instr_i[6:0] == 7'b1010111) &&
+                      (instr_i[31:26] == 6'b100101) && (instr_i[14:12] == 3'b110);
   assign is_vsub_vv = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
                       (instr_i[14:12] == 3'b000);
   assign is_vsub_vx = (instr_i[6:0] == 7'b1010111) && (instr_i[31:26] == 6'b000010) &&
@@ -533,6 +539,7 @@ module moon_vector_unit (
   assign vector_perm_offset = (instr_i[14:12] == 3'b011) ?
                               {59'd0, instr_i[19:15]} : scalar_rs1_i;
   assign is_vector_data_op = is_vmv_v_x || is_vadd_vv || is_vadd_vx ||
+                             is_vmul_vv || is_vmul_vx ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare;
@@ -835,6 +842,21 @@ module moon_vector_unit (
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
+            endcase
+          end
+        end
+      end else if (is_vmul_vv || is_vmul_vx) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
             endcase
           end
         end
