@@ -55,6 +55,12 @@ module moon_vector_unit (
   logic         is_vminmax;
   logic         is_vmask_logic;
   logic         is_vector_reduction;
+  logic         is_vslideup;
+  logic         is_vslidedown;
+  logic         is_vslide1up;
+  logic         is_vslide1down;
+  logic         is_vrgather;
+  logic         is_vector_permute;
   logic         is_vector_data_op;
   logic         is_vector_mask_result_op;
   logic [4:0]   vd, vs1, vs2;
@@ -86,6 +92,7 @@ module moon_vector_unit (
   logic [63:0]  mask_query_result;
   logic [63:0]  vector_reduce_result;
   logic [63:0]  vector_reduce_accum;
+  logic [63:0]  vector_perm_offset;
 
   always_comb begin
     case (instr_i[14:12])
@@ -381,6 +388,65 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_permute_element(
+    input logic [127:0] source,
+    input logic [127:0] indices,
+    input logic [4:0] destination_index,
+    input logic [4:0] active_length,
+    input logic [2:0] sew,
+    input logic [5:0] funct6,
+    input logic [2:0] funct3,
+    input logic [63:0] scalar,
+    input logic [4:0] immediate
+  );
+    integer source_index;
+    integer vlmax_value;
+    logic [63:0] gather_index;
+    begin
+      vlmax_value = 16 >> sew;
+      source_index = 0;
+      gather_index = 64'd0;
+      vector_permute_element = 64'd0;
+      if (funct6 == 6'b001100) begin
+        case (funct3)
+          3'b000: gather_index = vector_element(indices, destination_index, sew);
+          3'b100: gather_index = scalar;
+          default: gather_index = {59'd0, immediate};
+        endcase
+        if (gather_index < vlmax_value)
+          vector_permute_element = vector_element(source, gather_index[4:0], sew);
+      end else if (funct6 == 6'b001110) begin
+        if (funct3 == 3'b110) begin
+          if (destination_index == 0)
+            vector_permute_element = scalar;
+          else
+            vector_permute_element = vector_element(source, destination_index - 1'b1, sew);
+        end else begin
+          source_index = int'(destination_index) - int'(scalar[4:0]);
+          if (funct3 == 3'b011)
+            source_index = int'(destination_index) - int'(immediate);
+          if (source_index >= 0 && source_index < vlmax_value)
+            vector_permute_element = vector_element(source, source_index[4:0], sew);
+        end
+      end else if (funct6 == 6'b001111) begin
+        if (funct3 == 3'b110) begin
+          if (destination_index == (active_length - 1'b1))
+            vector_permute_element = scalar;
+          else if (destination_index + 1 < vlmax_value)
+            vector_permute_element = vector_element(source, destination_index + 1'b1, sew);
+        end else begin
+          source_index = int'(destination_index) + int'(scalar[4:0]);
+          if (funct3 == 3'b100 && scalar >= vlmax_value)
+            source_index = vlmax_value;
+          else if (funct3 == 3'b011)
+            source_index = int'(destination_index) + int'(immediate);
+          if (source_index >= 0 && source_index < vlmax_value)
+            vector_permute_element = vector_element(source, source_index[4:0], sew);
+        end
+      end
+    end
+  endfunction
+
   assign is_vsetvli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111);
   assign is_vsetivli = (instr_i[6:0] == 7'b1010111) && (instr_i[14:12] == 3'b111) &&
                        (instr_i[31:30] == 2'b11);
@@ -445,9 +511,30 @@ module moon_vector_unit (
   assign is_vector_reduction = (instr_i[6:0] == 7'b1010111) &&
                                (instr_i[14:12] == 3'b010) &&
                                (instr_i[31:29] == 3'b000);
+  assign is_vslideup = (instr_i[6:0] == 7'b1010111) &&
+                       (instr_i[31:26] == 6'b001110) &&
+                       ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
+  assign is_vslidedown = (instr_i[6:0] == 7'b1010111) &&
+                         (instr_i[31:26] == 6'b001111) &&
+                         ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
+  assign is_vslide1up = (instr_i[6:0] == 7'b1010111) &&
+                        (instr_i[31:26] == 6'b001110) &&
+                        (instr_i[14:12] == 3'b110);
+  assign is_vslide1down = (instr_i[6:0] == 7'b1010111) &&
+                          (instr_i[31:26] == 6'b001111) &&
+                          (instr_i[14:12] == 3'b110);
+  assign is_vrgather = (instr_i[6:0] == 7'b1010111) &&
+                       (instr_i[31:26] == 6'b001100) &&
+                       ((instr_i[14:12] == 3'b000) ||
+                        (instr_i[14:12] == 3'b100) ||
+                        (instr_i[14:12] == 3'b011));
+  assign is_vector_permute = is_vslideup || is_vslidedown || is_vslide1up ||
+                             is_vslide1down || is_vrgather;
+  assign vector_perm_offset = (instr_i[14:12] == 3'b011) ?
+                              {59'd0, instr_i[19:15]} : scalar_rs1_i;
   assign is_vector_data_op = is_vmv_v_x || is_vadd_vv || is_vadd_vx ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
-                             is_vshift || is_vminmax;
+                             is_vshift || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare;
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
@@ -729,6 +816,28 @@ module moon_vector_unit (
             if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
           end
         endcase
+      end else if (is_vector_permute) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) &&
+              (instr_i[25] || vreg[0][i]) &&
+              !(is_vslideup &&
+                (i < ((instr_i[14:12] == 3'b011) ? instr_i[19:15] : scalar_rs1_i)))) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_permute_element(
+                vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15])[7:0];
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_permute_element(
+                vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15])[15:0];
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_permute_element(
+                vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15])[31:0];
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_permute_element(
+                vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
+                instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
+            endcase
+          end
+        end
       end else if (is_vadd_vv) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
@@ -866,22 +975,26 @@ module moon_vector_unit (
               case (vsew_q)
                 3'b000: begin
                   if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*8 +: 8] <= 8'hff;
-                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
+                           !(is_vslideup && (i < vector_perm_offset)))
                     vreg[vd][i*8 +: 8] <= 8'hff;
                 end
                 3'b001: if (i < 8) begin
                   if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*16 +: 16] <= 16'hffff;
-                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
+                           !(is_vslideup && (i < vector_perm_offset)))
                     vreg[vd][i*16 +: 16] <= 16'hffff;
                 end
                 3'b010: if (i < 4) begin
                   if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
-                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
+                           !(is_vslideup && (i < vector_perm_offset)))
                     vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
                 end
                 default: if (i < 2) begin
                   if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
+                  else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
+                           !(is_vslideup && (i < vector_perm_offset)))
                     vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
                 end
               endcase
