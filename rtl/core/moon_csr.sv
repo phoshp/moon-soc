@@ -91,6 +91,7 @@ module moon_csr
   logic        mstatus_spp;
   logic [1:0]  mstatus_mpp;
   logic [1:0]  mstatus_fs;
+  logic [1:0]  mstatus_vs;
   logic        mstatus_sum;
   logic        mstatus_mxr;
   logic        mstatus_tvm;
@@ -98,7 +99,7 @@ module moon_csr
   logic        mstatus_tsr;
   wire  [1:0]  mstatus_uxl = 2'b10; // 64-bit
   wire  [1:0]  mstatus_sxl = 2'b10; // 64-bit
-  wire         mstatus_sd  = (mstatus_fs == 2'b11);
+  wire         mstatus_sd  = (mstatus_fs == 2'b11) || (mstatus_vs == 2'b11);
 
   assign sum_o = mstatus_sum;
   assign mxr_o = mstatus_mxr;
@@ -223,7 +224,7 @@ module moon_csr
       // Machine Mode CSRs
       CSR_MSTATUS:  csr_rdata_o = {mstatus_sd, 27'b0, mstatus_sxl, mstatus_uxl,
                                    9'b0, mstatus_tsr, mstatus_tw, mstatus_tvm, mstatus_mxr, mstatus_sum, 1'b0,
-                                   mstatus_fs, mstatus_mpp, 2'b0, mstatus_spp, mstatus_mpie, 1'b0,
+                                   mstatus_fs, mstatus_mpp, mstatus_vs, mstatus_spp, mstatus_mpie, 1'b0,
                                    mstatus_spie, 1'b0, mstatus_mie, 1'b0, mstatus_sie, 1'b0};
       CSR_MISA:     csr_rdata_o = MISA_VAL;
       CSR_MEDELEG:  csr_rdata_o = medeleg_q;
@@ -240,7 +241,7 @@ module moon_csr
 
       // Supervisor Mode CSRs
       CSR_SSTATUS:  csr_rdata_o = {mstatus_sd, 29'b0, mstatus_uxl, 12'b0, mstatus_mxr, mstatus_sum, 1'b0,
-                                   2'b0, mstatus_fs, 4'b0, mstatus_spp, 2'b0, mstatus_spie, 3'b0, mstatus_sie, 1'b0};
+                                   2'b0, mstatus_fs, 2'b0, mstatus_vs, mstatus_spp, 2'b0, mstatus_spie, 3'b0, mstatus_sie, 1'b0};
       CSR_SIE:      csr_rdata_o = {54'b0, mie_seie, 3'b0, mie_stie, 3'b0, mie_ssie, 1'b0} & mideleg_q;
       CSR_SIP:      csr_rdata_o = {54'b0, mip_seip, 3'b0, eff_stip, 3'b0, mip_ssip, 1'b0} & mideleg_q;
       CSR_STVEC:    csr_rdata_o = stvec_q;
@@ -312,6 +313,7 @@ module moon_csr
       mstatus_mpp  <= 2'b11; // M-mode
       mstatus_spp  <= 1'b0;
       mstatus_fs   <= 2'b01; // FP Initial
+      mstatus_vs   <= 2'b01; // Vector Initial
       mstatus_sum  <= 1'b0;
       mstatus_mxr  <= 1'b0;
       mstatus_tvm  <= 1'b0;
@@ -407,6 +409,7 @@ module moon_csr
             mstatus_spp  <= next_csr_val[8];
             mstatus_mpp  <= next_csr_val[12:11];
             mstatus_fs   <= next_csr_val[14:13];
+            mstatus_vs   <= next_csr_val[10:9];
             mstatus_sum  <= next_csr_val[18];
             mstatus_mxr  <= next_csr_val[19];
             mstatus_tvm  <= next_csr_val[20];
@@ -439,6 +442,7 @@ module moon_csr
             mstatus_spie <= next_csr_val[5];
             mstatus_spp  <= next_csr_val[8];
             mstatus_fs   <= next_csr_val[14:13];
+            mstatus_vs   <= next_csr_val[10:9];
             mstatus_sum  <= next_csr_val[18];
             mstatus_mxr  <= next_csr_val[19];
           end
@@ -510,6 +514,11 @@ module moon_csr
           default: ;
         endcase
       end
+
+      if (vector_vstart_clear_i || vector_vstart_fault_i ||
+          (csr_we_i && ((csr_addr_i == 12'h008) || (csr_addr_i == 12'h009) ||
+                        (csr_addr_i == 12'h00A) || (csr_addr_i == 12'h00F))))
+        mstatus_vs <= 2'b11;
 
       if (vector_vstart_fault_i) vstart_q <= vector_vstart_fault_value_i;
       else if (vector_vstart_clear_i) vstart_q <= '0;
