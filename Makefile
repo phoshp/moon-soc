@@ -41,7 +41,7 @@ soc-pmp-test:
 soc-mmu-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_mmu_sv39.hex
 
-.PHONY: soc-crypto-test soc-crypto-aes-test soc-crypto-aes-rounds-test soc-crypto-sha512-test soc-rvv-test soc-rvv-memory-test soc-rvv-csr-test soc-rvv-fault-test soc-rvv-fault-restart-test soc-rvv-policy-test soc-rvv-mask-test soc-rvv-mask-memory-test
+.PHONY: soc-crypto-test soc-crypto-aes-test soc-crypto-aes-rounds-test soc-crypto-sha512-test soc-rvv-test soc-rvv-memory-test soc-rvv-csr-test soc-rvv-fault-test soc-rvv-fault-restart-test soc-rvv-policy-test soc-rvv-mask-test soc-rvv-mask-memory-test soc-rvv-index-width-test
 soc-crypto-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_crypto_sha256.hex
 
@@ -77,6 +77,9 @@ soc-rvv-mask-test:
 
 soc-rvv-mask-memory-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_rvv_mask_memory.hex
+
+soc-rvv-index-width-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_rvv_index_width.hex
 
 soc-fp-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_fp_moves.hex
