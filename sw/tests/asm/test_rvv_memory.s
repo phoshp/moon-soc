@@ -142,6 +142,50 @@ _start:
     li   t1, 0x01020304
     bne  t0, t1, fail
 
+    # Indexed loads and stores use byte offsets from a vector index register.
+    li   s1, 9
+    li   a2, 0x80000400
+    li   t0, 0
+    sw   t0, 0(a2)
+    li   t0, 8
+    sw   t0, 4(a2)
+    li   t0, 16
+    sw   t0, 8(a2)
+    li   t0, 24
+    sw   t0, 12(a2)
+    vsetvli t0, zero, e32, m1, ta, ma
+    vle32.v v7, (a2)
+    li   a0, 0x80000300
+    vluxei32.v v8, (a0), v7
+    li   a1, 0x80000440
+    vse32.v v8, (a1)
+    li   t1, 0x01020304
+    lwu  t0, 0(a1)
+    bne  t0, t1, fail
+    li   t1, 0x11121314
+    lwu  t0, 4(a1)
+    bne  t0, t1, fail
+    li   t1, 0x21222324
+    lwu  t0, 8(a1)
+    bne  t0, t1, fail
+    li   t1, 0x31323334
+    lwu  t0, 12(a1)
+    bne  t0, t1, fail
+    li   a1, 0x80000480
+    vsoxei32.v v8, (a1), v7
+    li   t1, 0x01020304
+    lwu  t0, 0(a1)
+    bne  t0, t1, fail
+    li   t1, 0x11121314
+    lwu  t0, 8(a1)
+    bne  t0, t1, fail
+    li   t1, 0x21222324
+    lwu  t0, 16(a1)
+    bne  t0, t1, fail
+    li   t1, 0x31323334
+    lwu  t0, 24(a1)
+    bne  t0, t1, fail
+
     # Byte-width vector memory transfers cover the full VLEN=128 register.
     li   s1, 5
     vsetvli t0, zero, e8, m1, ta, ma
