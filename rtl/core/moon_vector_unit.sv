@@ -68,6 +68,7 @@ module moon_vector_unit (
   logic         is_vector_fp_mul;
   logic         is_vector_fp_div;
   logic         is_vector_fp_sqrt;
+  logic         is_vector_fp_mac;
   logic         is_vector_fp_op;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
@@ -127,6 +128,9 @@ module moon_vector_unit (
   logic [4:0]   vector_fp_div_flags [0:3];
   logic [63:0]  vector_fp_sqrt_result [0:3];
   logic [4:0]   vector_fp_sqrt_flags [0:3];
+  logic [63:0]  vector_fp_mac_result [0:3];
+  logic [4:0]   vector_fp_mac_flags [0:3];
+  logic [63:0]  vector_fp_operand_c [0:3];
 
   always_comb begin
     case (instr_i[14:12])
@@ -813,8 +817,12 @@ module moon_vector_unit (
                              (instr_i[19:15] == 5'b00000) &&
                              (instr_i[14:12] == 3'b001) &&
                              ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  assign is_vector_fp_mac = (instr_i[6:0] == 7'b1010111) &&
+                            (instr_i[31:26] == 6'b101100) &&
+                            (instr_i[14:12] == 3'b001) &&
+                            ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_op = is_vector_fp_addsub || is_vector_fp_mul ||
-                           is_vector_fp_div || is_vector_fp_sqrt;
+                           is_vector_fp_div || is_vector_fp_sqrt || is_vector_fp_mac;
   assign is_vslideup = (instr_i[6:0] == 7'b1010111) &&
                        (instr_i[31:26] == 6'b001110) &&
                        ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011));
@@ -882,18 +890,31 @@ module moon_vector_unit (
       .result_o         (vector_fp_sqrt_result[fp_lane]),
       .flags_o          (vector_fp_sqrt_flags[fp_lane])
     );
+    moon_fpu_fma u_vector_fpu_mac (
+      .operand_a_i      (vector_fp_operand_a[fp_lane]),
+      .operand_b_i      (vector_fp_operand_b[fp_lane]),
+      .operand_c_i      (vector_fp_operand_c[fp_lane]),
+      .format_i         ((vsew_q == 3'b010) ? 2'b00 : 2'b01),
+      .opcode_i         (instr_i[6:0]),
+      .rounding_mode_i  (frm_i),
+      .result_o         (vector_fp_mac_result[fp_lane]),
+      .flags_o          (vector_fp_mac_flags[fp_lane])
+    );
   end
 
   always_comb begin : prepare_vector_fp_add
     for (int i = 0; i < 4; i++) begin
       vector_fp_operand_a[i] = 64'd0;
       vector_fp_operand_b[i] = 64'd0;
+      vector_fp_operand_c[i] = 64'd0;
       if (vsew_q == 3'b010) begin
         vector_fp_operand_a[i] = {32'hffff_ffff, vreg[vs2][i*32 +: 32]};
         vector_fp_operand_b[i] = {32'hffff_ffff, vreg[vs1][i*32 +: 32]};
+        vector_fp_operand_c[i] = {32'hffff_ffff, vreg[vd][i*32 +: 32]};
       end else if ((vsew_q == 3'b011) && (i < 2)) begin
         vector_fp_operand_a[i] = vreg[vs2][i*64 +: 64];
         vector_fp_operand_b[i] = vreg[vs1][i*64 +: 64];
+        vector_fp_operand_c[i] = vreg[vd][i*64 +: 64];
       end
     end
   end
@@ -911,6 +932,8 @@ module moon_vector_unit (
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_div_flags[i];
         else if (is_vector_fp_sqrt)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_sqrt_flags[i];
+        else if (is_vector_fp_mac)
+          vector_fp_flags_o = vector_fp_flags_o | vector_fp_mac_flags[i];
         else
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_lane_flags[i];
       end
@@ -1289,20 +1312,24 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010)
-              vreg[vd][i*32 +: 32] <= is_vector_fp_sqrt ?
+              vreg[vd][i*32 +: 32] <= is_vector_fp_mac ?
+                                       vector_fp_mac_result[i][31:0] :
+                                       (is_vector_fp_sqrt ?
                                        vector_fp_sqrt_result[i][31:0] :
                                        (is_vector_fp_div ?
                                        vector_fp_div_result[i][31:0] :
                                        (is_vector_fp_mul ?
                                        vector_fp_mul_result[i][31:0] :
-                                       vector_fp_result[i][31:0]));
+                                       vector_fp_result[i][31:0])));
             else if ((vsew_q == 3'b011) && (i < 2))
-              vreg[vd][i*64 +: 64] <= is_vector_fp_sqrt ?
+              vreg[vd][i*64 +: 64] <= is_vector_fp_mac ?
+                                       vector_fp_mac_result[i] :
+                                       (is_vector_fp_sqrt ?
                                        vector_fp_sqrt_result[i] :
                                        (is_vector_fp_div ?
                                        vector_fp_div_result[i] :
                                        (is_vector_fp_mul ?
-                                        vector_fp_mul_result[i] : vector_fp_result[i]));
+                                        vector_fp_mul_result[i] : vector_fp_result[i])));
           end
         end
       end else if (is_vector_permute) begin
