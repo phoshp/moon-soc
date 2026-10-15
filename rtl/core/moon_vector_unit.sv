@@ -47,11 +47,15 @@ module moon_vector_unit (
   logic [4:0]   vd, vs1, vs2;
   logic         is_vle_v, is_vse_v;
   logic         vector_mem_strided;
+  logic         vector_mem_indexed;
   logic         vector_mem_active_q;
   logic         vector_mem_done_q;
   logic         vector_mem_store_q;
+  logic         vector_mem_strided_q;
+  logic         vector_mem_indexed_q;
   logic [63:0]  vector_mem_base_q;
   logic [63:0]  vector_mem_stride_q;
+  logic [4:0]   vector_mem_index_reg_q;
   logic [4:0]   vector_mem_count_q;
   logic [4:0]   vector_mem_vl_q;
   logic [2:0]   vector_mem_sew_q;
@@ -75,16 +79,30 @@ module moon_vector_unit (
                     (instr_i[31:29] == 3'b000) &&
                     (instr_i[28] == 1'b0) &&
                     (((instr_i[27:26] == 2'b00) && (instr_i[24:20] == 5'b00000)) ||
-                     (instr_i[27:26] == 2'b10)) &&
+                     (instr_i[27:26] == 2'b10) ||
+                     (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11)) &&
                     (vector_mem_eew == vsew_q);
   assign is_vse_v = (instr_i[6:0] == 7'b0100111) &&
                     (instr_i[31:29] == 3'b000) &&
                     (instr_i[28] == 1'b0) &&
-                    ((instr_i[27:26] == 2'b00) || (instr_i[27:26] == 2'b10)) &&
+                    ((instr_i[27:26] == 2'b00) || (instr_i[27:26] == 2'b10) ||
+                     (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11)) &&
                     (vector_mem_eew == vsew_q);
   assign vector_mem_strided = (instr_i[27:26] == 2'b10);
+  assign vector_mem_indexed = (instr_i[27:26] == 2'b01) || (instr_i[27:26] == 2'b11);
   always_comb begin
-    if (vector_mem_strided)
+    if (vector_mem_indexed_q) begin
+      case (vector_mem_sew_q)
+        3'b000: vector_mem_addr = vector_mem_base_q +
+                                  {56'd0, vreg[vector_mem_index_reg_q][int'(vector_mem_count_q) * 8 +: 8]};
+        3'b001: vector_mem_addr = vector_mem_base_q +
+                                  {48'd0, vreg[vector_mem_index_reg_q][int'(vector_mem_count_q) * 16 +: 16]};
+        3'b010: vector_mem_addr = vector_mem_base_q +
+                                  {32'd0, vreg[vector_mem_index_reg_q][int'(vector_mem_count_q) * 32 +: 32]};
+        default: vector_mem_addr = vector_mem_base_q +
+                                   vreg[vector_mem_index_reg_q][int'(vector_mem_count_q) * 64 +: 64];
+      endcase
+    end else if (vector_mem_strided_q)
       vector_mem_addr = vector_mem_base_q +
                         ($signed({59'd0, vector_mem_count_q}) * $signed(vector_mem_stride_q));
     else
@@ -414,8 +432,11 @@ module moon_vector_unit (
       vector_mem_active_q <= 1'b0;
       vector_mem_done_q <= 1'b0;
       vector_mem_store_q <= 1'b0;
+      vector_mem_strided_q <= 1'b0;
+      vector_mem_indexed_q <= 1'b0;
       vector_mem_base_q <= '0;
       vector_mem_stride_q <= '0;
+      vector_mem_index_reg_q <= '0;
       vector_mem_count_q <= '0;
       vector_mem_vl_q <= '0;
       vector_mem_sew_q <= '0;
@@ -428,8 +449,11 @@ module moon_vector_unit (
       end else if (!vector_mem_active_q && !vector_mem_done_q) begin
         vector_mem_active_q <= 1'b1;
         vector_mem_store_q <= is_vse_v;
+        vector_mem_strided_q <= vector_mem_strided;
+        vector_mem_indexed_q <= vector_mem_indexed;
         vector_mem_base_q <= scalar_rs1_i;
         vector_mem_stride_q <= scalar_rs2_i;
+        vector_mem_index_reg_q <= instr_i[24:20];
         vector_mem_count_q <= '0;
         vector_mem_vl_q <= vl_q;
         vector_mem_sew_q <= vector_mem_eew;
