@@ -93,6 +93,8 @@ module moon_ex_stage
   input  fwd_sel_e         fwd_b_i,
   input  logic [XLEN-1:0]  fwd_ex_data_i,  // Data from EX/MEM stage
   input  logic [XLEN-1:0]  fwd_mem_data_i, // Data from MEM/WB stage
+  input  logic             vector_mem_valid_i,
+  input  logic [XLEN-1:0]  vector_mem_rdata_i,
 
   // Redirection Outputs to IF Stage
   output logic             branch_taken_o,
@@ -100,6 +102,12 @@ module moon_ex_stage
 
   // Multi-cycle Busy Status to Hazard Unit
   output logic             busy_div_o,
+  output logic             vector_mem_req_o,
+  output logic             vector_mem_we_o,
+  output logic [XLEN-1:0]  vector_mem_addr_o,
+  output logic [XLEN-1:0]  vector_mem_wdata_o,
+  output logic [7:0]       vector_mem_wstrb_o,
+  output logic             vector_mem_busy_o,
 
   // Outputs to MEM Stage (EX/MEM Pipeline Register)
   output logic             ex_mem_valid_o,
@@ -169,6 +177,11 @@ module moon_ex_stage
   logic [XLEN-1:0] alu_result;
   logic [XLEN-1:0] vector_scalar_result;
   logic            vector_scalar_result_valid;
+  logic            vector_unit_mem_req;
+  logic            vector_unit_mem_we;
+  logic [XLEN-1:0] vector_unit_mem_addr;
+  logic [XLEN-1:0] vector_unit_mem_wdata;
+  logic [7:0]      vector_unit_mem_wstrb;
   logic            alu_zero;
   logic [FLEN-1:0] fp_add_result;
   logic [4:0]      fp_add_flags;
@@ -364,8 +377,22 @@ module moon_ex_stage
     .instr_i                (id_ex_instr_i),
     .scalar_rs1_i           (operand_a_fwd),
     .scalar_result_valid_o  (vector_scalar_result_valid),
-    .scalar_result_o        (vector_scalar_result)
+    .scalar_result_o        (vector_scalar_result),
+    .mem_req_o              (vector_unit_mem_req),
+    .mem_we_o               (vector_unit_mem_we),
+    .mem_addr_o             (vector_unit_mem_addr),
+    .mem_wdata_o            (vector_unit_mem_wdata),
+    .mem_wstrb_o             (vector_unit_mem_wstrb),
+    .mem_valid_i             (vector_mem_valid_i),
+    .mem_rdata_i             (vector_mem_rdata_i),
+    .mem_busy_o              (vector_mem_busy_o)
   );
+
+  assign vector_mem_req_o = vector_unit_mem_req;
+  assign vector_mem_we_o = vector_unit_mem_we;
+  assign vector_mem_addr_o = vector_unit_mem_addr;
+  assign vector_mem_wdata_o = vector_unit_mem_wdata;
+  assign vector_mem_wstrb_o = vector_unit_mem_wstrb;
 
   // --------------------------------------------------------------------------
   // Hardware Multiplier Instantiation (RV64M)

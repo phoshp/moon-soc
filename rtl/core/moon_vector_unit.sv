@@ -14,7 +14,15 @@ module moon_vector_unit (
   input  logic [31:0] instr_i,
   input  logic [63:0] scalar_rs1_i,
   output logic        scalar_result_valid_o,
-  output logic [63:0] scalar_result_o
+  output logic [63:0] scalar_result_o,
+  output logic        mem_req_o,
+  output logic        mem_we_o,
+  output logic [63:0] mem_addr_o,
+  output logic [63:0] mem_wdata_o,
+  output logic [7:0]  mem_wstrb_o,
+  input  logic        mem_valid_i,
+  input  logic [63:0] mem_rdata_i,
+  output logic        mem_busy_o
 );
   logic [127:0] vreg [0:31];
   logic [4:0]   vl_q;
@@ -36,6 +44,80 @@ module moon_vector_unit (
   logic         is_vminmax;
   logic         is_vmask_logic;
   logic [4:0]   vd, vs1, vs2;
+  logic         is_vle_v, is_vse_v;
+  logic         vector_mem_active_q;
+  logic         vector_mem_done_q;
+  logic         vector_mem_store_q;
+  logic [63:0]  vector_mem_base_q;
+  logic [4:0]   vector_mem_count_q;
+  logic [4:0]   vector_mem_vl_q;
+  logic [2:0]   vector_mem_sew_q;
+  logic [2:0]   vector_mem_eew;
+  logic [4:0]   vector_mem_vd_q;
+  logic [63:0]  vector_mem_addr;
+  logic [2:0]   vector_mem_offset;
+  logic [63:0]  vector_mem_element;
+
+  always_comb begin
+    case (instr_i[14:12])
+      3'b000: vector_mem_eew = 3'b000;
+      3'b101: vector_mem_eew = 3'b001;
+      3'b110: vector_mem_eew = 3'b010;
+      3'b111: vector_mem_eew = 3'b011;
+      default: vector_mem_eew = 3'b100;
+    endcase
+  end
+
+  assign is_vle_v = (instr_i[6:0] == 7'b0000111) &&
+                    (instr_i[31:29] == 3'b000) &&
+                    (instr_i[28:26] == 3'b000) &&
+                    (instr_i[24:20] == 5'b00000) &&
+                    (vector_mem_eew == vsew_q);
+  assign is_vse_v = (instr_i[6:0] == 7'b0100111) &&
+                    (instr_i[31:29] == 3'b000) &&
+                    (instr_i[28:26] == 3'b000) &&
+                    (vector_mem_eew == vsew_q);
+  assign vector_mem_addr = vector_mem_base_q +
+                           ({59'd0, vector_mem_count_q} << vector_mem_sew_q);
+  assign vector_mem_offset = vector_mem_addr[2:0];
+  always_comb begin
+    vector_mem_element = '0;
+    case (vector_mem_sew_q)
+      3'b000: vector_mem_element[7:0] = vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 8 +: 8];
+      3'b001: vector_mem_element[15:0] = vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 16 +: 16];
+      3'b010: vector_mem_element[31:0] = vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 32 +: 32];
+      default: vector_mem_element = vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 64 +: 64];
+    endcase
+  end
+  always_comb begin
+    mem_req_o = vector_mem_active_q &&
+                (vector_mem_count_q < vector_mem_vl_q) &&
+                (instr_i[25] || vreg[0][vector_mem_count_q]);
+    mem_we_o = vector_mem_store_q;
+    mem_addr_o = vector_mem_addr;
+    mem_wdata_o = '0;
+    mem_wstrb_o = '0;
+    case (vector_mem_sew_q)
+      3'b000: begin
+        mem_wstrb_o = 8'b1 << vector_mem_offset;
+        mem_wdata_o = {8{vector_mem_element[7:0]}} << (vector_mem_offset * 8);
+      end
+      3'b001: begin
+        mem_wstrb_o = 8'b11 << vector_mem_offset;
+        mem_wdata_o = {4{vector_mem_element[15:0]}} << (vector_mem_offset * 8);
+      end
+      3'b010: begin
+        mem_wstrb_o = 8'h0f << vector_mem_offset;
+        mem_wdata_o = {2{vector_mem_element[31:0]}} << (vector_mem_offset * 8);
+      end
+      default: begin
+        mem_wstrb_o = 8'hff;
+        mem_wdata_o = vector_mem_element;
+      end
+    endcase
+    mem_busy_o = vector_mem_active_q ||
+                 (valid_i && !vector_mem_done_q && (is_vle_v || is_vse_v));
+  end
 
   function automatic logic [63:0] vector_addsub(
     input logic [63:0] operand_a,
@@ -317,8 +399,61 @@ module moon_vector_unit (
     if (!rst_ni) begin
       vl_q <= '0;
       vsew_q <= 3'b010;
+      vector_mem_active_q <= 1'b0;
+      vector_mem_done_q <= 1'b0;
+      vector_mem_store_q <= 1'b0;
+      vector_mem_base_q <= '0;
+      vector_mem_count_q <= '0;
+      vector_mem_vl_q <= '0;
+      vector_mem_sew_q <= '0;
+      vector_mem_vd_q <= '0;
       for (int i = 0; i < 32; i++) vreg[i] <= '0;
-    end else if (valid_i && advance_i) begin
+    end else begin
+      if (!valid_i || !(is_vle_v || is_vse_v)) begin
+        vector_mem_active_q <= 1'b0;
+        vector_mem_done_q <= 1'b0;
+      end else if (!vector_mem_active_q && !vector_mem_done_q) begin
+        vector_mem_active_q <= 1'b1;
+        vector_mem_store_q <= is_vse_v;
+        vector_mem_base_q <= scalar_rs1_i;
+        vector_mem_count_q <= '0;
+        vector_mem_vl_q <= vl_q;
+        vector_mem_sew_q <= vector_mem_eew;
+        vector_mem_vd_q <= instr_i[11:7];
+        if (vl_q == 0) begin
+          vector_mem_active_q <= 1'b0;
+          vector_mem_done_q <= 1'b1;
+        end
+      end else if (vector_mem_active_q && vector_mem_count_q < vector_mem_vl_q &&
+                   !instr_i[25] && !vreg[0][vector_mem_count_q]) begin
+        if (vector_mem_count_q + 1'b1 >= vector_mem_vl_q) begin
+          vector_mem_active_q <= 1'b0;
+          vector_mem_done_q <= 1'b1;
+        end else begin
+          vector_mem_count_q <= vector_mem_count_q + 1'b1;
+        end
+      end else if (vector_mem_active_q && mem_valid_i && mem_req_o) begin
+        if (!vector_mem_store_q) begin
+          case (vector_mem_sew_q)
+            3'b000: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 8 +: 8] <=
+                      mem_rdata_i[vector_mem_offset * 8 +: 8];
+            3'b001: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 16 +: 16] <=
+                      mem_rdata_i[vector_mem_offset * 8 +: 16];
+            3'b010: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 32 +: 32] <=
+                      mem_rdata_i[vector_mem_offset * 8 +: 32];
+            default: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 64 +: 64] <=
+                       mem_rdata_i[63:0];
+          endcase
+        end
+        if (vector_mem_count_q + 1'b1 >= vector_mem_vl_q) begin
+          vector_mem_active_q <= 1'b0;
+          vector_mem_done_q <= 1'b1;
+        end else begin
+          vector_mem_count_q <= vector_mem_count_q + 1'b1;
+        end
+      end
+
+      if (valid_i && advance_i) begin
       if (is_vset_config) begin
         vl_q <= vl;
         if (vlmax != 0) vsew_q <= instr_i[25:23];
@@ -460,6 +595,7 @@ module moon_vector_unit (
             endcase
           end
         end
+      end
       end
     end
   end

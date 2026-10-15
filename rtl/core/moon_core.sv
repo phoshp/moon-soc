@@ -193,6 +193,17 @@ module moon_core
   logic [XLEN-1:0]  dmem_vaddr;
   logic [XLEN-1:0]  core_dmem_wdata;
   logic [7:0]       core_dmem_wstrb;
+  logic             vector_mem_req;
+  logic             vector_mem_we;
+  logic [XLEN-1:0]  vector_mem_addr;
+  logic [XLEN-1:0]  vector_mem_wdata;
+  logic [7:0]       vector_mem_wstrb;
+  logic             vector_mem_busy;
+  logic             data_translation_req;
+  logic             data_translation_we;
+  logic [XLEN-1:0]  data_translation_vaddr;
+  logic [XLEN-1:0]  data_translation_wdata;
+  logic [7:0]       data_translation_wstrb;
   logic             mmu_data_hit;
   logic [XLEN-1:0]  mmu_data_paddr;
   logic             mmu_load_page_fault;
@@ -335,18 +346,18 @@ module moon_core
       trap_cause   = CAUSE_BREAKPOINT;
       trap_val     = ex_mem_pc;
       trap_pc      = ex_mem_pc;
-    end else if (core_dmem_req && mmu_load_page_fault) begin
+    end else if (data_translation_req && !data_translation_we && mmu_load_page_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_PAGE_FAULT_LOAD;
-      trap_val     = dmem_vaddr;
-      trap_pc      = ex_mem_pc;
-    end else if (core_dmem_req && mmu_store_page_fault) begin
+      trap_val     = data_translation_vaddr;
+      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
+    end else if (data_translation_req && data_translation_we && mmu_store_page_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_PAGE_FAULT_STORE;
-      trap_val     = dmem_vaddr;
-      trap_pc      = ex_mem_pc;
+      trap_val     = data_translation_vaddr;
+      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
     end else if (imem_req_o && mmu_fetch_page_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -358,13 +369,13 @@ module moon_core
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_LOAD_ACCESS_FAULT;
       trap_val     = dmem_addr_o;
-      trap_pc      = ex_mem_pc;
+      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
     end else if (pmp_store_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_STORE_ACCESS_FAULT;
       trap_val     = dmem_addr_o;
-      trap_pc      = ex_mem_pc;
+      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
     end else if (pmp_fetch_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -547,9 +558,17 @@ module moon_core
     .fwd_b_i              (fwd_b),
     .fwd_ex_data_i        (ex_fwd_val),
     .fwd_mem_data_i       (wb_wdata),
+    .vector_mem_valid_i   (dmem_valid_i && mmu_data_hit && !mmu_busy),
+    .vector_mem_rdata_i   (dmem_rdata_i),
     .branch_taken_o       (branch_taken),
     .branch_target_o      (branch_target),
     .busy_div_o           (busy_div),
+    .vector_mem_req_o     (vector_mem_req),
+    .vector_mem_we_o      (vector_mem_we),
+    .vector_mem_addr_o    (vector_mem_addr),
+    .vector_mem_wdata_o   (vector_mem_wdata),
+    .vector_mem_wstrb_o   (vector_mem_wstrb),
+    .vector_mem_busy_o    (vector_mem_busy),
     .ex_mem_valid_o       (ex_mem_valid),
     .ex_mem_pc_o          (ex_mem_pc),
     .ex_mem_link_pc_o     (ex_mem_link_pc),
@@ -725,9 +744,9 @@ module moon_core
     .mem_wb_regwrite_i  (mem_wb_regwrite),
     .branch_taken_i     (branch_taken),
     .trap_flush_i       (trap_enter || ex_mem_is_mret || ex_mem_is_sret),
-    .busy_div_i         (busy_div),
+    .busy_div_i         (busy_div || vector_mem_busy),
     .busy_mem_i         ((imem_req_o && !imem_valid_i) || (dmem_req_o && !dmem_valid_i)),
-    .busy_mmu_i         (mmu_busy || (!mmu_fetch_hit && imem_req_o) || (!mmu_data_hit && core_dmem_req)),
+    .busy_mmu_i         (mmu_busy || (!mmu_fetch_hit && imem_req_o) || (!mmu_data_hit && data_translation_req)),
     .fwd_a_o            (fwd_a),
     .fwd_b_o            (fwd_b),
     .stall_if_o         (stall_if),
@@ -820,9 +839,9 @@ module moon_core
     .fetch_hit_o         (mmu_fetch_hit),
     .fetch_paddr_o       (mmu_fetch_paddr),
     .fetch_page_fault_o  (mmu_fetch_page_fault),
-    .data_req_i          (core_dmem_req),
-    .data_we_i           (core_dmem_we),
-    .data_vaddr_i        (dmem_vaddr),
+    .data_req_i          (data_translation_req),
+    .data_we_i           (data_translation_we),
+    .data_vaddr_i        (data_translation_vaddr),
     .data_hit_o          (mmu_data_hit),
     .data_paddr_o        (mmu_data_paddr),
     .load_page_fault_o   (mmu_load_page_fault),
@@ -834,12 +853,17 @@ module moon_core
     .ptw_mem_rdata_i     (ptw_mem_rdata)
   );
 
-  // Memory Bus Multiplexing (PTW vs Core)
-  assign dmem_req_o   = mmu_busy ? ptw_mem_req   : (core_dmem_req && mmu_data_hit);
-  assign dmem_we_o    = mmu_busy ? 1'b0          : core_dmem_we;
+  // Memory Bus Multiplexing (PTW, scalar LSU, and serialized vector LSU)
+  assign data_translation_req = core_dmem_req || (!core_dmem_req && vector_mem_req);
+  assign data_translation_we = core_dmem_req ? core_dmem_we : vector_mem_we;
+  assign data_translation_vaddr = core_dmem_req ? dmem_vaddr : vector_mem_addr;
+  assign data_translation_wdata = core_dmem_req ? core_dmem_wdata : vector_mem_wdata;
+  assign data_translation_wstrb = core_dmem_req ? core_dmem_wstrb : vector_mem_wstrb;
+  assign dmem_req_o   = mmu_busy ? ptw_mem_req   : (data_translation_req && mmu_data_hit);
+  assign dmem_we_o    = mmu_busy ? 1'b0          : data_translation_we;
   assign dmem_addr_o  = mmu_busy ? ptw_mem_addr  : mmu_data_paddr;
-  assign dmem_wdata_o = mmu_busy ? '0            : core_dmem_wdata;
-  assign dmem_wstrb_o = mmu_busy ? 8'hFF         : core_dmem_wstrb;
+  assign dmem_wdata_o = mmu_busy ? '0            : data_translation_wdata;
+  assign dmem_wstrb_o = mmu_busy ? 8'hFF         : data_translation_wstrb;
 
   assign ptw_mem_valid = mmu_busy && dmem_valid_i;
   assign ptw_mem_rdata = dmem_rdata_i;
