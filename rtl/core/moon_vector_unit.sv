@@ -70,6 +70,8 @@ module moon_vector_unit (
   logic         is_vector_fp_sqrt;
   logic         is_vector_fp_mac;
   logic         is_vector_fp_fma_dest_mult;
+  logic         is_vector_fp_compare;
+  logic         is_vector_fp_not_equal;
   logic         is_vector_fp_op;
   logic         is_vsub_vv;
   logic         is_vsub_vx;
@@ -133,6 +135,8 @@ module moon_vector_unit (
   logic [4:0]   vector_fp_mac_flags [0:3];
   logic [63:0]  vector_fp_operand_c [0:3];
   logic [6:0]   vector_fp_mac_opcode;
+  logic [63:0]  vector_fp_compare_result [0:3];
+  logic [4:0]   vector_fp_compare_flags [0:3];
 
   always_comb begin
     case (instr_i[14:12])
@@ -778,6 +782,14 @@ module moon_vector_unit (
                         ((instr_i[31:26] == 6'b011110) ||
                          (instr_i[31:26] == 6'b011111)) &&
                         ((instr_i[14:12] == 3'b100) || (instr_i[14:12] == 3'b011)));
+  assign is_vector_fp_compare = (instr_i[6:0] == 7'b1010111) &&
+                                ((instr_i[31:26] == 6'b011000) ||
+                                 (instr_i[31:26] == 6'b011001) ||
+                                 (instr_i[31:26] == 6'b011011) ||
+                                 (instr_i[31:26] == 6'b011100)) &&
+                                (instr_i[14:12] == 3'b001) &&
+                                ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  assign is_vector_fp_not_equal = instr_i[31:26] == 6'b011100;
   assign is_vminmax = (instr_i[6:0] == 7'b1010111) &&
                       ((instr_i[31:26] == 6'b000100) ||
                        (instr_i[31:26] == 6'b000101) ||
@@ -871,7 +883,7 @@ module moon_vector_unit (
                              is_vector_sat || is_vector_fp_op ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
-  assign is_vector_mask_result_op = is_vmask_logic || is_vcompare;
+  assign is_vector_mask_result_op = is_vmask_logic || is_vcompare || is_vector_fp_compare;
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
@@ -919,6 +931,15 @@ module moon_vector_unit (
       .result_o         (vector_fp_mac_result[fp_lane]),
       .flags_o          (vector_fp_mac_flags[fp_lane])
     );
+    moon_fpu_cmp u_vector_fpu_compare (
+      .operand_a_i      (vector_fp_operand_a[fp_lane]),
+      .operand_b_i      (vector_fp_operand_b[fp_lane]),
+      .is_single_i      (vsew_q == 3'b010),
+      .operation_i      ((instr_i[31:26] == 6'b011001) ? 3'd2 :
+                         ((instr_i[31:26] == 6'b011011) ? 3'd3 : 3'd4)),
+      .result_o         (vector_fp_compare_result[fp_lane]),
+      .flags_o          (vector_fp_compare_flags[fp_lane])
+    );
   end
 
   always_comb begin : prepare_vector_fp_add
@@ -952,12 +973,16 @@ module moon_vector_unit (
 
   always_comb begin : collect_vector_fp_flags
     vector_fp_flags_o = 5'd0;
-    vector_fp_flags_we_o = valid_i && advance_i && is_vector_fp_op;
+    vector_fp_flags_we_o = valid_i && advance_i &&
+                           (is_vector_fp_op || is_vector_fp_compare);
     for (int i = 0; i < 4; i++) begin
-      if (valid_i && advance_i && is_vector_fp_op && (i < vl_q) &&
+      if (valid_i && advance_i && (is_vector_fp_op || is_vector_fp_compare) &&
+          (i < vl_q) &&
           (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i]) &&
           ((vsew_q == 3'b010) || (i < 2))) begin
-        if (is_vector_fp_mul)
+        if (is_vector_fp_compare)
+          vector_fp_flags_o = vector_fp_flags_o | vector_fp_compare_flags[i];
+        else if (is_vector_fp_mul)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_mul_flags[i];
         else if (is_vector_fp_div)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_div_flags[i];
@@ -1555,6 +1580,15 @@ module moon_vector_unit (
                   ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*64 +: 6]), vsew_q, instr_i[31:26]);
             endcase
           end
+        end
+      end else if (is_vector_fp_compare) begin
+        for (int i = 0; i < 4; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) &&
+              (instr_i[25] || vreg[0][i]) &&
+              ((vsew_q == 3'b010) || (i < 2)))
+            vreg[vd][i] <= is_vector_fp_not_equal ?
+                           !vector_fp_compare_result[i][0] :
+                           vector_fp_compare_result[i][0];
         end
       end else if (is_vcompare) begin
         for (int i = 0; i < 16; i++) begin
