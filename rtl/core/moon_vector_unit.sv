@@ -70,6 +70,9 @@ module moon_vector_unit (
   logic         is_vector_fp_sqrt;
   logic         is_vector_fp_class;
   logic         is_vector_fp_int_cvt;
+  logic         is_vector_fp_widen_cvt;
+  logic         is_vector_fp_widen_float_cvt;
+  logic         is_vector_fp_widen_op;
   logic         is_vector_fp_mac;
   logic         is_vector_fp_fma_dest_mult;
   logic         is_vector_fp_compare;
@@ -145,6 +148,8 @@ module moon_vector_unit (
   logic [31:0]  vector_fp_int_cvt_instr [0:3];
   logic [63:0]  vector_fp_int_cvt_result [0:3];
   logic [4:0]   vector_fp_int_cvt_flags [0:3];
+  logic [63:0]  vector_fp_widen_float_result [0:3];
+  logic [4:0]   vector_fp_widen_float_flags [0:3];
 
   function automatic logic [9:0] classify_floating(
     input logic [63:0] value,
@@ -186,20 +191,32 @@ module moon_vector_unit (
   );
     logic float_to_int;
     logic unsigned_conversion;
+    logic widening;
+    logic integer_word;
     logic [6:0] scalar_funct7;
     logic [4:0] scalar_cvt_type;
     begin
+      widening = vector_instr[19:15] >= 5'd8;
       float_to_int = (vector_instr[19:15] == 5'd0) ||
                      (vector_instr[19:15] == 5'd1) ||
                      (vector_instr[19:15] == 5'd6) ||
-                     (vector_instr[19:15] == 5'd7);
+                     (vector_instr[19:15] == 5'd7) ||
+                     (vector_instr[19:15] == 5'd8) ||
+                     (vector_instr[19:15] == 5'd9) ||
+                     (vector_instr[19:15] == 5'd14) ||
+                     (vector_instr[19:15] == 5'd15);
       unsigned_conversion = (vector_instr[19:15] == 5'd0) ||
                             (vector_instr[19:15] == 5'd2) ||
-                            (vector_instr[19:15] == 5'd6);
+                            (vector_instr[19:15] == 5'd6) ||
+                            (vector_instr[19:15] == 5'd8) ||
+                            (vector_instr[19:15] == 5'd10) ||
+                            (vector_instr[19:15] == 5'd14);
+      integer_word = widening ? !float_to_int : (sew == 3'b010);
       scalar_funct7 = float_to_int ?
                       ((sew == 3'b010) ? 7'b1100000 : 7'b1100001) :
-                      ((sew == 3'b010) ? 7'b1101000 : 7'b1101001);
-      scalar_cvt_type = (sew == 3'b010) ?
+                      ((widening || (sew != 3'b010)) ?
+                       7'b1101001 : 7'b1101000);
+      scalar_cvt_type = integer_word ?
                         (unsigned_conversion ? 5'd1 : 5'd0) :
                         (unsigned_conversion ? 5'd3 : 5'd2);
       make_scalar_int_cvt_instr = {scalar_funct7, scalar_cvt_type,
@@ -933,14 +950,37 @@ module moon_vector_unit (
                               ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_int_cvt = (instr_i[6:0] == 7'b1010111) &&
                                 (instr_i[31:26] == 6'b010010) &&
-                                ((instr_i[19:15] == 5'd0) ||
-                                 (instr_i[19:15] == 5'd1) ||
-                                 (instr_i[19:15] == 5'd2) ||
-                                 (instr_i[19:15] == 5'd3) ||
-                                 (instr_i[19:15] == 5'd6) ||
-                                 (instr_i[19:15] == 5'd7)) &&
                                 (instr_i[14:12] == 3'b001) &&
-                                ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+                                ((((instr_i[19:15] == 5'd0) ||
+                                   (instr_i[19:15] == 5'd1) ||
+                                   (instr_i[19:15] == 5'd2) ||
+                                   (instr_i[19:15] == 5'd3) ||
+                                   (instr_i[19:15] == 5'd6) ||
+                                   (instr_i[19:15] == 5'd7)) &&
+                                  ((vsew_q == 3'b010) || (vsew_q == 3'b011))) ||
+                                 (((instr_i[19:15] == 5'd8) ||
+                                   (instr_i[19:15] == 5'd9) ||
+                                   (instr_i[19:15] == 5'd10) ||
+                                   (instr_i[19:15] == 5'd11) ||
+                                   (instr_i[19:15] == 5'd14) ||
+                                   (instr_i[19:15] == 5'd15)) &&
+                                  (vsew_q == 3'b010)));
+  assign is_vector_fp_widen_cvt = (instr_i[6:0] == 7'b1010111) &&
+                                  (instr_i[31:26] == 6'b010010) &&
+                                  ((instr_i[19:15] == 5'd8) ||
+                                   (instr_i[19:15] == 5'd9) ||
+                                   (instr_i[19:15] == 5'd10) ||
+                                   (instr_i[19:15] == 5'd11) ||
+                                   (instr_i[19:15] == 5'd14) ||
+                                   (instr_i[19:15] == 5'd15)) &&
+                                  (instr_i[14:12] == 3'b001) &&
+                                  (vsew_q == 3'b010);
+  assign is_vector_fp_widen_float_cvt = (instr_i[6:0] == 7'b1010111) &&
+                                        (instr_i[31:26] == 6'b010010) &&
+                                        (instr_i[19:15] == 5'd12) &&
+                                        (instr_i[14:12] == 3'b001) &&
+                                        (vsew_q == 3'b010);
+  assign is_vector_fp_widen_op = is_vector_fp_widen_cvt || is_vector_fp_widen_float_cvt;
   assign is_vector_fp_mac = (instr_i[6:0] == 7'b1010111) &&
                             ((instr_i[31:26] == 6'b101000) ||
                              (instr_i[31:26] == 6'b101001) ||
@@ -992,6 +1032,7 @@ module moon_vector_unit (
                              is_vdivrem_vv || is_vdivrem_vx ||
                              is_vector_sat || is_vector_fp_op || is_vector_fp_class ||
                              is_vector_fp_int_cvt || is_vector_fp_minmax ||
+                             is_vector_fp_widen_op ||
                              is_vector_fp_signinj ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
@@ -1062,12 +1103,25 @@ module moon_vector_unit (
                          (instr_i[19:15] == 5'd0) ||
                          (instr_i[19:15] == 5'd1) ||
                          (instr_i[19:15] == 5'd6) ||
-                         (instr_i[19:15] == 5'd7))),
+                         (instr_i[19:15] == 5'd7) ||
+                         (instr_i[19:15] == 5'd8) ||
+                         (instr_i[19:15] == 5'd9) ||
+                         (instr_i[19:15] == 5'd14) ||
+                         (instr_i[19:15] == 5'd15))),
       .instruction_i    (make_scalar_int_cvt_instr(instr_i, vsew_q)),
       .rounding_mode_i  (((instr_i[19:15] == 5'd6) ||
-                          (instr_i[19:15] == 5'd7)) ? 3'b001 : frm_i),
+                          (instr_i[19:15] == 5'd7) ||
+                          (instr_i[19:15] == 5'd14) ||
+                          (instr_i[19:15] == 5'd15)) ? 3'b001 : frm_i),
       .result_o         (vector_fp_int_cvt_result[fp_lane]),
       .flags_o          (vector_fp_int_cvt_flags[fp_lane])
+    );
+    moon_fpu_cvt u_vector_fpu_widen_float_cvt (
+      .operand_i        (vector_fp_int_cvt_operand(vreg[vs2], fp_lane, 3'b010, 1'b1)),
+      .single_source_i  (1'b1),
+      .rounding_mode_i  (frm_i),
+      .result_o         (vector_fp_widen_float_result[fp_lane]),
+      .flags_o          (vector_fp_widen_float_flags[fp_lane])
     );
   end
 
@@ -1108,15 +1162,17 @@ module moon_vector_unit (
     vector_fp_flags_o = 5'd0;
     vector_fp_flags_we_o = valid_i && advance_i &&
                            (is_vector_fp_op || is_vector_fp_compare || is_vector_fp_minmax ||
-                            is_vector_fp_int_cvt);
+                            is_vector_fp_int_cvt || is_vector_fp_widen_float_cvt);
     for (int i = 0; i < 4; i++) begin
       if (valid_i && advance_i &&
           (is_vector_fp_op || is_vector_fp_compare || is_vector_fp_minmax ||
-           is_vector_fp_int_cvt) &&
+           is_vector_fp_int_cvt || is_vector_fp_widen_float_cvt) &&
           (i < vl_q) &&
           (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i]) &&
           ((vsew_q == 3'b010) || (i < 2))) begin
-        if (is_vector_fp_int_cvt)
+        if (is_vector_fp_widen_float_cvt)
+          vector_fp_flags_o = vector_fp_flags_o | vector_fp_widen_float_flags[i];
+        else if (is_vector_fp_int_cvt)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_int_cvt_flags[i];
         else if (is_vector_fp_compare || is_vector_fp_minmax)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_compare_flags[i];
@@ -1513,6 +1569,19 @@ module moon_vector_unit (
                 vreg[vs2][i*64 +: 64], 1'b0)};
           end
         end
+      end else if (is_vector_fp_widen_op) begin
+        for (int i = 0; i < 4; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) &&
+              (instr_i[25] || vreg[0][i])) begin
+            if (i < 2) begin
+              vreg[vd][i*64 +: 64] <= is_vector_fp_widen_float_cvt ?
+                vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i];
+            end else begin
+              vreg[vd + 5'd1][(i-2)*64 +: 64] <= is_vector_fp_widen_float_cvt ?
+                vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i];
+            end
+          end
+        end
       end else if (is_vector_fp_int_cvt) begin
         for (int i = 0; i < 4; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) &&
@@ -1837,7 +1906,23 @@ module moon_vector_unit (
         end
       end
 
-      if (vtype_q[7:6] != 2'b00 && (is_vector_data_op || is_vector_mask_result_op)) begin
+      if (vtype_q[7:6] != 2'b00 && is_vector_fp_widen_op) begin
+        for (int i = 0; i < 4; i++) begin
+          if (i >= vector_vstart_i) begin
+            if ((i >= vl_q) && vtype_q[6]) begin
+              if (i < 2)
+                vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+              else
+                vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+            end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
+              if (i < 2)
+                vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+              else
+                vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+            end
+          end
+        end
+      end else if (vtype_q[7:6] != 2'b00 && (is_vector_data_op || is_vector_mask_result_op)) begin
         if (is_vector_mask_result_op) begin
           for (int i = 0; i < 16; i++) begin
             if ((i >= vector_vstart_i) &&
