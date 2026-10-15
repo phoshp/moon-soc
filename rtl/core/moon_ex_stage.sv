@@ -95,6 +95,7 @@ module moon_ex_stage
   input  logic [XLEN-1:0]  fwd_mem_data_i, // Data from MEM/WB stage
   input  logic             vector_mem_valid_i,
   input  logic [XLEN-1:0]  vector_mem_rdata_i,
+  input  logic [XLEN-1:0]  vector_vstart_i,
 
   // Redirection Outputs to IF Stage
   output logic             branch_taken_o,
@@ -108,6 +109,9 @@ module moon_ex_stage
   output logic [XLEN-1:0]  vector_mem_wdata_o,
   output logic [7:0]       vector_mem_wstrb_o,
   output logic             vector_mem_busy_o,
+  output logic [XLEN-1:0]  vector_vl_o,
+  output logic [XLEN-1:0]  vector_vtype_o,
+  output logic             vector_vstart_clear_o,
 
   // Outputs to MEM Stage (EX/MEM Pipeline Register)
   output logic             ex_mem_valid_o,
@@ -377,6 +381,10 @@ module moon_ex_stage
     .instr_i                (id_ex_instr_i),
     .scalar_rs1_i           (operand_a_fwd),
     .scalar_rs2_i           (operand_b_fwd),
+    .vector_vstart_i        (vector_vstart_i),
+    .vector_vstart_clear_o  (vector_vstart_clear_o),
+    .vector_vl_o            (vector_vl_o),
+    .vector_vtype_o         (vector_vtype_o),
     .scalar_result_valid_o  (vector_scalar_result_valid),
     .scalar_result_o        (vector_scalar_result),
     .mem_req_o              (vector_unit_mem_req),

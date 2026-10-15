@@ -14,6 +14,10 @@ module moon_vector_unit (
   input  logic [31:0] instr_i,
   input  logic [63:0] scalar_rs1_i,
   input  logic [63:0] scalar_rs2_i,
+  input  logic [63:0] vector_vstart_i,
+  output logic        vector_vstart_clear_o,
+  output logic [63:0] vector_vl_o,
+  output logic [63:0] vector_vtype_o,
   output logic        scalar_result_valid_o,
   output logic [63:0] scalar_result_o,
   output logic        mem_req_o,
@@ -30,6 +34,8 @@ module moon_vector_unit (
   logic [4:0]   vl;
   logic [4:0]   vlmax;
   logic [2:0]   vsew_q;
+  logic [63:0]  vtype_q;
+  logic         vtype_legal;
   logic         is_vsetvli;
   logic         is_vsetivli;
   logic         is_vset_config;
@@ -118,6 +124,11 @@ module moon_vector_unit (
       3'b010: vector_mem_element[31:0] = vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 32 +: 32];
       default: vector_mem_element = vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 64 +: 64];
     endcase
+  end
+  always_comb begin
+    vector_vstart_clear_o = valid_i && advance_i &&
+                            ((instr_i[6:0] == 7'b1010111) ||
+                             ((is_vle_v || is_vse_v) && vector_mem_done_q));
   end
   always_comb begin
     mem_req_o = vector_mem_active_q &&
@@ -383,11 +394,17 @@ module moon_vector_unit (
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
 
+  assign vector_vl_o = {59'd0, vl_q};
+  assign vector_vtype_o = vtype_q;
+
   always_comb begin
     vl = vl_q;
     vlmax = 5'd0;
+    vtype_legal = 1'b0;
     if (is_vset_config) begin
-      if ((instr_i[22:20] == 3'b000) && (instr_i[25:23] <= 3'b011)) begin
+      if ((instr_i[22:20] == 3'b000) && (instr_i[25:23] <= 3'b011) &&
+          (is_vsetivli ? (instr_i[29:28] == 2'b00) : (instr_i[30:28] == 3'b000))) begin
+        vtype_legal = 1'b1;
         vlmax = 5'd16 >> instr_i[25:23];
         if (is_vsetivli) begin
           if (instr_i[19:15] == 5'd0) vl = 5'd0;
@@ -429,6 +446,7 @@ module moon_vector_unit (
     if (!rst_ni) begin
       vl_q <= '0;
       vsew_q <= 3'b010;
+      vtype_q <= 64'h8000_0000_0000_0000;
       vector_mem_active_q <= 1'b0;
       vector_mem_done_q <= 1'b0;
       vector_mem_store_q <= 1'b0;
@@ -454,11 +472,11 @@ module moon_vector_unit (
         vector_mem_base_q <= scalar_rs1_i;
         vector_mem_stride_q <= scalar_rs2_i;
         vector_mem_index_reg_q <= instr_i[24:20];
-        vector_mem_count_q <= '0;
+        vector_mem_count_q <= vector_vstart_i[4:0];
         vector_mem_vl_q <= vl_q;
         vector_mem_sew_q <= vector_mem_eew;
         vector_mem_vd_q <= instr_i[11:7];
-        if (vl_q == 0) begin
+        if ((vl_q == 0) || (vector_vstart_i >= {59'd0, vl_q})) begin
           vector_mem_active_q <= 1'b0;
           vector_mem_done_q <= 1'b1;
         end
@@ -494,17 +512,22 @@ module moon_vector_unit (
       if (valid_i && advance_i) begin
       if (is_vset_config) begin
         vl_q <= vl;
-        if (vlmax != 0) vsew_q <= instr_i[25:23];
+        if (vtype_legal) begin
+          vsew_q <= instr_i[25:23];
+          vtype_q <= {1'b0, 55'd0, instr_i[27:20]};
+        end else begin
+          vtype_q <= 64'h8000_0000_0000_0000;
+        end
       end else if (is_vmv_v_x) begin
         case (vsew_q)
-          3'b000: for (int i = 0; i < 16; i++) if (i < vl_q) vreg[vd][i*8 +: 8] <= scalar_rs1_i[7:0];
-          3'b001: for (int i = 0; i < 8; i++) if (i < vl_q) vreg[vd][i*16 +: 16] <= scalar_rs1_i[15:0];
-          3'b010: for (int i = 0; i < 4; i++) if (i < vl_q) vreg[vd][i*32 +: 32] <= scalar_rs1_i[31:0];
-          default: for (int i = 0; i < 2; i++) if (i < vl_q) vreg[vd][i*64 +: 64] <= scalar_rs1_i;
+          3'b000: for (int i = 0; i < 16; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*8 +: 8] <= scalar_rs1_i[7:0];
+          3'b001: for (int i = 0; i < 8; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*16 +: 16] <= scalar_rs1_i[15:0];
+          3'b010: for (int i = 0; i < 4; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*32 +: 32] <= scalar_rs1_i[31:0];
+          default: for (int i = 0; i < 2; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*64 +: 64] <= scalar_rs1_i;
         endcase
       end else if (is_vmask_logic) begin
         for (int i = 0; i < 16; i++) begin
-          if (i < vl_q) begin
+          if ((i < vl_q) && (i >= vector_vstart_i)) begin
             case (instr_i[31:26])
               6'b011000: vreg[vd][i] <= vreg[vs2][i] & ~vreg[vs1][i];
               6'b011001: vreg[vd][i] <= vreg[vs2][i] & vreg[vs1][i];
@@ -519,7 +542,7 @@ module moon_vector_unit (
         end
       end else if (is_vadd_vv) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b0);
               3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b0);
@@ -530,7 +553,7 @@ module moon_vector_unit (
         end
       end else if (is_vadd_vx) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
@@ -545,7 +568,7 @@ module moon_vector_unit (
         end
       end else if (is_vsub_vv) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b1);
               3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b1);
@@ -556,7 +579,7 @@ module moon_vector_unit (
         end
       end else if (is_vsub_vx) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], scalar_rs1_i, vsew_q, 1'b1);
               3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], scalar_rs1_i, vsew_q, 1'b1);
@@ -567,7 +590,7 @@ module moon_vector_unit (
         end
       end else if (is_vlogic) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_logic(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
@@ -586,7 +609,7 @@ module moon_vector_unit (
         end
       end else if (is_vshift) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_shift(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
@@ -605,7 +628,7 @@ module moon_vector_unit (
         end
       end else if (is_vcompare) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i] <= vector_compare(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]);
@@ -620,7 +643,7 @@ module moon_vector_unit (
         end
       end else if (is_vminmax) begin
         for (int i = 0; i < 16; i++) begin
-          if ((i < vl_q) && (instr_i[25] || vreg[0][i])) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b000: vreg[vd][i*8 +: 8] <= vector_minmax(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]);

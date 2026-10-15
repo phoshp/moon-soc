@@ -61,7 +61,15 @@ module moon_csr
   // Floating-Point Unit Status
   input  logic [4:0]       fpu_flags_i,
   input  logic             fpu_flags_we_i,
-  output logic [2:0]       frm_o
+  output logic [2:0]       frm_o,
+
+  // Vector architectural state
+  input  logic [XLEN-1:0]  vector_vl_i,
+  input  logic [XLEN-1:0]  vector_vtype_i,
+  input  logic             vector_vstart_clear_i,
+  output logic [XLEN-1:0]  vector_vstart_o,
+  output logic             vector_vxsat_o,
+  output logic [1:0]       vector_vxrm_o
 );
 
   // --------------------------------------------------------------------------
@@ -137,11 +145,18 @@ module moon_csr
   logic [4:0]  fcsr_fflags;
   assign frm_o = fcsr_frm;
 
-  // MISA: 64-bit (MXL=2), Extensions: A, B, C, D, F, I, M, S, U
-  // bit 0=A, 1=B, 2=C, 3=D, 5=F, 8=I, 12=M, 18=S, 20=U
+  logic [XLEN-1:0] vstart_q;
+  logic            vxsat_q;
+  logic [1:0]      vxrm_q;
+  assign vector_vstart_o = vstart_q;
+  assign vector_vxsat_o = vxsat_q;
+  assign vector_vxrm_o = vxrm_q;
+
+  // MISA: 64-bit (MXL=2), Extensions: A, B, C, D, F, I, M, S, U, V
+  // bit 0=A, 1=B, 2=C, 3=D, 5=F, 8=I, 12=M, 18=S, 20=U, 21=V
   localparam logic [XLEN-1:0] MISA_VAL =
     (2'b10 << 62) | (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) |
-    (1 << 5) | (1 << 8) | (1 << 12) | (1 << 18) | (1 << 20);
+    (1 << 5) | (1 << 8) | (1 << 12) | (1 << 18) | (1 << 20) | (1 << 21);
 
   // Map hardware interrupt inputs
   assign mip_msip = software_irq_i;
@@ -260,6 +275,13 @@ module moon_csr
       CSR_FFLAGS:   csr_rdata_o = {59'b0, fcsr_fflags};
       CSR_FRM:      csr_rdata_o = {61'b0, fcsr_frm};
       CSR_FCSR:     csr_rdata_o = {56'b0, fcsr_frm, fcsr_fflags};
+      12'h008:      csr_rdata_o = vstart_q;
+      12'h009:      csr_rdata_o = {63'd0, vxsat_q};
+      12'h00A:      csr_rdata_o = {62'd0, vxrm_q};
+      12'h00F:      csr_rdata_o = {60'd0, vxsat_q, 1'b0, vxrm_q};
+      12'hC20:      csr_rdata_o = vector_vl_i;
+      12'hC21:      csr_rdata_o = vector_vtype_i;
+      12'hC22:      csr_rdata_o = 64'd16;
       default:      csr_rdata_o = '0;
     endcase
   end
@@ -323,6 +345,9 @@ module moon_csr
       minstret_q   <= '0;
       fcsr_frm     <= 3'b000;
       fcsr_fflags  <= 5'b00000;
+      vstart_q     <= '0;
+      vxsat_q      <= 1'b0;
+      vxrm_q       <= 2'b00;
     end else begin
       // Cycle and Instruction Counters
       mcycle_q <= mcycle_q + 1'b1;
@@ -473,9 +498,18 @@ module moon_csr
             fcsr_frm    <= next_csr_val[7:5];
             mstatus_fs  <= 2'b11;
           end
+          12'h008: vstart_q <= next_csr_val;
+          12'h009: vxsat_q <= next_csr_val[0];
+          12'h00A: vxrm_q <= next_csr_val[1:0];
+          12'h00F: begin
+            vxrm_q <= next_csr_val[1:0];
+            vxsat_q <= next_csr_val[3];
+          end
           default: ;
         endcase
       end
+
+      if (vector_vstart_clear_i) vstart_q <= '0;
     end
   end
 

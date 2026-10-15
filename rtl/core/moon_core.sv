@@ -199,6 +199,12 @@ module moon_core
   logic [XLEN-1:0]  vector_mem_wdata;
   logic [7:0]       vector_mem_wstrb;
   logic             vector_mem_busy;
+  logic [XLEN-1:0]  vector_vl;
+  logic [XLEN-1:0]  vector_vtype;
+  logic [XLEN-1:0]  vector_vstart;
+  logic             vector_vstart_clear;
+  logic             vector_vxsat;
+  logic [1:0]       vector_vxrm;
   logic             data_translation_req;
   logic             data_translation_we;
   logic [XLEN-1:0]  data_translation_vaddr;
@@ -560,6 +566,7 @@ module moon_core
     .fwd_mem_data_i       (wb_wdata),
     .vector_mem_valid_i   (dmem_valid_i && mmu_data_hit && !mmu_busy && !core_dmem_req),
     .vector_mem_rdata_i   (dmem_rdata_i),
+    .vector_vstart_i      (vector_vstart),
     .branch_taken_o       (branch_taken),
     .branch_target_o      (branch_target),
     .busy_div_o           (busy_div),
@@ -569,6 +576,9 @@ module moon_core
     .vector_mem_wdata_o   (vector_mem_wdata),
     .vector_mem_wstrb_o   (vector_mem_wstrb),
     .vector_mem_busy_o    (vector_mem_busy),
+    .vector_vl_o          (vector_vl),
+    .vector_vtype_o       (vector_vtype),
+    .vector_vstart_clear_o(vector_vstart_clear),
     .ex_mem_valid_o       (ex_mem_valid),
     .ex_mem_pc_o          (ex_mem_pc),
     .ex_mem_link_pc_o     (ex_mem_link_pc),
@@ -798,7 +808,13 @@ module moon_core
     .interrupt_cause_o   (interrupt_cause),
     .fpu_flags_i         (mem_wb_fp_flags),
     .fpu_flags_we_i      (mem_wb_fp_flags_we),
-    .frm_o               (frm)
+    .frm_o               (frm),
+    .vector_vl_i         (vector_vl),
+    .vector_vtype_i      (vector_vtype),
+    .vector_vstart_clear_i(vector_vstart_clear),
+    .vector_vstart_o     (vector_vstart),
+    .vector_vxsat_o      (vector_vxsat),
+    .vector_vxrm_o       (vector_vxrm)
   );
 
   // --------------------------------------------------------------------------
