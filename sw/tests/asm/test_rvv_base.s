@@ -17,6 +17,7 @@ _start:
     li   t1, 7
     bne  a2, t1, fail
 
+    vsetvli t0, zero, e32, m1, tu, mu
     li   a0, 42
     vmv.v.x v3, a0
     li   a0, 0

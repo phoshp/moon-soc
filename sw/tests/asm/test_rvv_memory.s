@@ -43,6 +43,7 @@ _start:
 
     # Masked load leaves masked-off destination elements unchanged.
     li   s1, 3
+    vsetvli t0, zero, e32, m1, tu, mu
     li   t0, 0x5a5a5a5a
     vmv.v.x v2, t0
     li   t0, 5
