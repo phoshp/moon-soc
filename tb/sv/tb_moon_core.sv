@@ -142,6 +142,7 @@ module tb_moon_core (
   int addr;
 
   initial begin
+    $dumpfile("waveform_core.vcd");
     test_passed     = 1'b0;
     test_failed     = 1'b0;
     test_error_code = 32'd0;

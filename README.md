@@ -11,7 +11,7 @@ Moon-SoC is a modular 64-bit RISC-V processor and SoC written in SystemVerilog. 
 
 Verification is implemented in Python using [cocotb](https://www.cocotb.org/) and [Verilator](https://www.veripool.org/verilator/), providing fast simulation alongside flexible test orchestration.
 
-The Phase 4 integer, privilege, and virtual-memory work is complete for the current project scope. Phase 5 is active; scalar F/D and crypto slices are implemented, and RVV support is being built incrementally. See the roadmap for status and remaining work.
+Still work in progress.
 
 ---
 
@@ -62,50 +62,6 @@ The Phase 4 integer, privilege, and virtual-memory work is complete for the curr
             ^               ^               |               |               |
             |               |               v               v               |
             +---------------+-------- Forwarding & Hazard Control ----------+
-```
-
----
-
-## Repository Structure
-
-```text
-moon-soc/
-├── rtl/
-│   └── core/                   # Synthesizable SystemVerilog core modules
-│       ├── moon_pkg.sv         # Global types, opcodes, CSR definitions, constants
-│       ├── moon_core.sv        # Top-level core module and inter-stage interconnect
-│       ├── moon_if_stage.sv    # Instruction Fetch stage and PC generation
-│       ├── moon_id_stage.sv    # Instruction Decode and immediate extraction
-│       ├── moon_regfile.sv     # 32 x 64-bit integer register file
-│       ├── moon_ex_stage.sv    # Execution stage multiplexers and branch logic
-│       ├── moon_alu.sv         # Integer ALU and scalar crypto operations
-│       ├── moon_fpu_*.sv       # Scalar F/D arithmetic, conversions, and fused operations
-│       ├── moon_vector_unit.sv # VLEN=128 RVV integer slice (in progress)
-│       ├── moon_mul.sv         # Hardware integer multiplier
-│       ├── moon_div.sv         # Multi-cycle radix-2 divider / remainder
-│       ├── moon_mem_stage.sv   # Memory stage, sign/zero extension, aligner
-│       ├── moon_amo.sv         # Atomic Memory Operation ALU
-│       ├── moon_wb_stage.sv    # Writeback selection and register file commit
-│       ├── moon_hazard_unit.sv # Hazard detection, forwarding, stalls, flushes
-│       └── moon_csr.sv         # Machine-mode CSRs, interrupts, and trap engine
-├── sw/
-│   ├── common/
-│   │   └── link_test.ld        # RISC-V linker script (ROM 0x1000, RAM 0x8000_0000)
-│   └── tests/
-│       └── asm/
-│           ├── test_rv64_all.s   # Self-checking directed test assembly suite
-│           └── test_rv64_all.hex # Assembled 32-bit little-endian simulation hex
-├── scripts/
-│   └── bin2hex.py              # Flat binary to 32-bit hex word converter
-├── tb/
-│   ├── sv/
-│   │   └── tb_moon_core.sv     # SystemVerilog testbench memory harness
-│   └── cocotb/
-│       ├── Makefile            # Standalone cocotb Makefile
-│       ├── run_test.py         # Python test runner and pytest entrypoint
-│       └── test_moon_core.py   # Cocotb asynchronous test routines
-├── Makefile                    # Root project Makefile
-└── CLAUDE.md                   # Developer guidance and architectural notes
 ```
 
 ---
@@ -163,31 +119,6 @@ All simulation commands can be run from the root directory:
    ```bash
    make clean
    ```
-
-### RVA23 Computational Extension Tests
-
-Run the directed firmware targets for the currently implemented Phase 5 slices:
-
-```bash
-make soc-fp-test
-make soc-crypto-test
-make soc-crypto-aes-test
-make soc-crypto-aes-rounds-test
-make soc-crypto-sha512-test
-make soc-rvv-test
-make soc-rvv-fp-convert-test
-make soc-rvv-fp-widen-convert-test
-```
-
-`make soc-rvv-test` covers the base directed integer regression. The floating-point conversion targets cover the implemented narrow and widening conversion slices. These tests do not establish full RVV 1.0 compliance. See [ROADMAP_RVA23_PLAN.md](ROADMAP_RVA23_PLAN.md) for current progress and remaining work. That roadmap is locally gitignored in this checkout.
-
----
-
-## Firmware Protocol
-
-In simulation, `tb/sv/tb_moon_core.sv` monitors writes to physical memory address `0x8000_1000`:
-- **`0xCAFE_BABE`**: Test passed successfully.
-- **`0xDEAD_00xx`**: Test failed with specific error code `xx`.
 
 ---
 
