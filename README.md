@@ -33,8 +33,9 @@ The Phase 4 integer, privilege, and virtual-memory work is complete for the curr
 - **RVA23 Computational Extensions (in progress)**:
   - Scalar F/D operations include arithmetic, division, square root, comparisons, conversions, and fused multiply-add.
   - Scalar AES64 and SHA-256/SHA-512 integer operations are available.
-  - The RVV unit currently implements a VLEN=128, LMUL=1 integer slice for e8/e16/e32/e64, including vector configuration, moves, arithmetic, bitwise and shift operations, comparisons, min/max, mask logic, and masked execution.
-  - RVV 1.0 is not complete: vector memory operations, vector floating point, reductions, full vector CSR state, and complete tail/mask policies remain future work.
+  - The RVV unit currently provides a VLEN=128, LMUL=1 slice with e8/e16/e32/e64 configuration, integer arithmetic and reductions, mask operations, and unit-stride, strided, and indexed memory operations.
+  - Selected vector floating-point operations are implemented, including arithmetic, fused operations, comparisons, classification, min/max, sign injection, and conversions. Widening conversions support e32 source elements and e64 destinations, including signed/unsigned integer conversions and float-to-float conversion.
+  - RVV 1.0 is not complete. Vector operation families, CSR and restart behavior, and tail/mask policy coverage remain partial; the implemented subset is not full RVV compliance.
 - **5-Stage Pipeline & Hazard Management**:
   - In-order pipeline stages: **IF** (Fetch), **ID** (Decode), **EX** (Execute), **MEM** (Memory), **WB** (Writeback).
   - Forwarding paths from EX/MEM and MEM/WB to execution operands.
@@ -174,9 +175,11 @@ make soc-crypto-aes-test
 make soc-crypto-aes-rounds-test
 make soc-crypto-sha512-test
 make soc-rvv-test
+make soc-rvv-fp-convert-test
+make soc-rvv-fp-widen-convert-test
 ```
 
-The RVV target covers the implemented integer slice only; a passing run does not establish full RVV 1.0 compliance. See [ROADMAP_RVA23_PLAN.md](ROADMAP_RVA23_PLAN.md) for current progress and remaining work. That roadmap is locally gitignored in this checkout.
+`make soc-rvv-test` covers the base directed integer regression. The floating-point conversion targets cover the implemented narrow and widening conversion slices. These tests do not establish full RVV 1.0 compliance. See [ROADMAP_RVA23_PLAN.md](ROADMAP_RVA23_PLAN.md) for current progress and remaining work. That roadmap is locally gitignored in this checkout.
 
 ---
 
