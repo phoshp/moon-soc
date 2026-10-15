@@ -67,6 +67,8 @@ module moon_csr
   input  logic [XLEN-1:0]  vector_vl_i,
   input  logic [XLEN-1:0]  vector_vtype_i,
   input  logic             vector_vstart_clear_i,
+  input  logic             vector_vstart_fault_i,
+  input  logic [XLEN-1:0]  vector_vstart_fault_value_i,
   output logic [XLEN-1:0]  vector_vstart_o,
   output logic             vector_vxsat_o,
   output logic [1:0]       vector_vxrm_o
@@ -509,7 +511,8 @@ module moon_csr
         endcase
       end
 
-      if (vector_vstart_clear_i) vstart_q <= '0;
+      if (vector_vstart_fault_i) vstart_q <= vector_vstart_fault_value_i;
+      else if (vector_vstart_clear_i) vstart_q <= '0;
     end
   end
 

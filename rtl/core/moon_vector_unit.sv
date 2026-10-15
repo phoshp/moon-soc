@@ -15,7 +15,9 @@ module moon_vector_unit (
   input  logic [63:0] scalar_rs1_i,
   input  logic [63:0] scalar_rs2_i,
   input  logic [63:0] vector_vstart_i,
+  input  logic        vector_mem_fault_i,
   output logic        vector_vstart_clear_o,
+  output logic [63:0] vector_mem_vstart_o,
   output logic [63:0] vector_vl_o,
   output logic [63:0] vector_vtype_o,
   output logic        scalar_result_valid_o,
@@ -396,6 +398,7 @@ module moon_vector_unit (
 
   assign vector_vl_o = {59'd0, vl_q};
   assign vector_vtype_o = vtype_q;
+  assign vector_mem_vstart_o = {59'd0, vector_mem_count_q};
 
   always_comb begin
     vl = vl_q;
@@ -461,7 +464,10 @@ module moon_vector_unit (
       vector_mem_vd_q <= '0;
       for (int i = 0; i < 32; i++) vreg[i] <= '0;
     end else begin
-      if (!valid_i || !(is_vle_v || is_vse_v)) begin
+      if (vector_mem_fault_i) begin
+        vector_mem_active_q <= 1'b0;
+        vector_mem_done_q <= 1'b0;
+      end else if (!valid_i || !(is_vle_v || is_vse_v)) begin
         vector_mem_active_q <= 1'b0;
         vector_mem_done_q <= 1'b0;
       end else if (!vector_mem_active_q && !vector_mem_done_q) begin

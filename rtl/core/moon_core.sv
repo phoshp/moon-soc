@@ -203,6 +203,8 @@ module moon_core
   logic [XLEN-1:0]  vector_vtype;
   logic [XLEN-1:0]  vector_vstart;
   logic             vector_vstart_clear;
+  logic             vector_mem_fault;
+  logic [XLEN-1:0]  vector_mem_vstart;
   logic             vector_vxsat;
   logic [1:0]       vector_vxrm;
   logic             data_translation_req;
@@ -247,6 +249,12 @@ module moon_core
       ex_fwd_val = ex_mem_alu_res;
     end
   end
+
+  assign vector_mem_fault = vector_mem_req && trap_enter && !is_interrupt &&
+                            ((trap_cause == CAUSE_PAGE_FAULT_LOAD) ||
+                             (trap_cause == CAUSE_PAGE_FAULT_STORE) ||
+                             (trap_cause == CAUSE_LOAD_ACCESS_FAULT) ||
+                             (trap_cause == CAUSE_STORE_ACCESS_FAULT));
   logic             mem_wb_is_jal;
   logic             mem_wb_is_jalr;
   logic             mem_wb_regwrite;
@@ -567,6 +575,7 @@ module moon_core
     .vector_mem_valid_i   (dmem_valid_i && mmu_data_hit && !mmu_busy && !core_dmem_req),
     .vector_mem_rdata_i   (dmem_rdata_i),
     .vector_vstart_i      (vector_vstart),
+    .vector_mem_fault_i   (vector_mem_fault),
     .branch_taken_o       (branch_taken),
     .branch_target_o      (branch_target),
     .busy_div_o           (busy_div),
@@ -579,6 +588,7 @@ module moon_core
     .vector_vl_o          (vector_vl),
     .vector_vtype_o       (vector_vtype),
     .vector_vstart_clear_o(vector_vstart_clear),
+    .vector_mem_vstart_o  (vector_mem_vstart),
     .ex_mem_valid_o       (ex_mem_valid),
     .ex_mem_pc_o          (ex_mem_pc),
     .ex_mem_link_pc_o     (ex_mem_link_pc),
@@ -812,6 +822,8 @@ module moon_core
     .vector_vl_i         (vector_vl),
     .vector_vtype_i      (vector_vtype),
     .vector_vstart_clear_i(vector_vstart_clear),
+    .vector_vstart_fault_i(vector_mem_fault),
+    .vector_vstart_fault_value_i(vector_mem_vstart),
     .vector_vstart_o     (vector_vstart),
     .vector_vxsat_o      (vector_vxsat),
     .vector_vxrm_o       (vector_vxrm)
