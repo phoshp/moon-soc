@@ -72,7 +72,8 @@ module moon_csr
   input  logic [XLEN-1:0]  vector_vstart_fault_value_i,
   output logic [XLEN-1:0]  vector_vstart_o,
   output logic             vector_vxsat_o,
-  output logic [1:0]       vector_vxrm_o
+  output logic [1:0]       vector_vxrm_o,
+  output logic             vector_state_enabled_o
 );
 
   // --------------------------------------------------------------------------
@@ -155,6 +156,7 @@ module moon_csr
   assign vector_vstart_o = vstart_q;
   assign vector_vxsat_o = vxsat_q;
   assign vector_vxrm_o = vxrm_q;
+  assign vector_state_enabled_o = (mstatus_vs != 2'b00);
 
   // MISA: 64-bit (MXL=2), Extensions: A, B, C, D, F, I, M, S, U, V
   // bit 0=A, 1=B, 2=C, 3=D, 5=F, 8=I, 12=M, 18=S, 20=U, 21=V

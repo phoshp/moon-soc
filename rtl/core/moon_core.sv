@@ -208,6 +208,8 @@ module moon_core
   logic [XLEN-1:0]  vector_mem_vstart;
   logic             vector_vxsat;
   logic [1:0]       vector_vxrm;
+  logic             vector_state_enabled;
+  logic             id_ex_uses_vector_state;
   logic             data_translation_req;
   logic             data_translation_we;
   logic [XLEN-1:0]  data_translation_vaddr;
@@ -315,6 +317,26 @@ module moon_core
   logic [XLEN-1:0] trap_pc;
 
   always_comb begin
+    id_ex_uses_vector_state = 1'b0;
+    if (id_ex_instr[6:0] == 7'b1010111) begin
+      id_ex_uses_vector_state = 1'b1;
+    end else if (((id_ex_instr[6:0] == 7'b0000111) ||
+                  (id_ex_instr[6:0] == 7'b0100111)) &&
+                 (id_ex_instr[14:12] != 3'b010)) begin
+      id_ex_uses_vector_state = 1'b1;
+    end else if ((id_ex_instr[6:0] == 7'b1110011) &&
+                 ((id_ex_instr[31:20] == 12'h008) ||
+                  (id_ex_instr[31:20] == 12'h009) ||
+                  (id_ex_instr[31:20] == 12'h00a) ||
+                  (id_ex_instr[31:20] == 12'h00f) ||
+                  (id_ex_instr[31:20] == 12'hc20) ||
+                  (id_ex_instr[31:20] == 12'hc21) ||
+                  (id_ex_instr[31:20] == 12'hc22))) begin
+      id_ex_uses_vector_state = 1'b1;
+    end
+  end
+
+  always_comb begin
     trap_enter   = 1'b0;
     is_interrupt = 1'b0;
     trap_cause   = '0;
@@ -343,6 +365,12 @@ module moon_core
         trap_pc = imem_addr_o;
       end
       trap_val     = trap_pc;
+    end else if (id_ex_valid && id_ex_uses_vector_state && !vector_state_enabled) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_ILLEGAL_INSTRUCTION;
+      trap_val     = {{(XLEN-ILEN){1'b0}}, id_ex_instr};
+      trap_pc      = id_ex_pc;
     end else if (ex_mem_valid && ex_mem_is_ecall) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -829,7 +857,8 @@ module moon_core
     .vector_vstart_fault_value_i(vector_mem_vstart),
     .vector_vstart_o     (vector_vstart),
     .vector_vxsat_o      (vector_vxsat),
-    .vector_vxrm_o       (vector_vxrm)
+    .vector_vxrm_o       (vector_vxrm),
+    .vector_state_enabled_o(vector_state_enabled)
   );
 
   // --------------------------------------------------------------------------
