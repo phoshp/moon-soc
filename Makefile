@@ -41,7 +41,7 @@ soc-pmp-test:
 soc-mmu-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_mmu_sv39.hex
 
-.PHONY: soc-crypto-test soc-crypto-aes-test soc-crypto-aes-rounds-test soc-crypto-sha512-test soc-rvv-test soc-rvv-memory-test soc-rvv-csr-test soc-rvv-vs-off-test soc-rvv-fault-test soc-rvv-fault-restart-test soc-rvv-store-fault-restart-test soc-rvv-policy-test soc-rvv-mask-test soc-rvv-mask-memory-test soc-rvv-index-width-test soc-rvv-reductions-test soc-rvv-permute-test soc-rvv-mul-test soc-rvv-mulh-test soc-rvv-divrem-test soc-rvv-saturating-test soc-rvv-compare-relations-test soc-rvv-widen-reductions-test soc-rvv-fp-add-test soc-rvv-fp-mul-test soc-rvv-fp-div-test soc-rvv-fp-sqrt-test soc-rvv-fp-mac-test soc-rvv-fp-mac-signs-test soc-rvv-fp-fma-dest-mult-test soc-rvv-fp-compare-test soc-rvv-fp-minmax-test soc-rvv-fp-signinj-test soc-rvv-fp-scalar-test
+.PHONY: soc-crypto-test soc-crypto-aes-test soc-crypto-aes-rounds-test soc-crypto-sha512-test soc-rvv-test soc-rvv-memory-test soc-rvv-csr-test soc-rvv-vs-off-test soc-rvv-fault-test soc-rvv-fault-restart-test soc-rvv-store-fault-restart-test soc-rvv-policy-test soc-rvv-mask-test soc-rvv-mask-memory-test soc-rvv-index-width-test soc-rvv-reductions-test soc-rvv-permute-test soc-rvv-mul-test soc-rvv-mulh-test soc-rvv-divrem-test soc-rvv-saturating-test soc-rvv-compare-relations-test soc-rvv-widen-reductions-test soc-rvv-fp-add-test soc-rvv-fp-mul-test soc-rvv-fp-div-test soc-rvv-fp-sqrt-test soc-rvv-fp-class-test soc-rvv-fp-mac-test soc-rvv-fp-mac-signs-test soc-rvv-fp-fma-dest-mult-test soc-rvv-fp-compare-test soc-rvv-fp-minmax-test soc-rvv-fp-signinj-test soc-rvv-fp-scalar-test
 soc-crypto-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_crypto_sha256.hex
 
@@ -122,6 +122,9 @@ soc-rvv-fp-div-test:
 
 soc-rvv-fp-sqrt-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_rvv_fp_sqrt.hex
+
+soc-rvv-fp-class-test:
+	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_rvv_fp_class.hex
 
 soc-rvv-fp-mac-test:
 	$(PYTHON) tb/cocotb/soc/run_soc_test.py $(PWD)/sw/tests/asm/test_rvv_fp_mac.hex
