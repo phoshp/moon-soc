@@ -68,6 +68,7 @@ module moon_vector_unit (
   logic         is_vector_fp_mul;
   logic         is_vector_fp_div;
   logic         is_vector_fp_sqrt;
+  logic         is_vector_fp_class;
   logic         is_vector_fp_mac;
   logic         is_vector_fp_fma_dest_mult;
   logic         is_vector_fp_compare;
@@ -140,6 +141,40 @@ module moon_vector_unit (
   logic [6:0]   vector_fp_mac_opcode;
   logic [63:0]  vector_fp_compare_result [0:3];
   logic [4:0]   vector_fp_compare_flags [0:3];
+
+  function automatic logic [9:0] classify_floating(
+    input logic [63:0] value,
+    input logic        single_precision
+  );
+    logic sign;
+    logic [10:0] exponent;
+    logic [51:0] fraction;
+    logic exponent_all_ones;
+    logic fraction_zero;
+    begin
+      sign = single_precision ? value[31] : value[63];
+      exponent = single_precision ? {3'b0, value[30:23]} : value[62:52];
+      fraction = single_precision ? {29'd0, value[22:0]} : value[51:0];
+      exponent_all_ones = single_precision ? (exponent == 11'h0ff) : (exponent == 11'h7ff);
+      fraction_zero = (fraction == 52'd0);
+      classify_floating = 10'd0;
+      if (exponent_all_ones) begin
+        if (fraction_zero)
+          classify_floating[sign ? 0 : 7] = 1'b1;
+        else if (single_precision ? fraction[22] : fraction[51])
+          classify_floating[9] = 1'b1;
+        else
+          classify_floating[8] = 1'b1;
+      end else if (exponent == 11'd0) begin
+        if (fraction_zero)
+          classify_floating[sign ? 3 : 4] = 1'b1;
+        else
+          classify_floating[sign ? 2 : 5] = 1'b1;
+      end else begin
+        classify_floating[sign ? 1 : 6] = 1'b1;
+      end
+    end
+  endfunction
 
   always_comb begin
     case (instr_i[14:12])
@@ -846,6 +881,11 @@ module moon_vector_unit (
                              (instr_i[19:15] == 5'b00000) &&
                              (instr_i[14:12] == 3'b001) &&
                              ((vsew_q == 3'b010) || (vsew_q == 3'b011));
+  assign is_vector_fp_class = (instr_i[6:0] == 7'b1010111) &&
+                              (instr_i[31:26] == 6'b010011) &&
+                              (instr_i[19:15] == 5'b10000) &&
+                              (instr_i[14:12] == 3'b001) &&
+                              ((vsew_q == 3'b010) || (vsew_q == 3'b011));
   assign is_vector_fp_mac = (instr_i[6:0] == 7'b1010111) &&
                             ((instr_i[31:26] == 6'b101000) ||
                              (instr_i[31:26] == 6'b101001) ||
@@ -895,7 +935,7 @@ module moon_vector_unit (
                              is_vmulh_vv || is_vmulh_vx || is_vmulhu_vv ||
                              is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx ||
                              is_vdivrem_vv || is_vdivrem_vx ||
-                             is_vector_sat || is_vector_fp_op || is_vector_fp_minmax ||
+                             is_vector_sat || is_vector_fp_op || is_vector_fp_class || is_vector_fp_minmax ||
                              is_vector_fp_signinj ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
                              is_vshift || is_vminmax || is_vector_permute;
@@ -1386,6 +1426,18 @@ module moon_vector_unit (
             if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
           end
         endcase
+      end else if (is_vector_fp_class) begin
+        for (int i = 0; i < 4; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) &&
+              (instr_i[25] || vreg[0][i])) begin
+            if (vsew_q == 3'b010)
+              vreg[vd][i*32 +: 32] <= {22'd0, classify_floating(
+                {32'd0, vreg[vs2][i*32 +: 32]}, 1'b1)};
+            else if ((vsew_q == 3'b011) && (i < 2))
+              vreg[vd][i*64 +: 64] <= {54'd0, classify_floating(
+                vreg[vs2][i*64 +: 64], 1'b0)};
+          end
+        end
       end else if (is_vector_fp_minmax) begin
         for (int i = 0; i < 4; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) &&
