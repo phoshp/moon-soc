@@ -95,6 +95,7 @@ module moon_vector_unit (
   logic         is_vector_reduction;
   logic         is_vector_widen_reduction;
   logic         is_vector_int_widen_arith;
+  logic         is_vector_int_widen_macc;
   logic         is_vslideup;
   logic         is_vslidedown;
   logic         is_vslide1up;
@@ -733,6 +734,64 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_widen_macc(
+    input logic [63:0] op_acc,
+    input logic [63:0] op_vs2,
+    input logic [63:0] op_vs1,
+    input logic [2:0]  sew,
+    input logic [5:0]  funct6,
+    input logic        is_vx
+  );
+    case (sew)
+      3'b000: begin
+        logic signed [15:0] vs2_s, vs1_s;
+        logic signed [15:0] vs2_u, vs1_u;
+        vs2_s = {{8{op_vs2[7]}}, op_vs2[7:0]};
+        vs1_s = {{8{op_vs1[7]}}, op_vs1[7:0]};
+        vs2_u = {8'd0, op_vs2[7:0]};
+        vs1_u = {8'd0, op_vs1[7:0]};
+        case (funct6)
+          6'b111100: vector_widen_macc = {48'd0, 16'(op_acc[15:0] + 16'(op_vs2[7:0] * op_vs1[7:0]))};
+          6'b111101: vector_widen_macc = {48'd0, 16'(op_acc[15:0] + 16'(vs2_s * vs1_s))};
+          6'b111110: vector_widen_macc = {48'd0, 16'(op_acc[15:0] + 16'(vs1_s * vs2_u))};
+          6'b111111: vector_widen_macc = {48'd0, 16'(op_acc[15:0] + 16'(vs2_s * vs1_u))};
+          default:   vector_widen_macc = 64'd0;
+        endcase
+      end
+      3'b001: begin
+        logic signed [31:0] vs2_s, vs1_s;
+        logic signed [31:0] vs2_u, vs1_u;
+        vs2_s = {{16{op_vs2[15]}}, op_vs2[15:0]};
+        vs1_s = {{16{op_vs1[15]}}, op_vs1[15:0]};
+        vs2_u = {16'd0, op_vs2[15:0]};
+        vs1_u = {16'd0, op_vs1[15:0]};
+        case (funct6)
+          6'b111100: vector_widen_macc = {32'd0, 32'(op_acc[31:0] + 32'(32'(op_vs2[15:0]) * 32'(op_vs1[15:0])))};
+          6'b111101: vector_widen_macc = {32'd0, 32'(op_acc[31:0] + 32'(vs2_s * vs1_s))};
+          6'b111110: vector_widen_macc = {32'd0, 32'(op_acc[31:0] + 32'(vs1_s * vs2_u))};
+          6'b111111: vector_widen_macc = {32'd0, 32'(op_acc[31:0] + 32'(vs2_s * vs1_u))};
+          default:   vector_widen_macc = 64'd0;
+        endcase
+      end
+      3'b010: begin
+        logic signed [63:0] vs2_s, vs1_s;
+        logic signed [63:0] vs2_u, vs1_u;
+        vs2_s = {{32{op_vs2[31]}}, op_vs2[31:0]};
+        vs1_s = {{32{op_vs1[31]}}, op_vs1[31:0]};
+        vs2_u = {32'd0, op_vs2[31:0]};
+        vs1_u = {32'd0, op_vs1[31:0]};
+        case (funct6)
+          6'b111100: vector_widen_macc = op_acc + (64'(op_vs2[31:0]) * 64'(op_vs1[31:0]));
+          6'b111101: vector_widen_macc = op_acc + 64'(vs2_s * vs1_s);
+          6'b111110: vector_widen_macc = op_acc + 64'(vs1_s * vs2_u);
+          6'b111111: vector_widen_macc = op_acc + 64'(vs2_s * vs1_u);
+          default:   vector_widen_macc = 64'd0;
+        endcase
+      end
+      default: vector_widen_macc = 64'd0;
+    endcase
+  endfunction
+
   function automatic logic vector_compare(
     input logic [63:0] operand_a,
     input logic [63:0] operand_b,
@@ -1060,6 +1119,17 @@ module moon_vector_unit (
                                       (instr_i[31:26] == 6'b111010) ||
                                       (instr_i[31:26] == 6'b111011)) &&
                                      (vsew_q != 3'b011);
+  assign is_vector_int_widen_macc = (instr_i[6:0] == 7'b1010111) &&
+                                    (((instr_i[14:12] == 3'b010) &&
+                                      ((instr_i[31:26] == 6'b111100) ||
+                                       (instr_i[31:26] == 6'b111101) ||
+                                       (instr_i[31:26] == 6'b111111))) ||
+                                     ((instr_i[14:12] == 3'b110) &&
+                                      ((instr_i[31:26] == 6'b111100) ||
+                                       (instr_i[31:26] == 6'b111101) ||
+                                       (instr_i[31:26] == 6'b111110) ||
+                                       (instr_i[31:26] == 6'b111111)))) &&
+                                    (vsew_q != 3'b011);
   assign is_vector_fp_addsub = (instr_i[6:0] == 7'b1010111) &&
                                ((instr_i[31:26] == 6'b000000) ||
                                 (instr_i[31:26] == 6'b000010)) &&
@@ -2139,6 +2209,74 @@ module moon_vector_unit (
             endcase
           end
         end
+      end else if (is_vector_int_widen_macc) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b000: begin
+                if (i < 8)
+                  vreg[vd][i*16 +: 16] <= vector_widen_macc(
+                    {48'd0, vreg[vd][i*16 +: 16]},
+                    {56'd0, vreg[vs2][i*8 +: 8]},
+                    (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
+                    vsew_q,
+                    instr_i[31:26],
+                    instr_i[14:12] == 3'b110
+                  );
+                else
+                  vreg[vd + 5'd1][(i-8)*16 +: 16] <= vector_widen_macc(
+                    {48'd0, vreg[vd + 5'd1][(i-8)*16 +: 16]},
+                    {56'd0, vreg[vs2][i*8 +: 8]},
+                    (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
+                    vsew_q,
+                    instr_i[31:26],
+                    instr_i[14:12] == 3'b110
+                  );
+              end
+              3'b001: if (i < 8) begin
+                if (i < 4)
+                  vreg[vd][i*32 +: 32] <= vector_widen_macc(
+                    {32'd0, vreg[vd][i*32 +: 32]},
+                    {48'd0, vreg[vs2][i*16 +: 16]},
+                    (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
+                    vsew_q,
+                    instr_i[31:26],
+                    instr_i[14:12] == 3'b110
+                  );
+                else
+                  vreg[vd + 5'd1][(i-4)*32 +: 32] <= vector_widen_macc(
+                    {32'd0, vreg[vd + 5'd1][(i-4)*32 +: 32]},
+                    {48'd0, vreg[vs2][i*16 +: 16]},
+                    (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
+                    vsew_q,
+                    instr_i[31:26],
+                    instr_i[14:12] == 3'b110
+                  );
+              end
+              3'b010: if (i < 4) begin
+                if (i < 2)
+                  vreg[vd][i*64 +: 64] <= vector_widen_macc(
+                    vreg[vd][i*64 +: 64],
+                    {32'd0, vreg[vs2][i*32 +: 32]},
+                    (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
+                    vsew_q,
+                    instr_i[31:26],
+                    instr_i[14:12] == 3'b110
+                  );
+                else
+                  vreg[vd + 5'd1][(i-2)*64 +: 64] <= vector_widen_macc(
+                    vreg[vd + 5'd1][(i-2)*64 +: 64],
+                    {32'd0, vreg[vs2][i*32 +: 32]},
+                    (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
+                    vsew_q,
+                    instr_i[31:26],
+                    instr_i[14:12] == 3'b110
+                  );
+              end
+              default: ;
+            endcase
+          end
+        end
       end else if (is_vector_fp_compare) begin
         for (int i = 0; i < 4; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) &&
@@ -2195,7 +2333,7 @@ module moon_vector_unit (
         end
       end
 
-      if (vtype_q[7:6] != 2'b00 && (is_vector_fp_widen_op || is_vector_int_widen_arith)) begin
+      if (vtype_q[7:6] != 2'b00 && (is_vector_fp_widen_op || is_vector_int_widen_arith || is_vector_int_widen_macc)) begin
         for (int i = 0; i < 16; i++) begin
           if (i >= vector_vstart_i) begin
             case (vsew_q)
