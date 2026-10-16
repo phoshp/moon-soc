@@ -88,6 +88,7 @@ module moon_vector_unit (
   logic         is_vsub_vx;
   logic         is_vlogic;
   logic         is_vshift;
+  logic         is_vector_narrow_shift;
   logic         is_vcompare;
   logic         is_vminmax;
   logic         is_vmask_logic;
@@ -634,6 +635,35 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_narrow_shift(
+    input logic [63:0] operand,
+    input logic [5:0]  amount,
+    input logic [2:0]  sew,
+    input logic        is_arithmetic
+  );
+    case (sew)
+      3'b000: begin
+        if (is_arithmetic)
+          vector_narrow_shift = {56'd0, 8'($signed(operand[15:0]) >>> amount[3:0])};
+        else
+          vector_narrow_shift = {56'd0, 8'(operand[15:0] >> amount[3:0])};
+      end
+      3'b001: begin
+        if (is_arithmetic)
+          vector_narrow_shift = {48'd0, 16'($signed(operand[31:0]) >>> amount[4:0])};
+        else
+          vector_narrow_shift = {48'd0, 16'(operand[31:0] >> amount[4:0])};
+      end
+      3'b010: begin
+        if (is_arithmetic)
+          vector_narrow_shift = {32'd0, 32'($signed(operand[63:0]) >>> amount[5:0])};
+        else
+          vector_narrow_shift = {32'd0, 32'(operand[63:0] >> amount[5:0])};
+      end
+      default: vector_narrow_shift = 64'd0;
+    endcase
+  endfunction
+
   function automatic logic vector_compare(
     input logic [63:0] operand_a,
     input logic [63:0] operand_b,
@@ -883,6 +913,13 @@ module moon_vector_unit (
                       (instr_i[31:26] == 6'b101001)) &&
                      ((instr_i[14:12] == 3'b000) || (instr_i[14:12] == 3'b100) ||
                       (instr_i[14:12] == 3'b011));
+  assign is_vector_narrow_shift = (instr_i[6:0] == 7'b1010111) &&
+                                  ((instr_i[31:26] == 6'b101100) ||
+                                   (instr_i[31:26] == 6'b101101)) &&
+                                  ((instr_i[14:12] == 3'b000) ||
+                                   (instr_i[14:12] == 3'b100) ||
+                                   (instr_i[14:12] == 3'b011)) &&
+                                  (vsew_q != 3'b011);
   assign is_vcompare = (instr_i[6:0] == 7'b1010111) &&
                        ((instr_i[31:26] == 6'b011000) ||
                         (instr_i[31:26] == 6'b011001) ||
@@ -1074,7 +1111,7 @@ module moon_vector_unit (
                              is_vector_fp_widen_op || is_vector_fp_narrow_op ||
                              is_vector_fp_signinj ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
-                             is_vshift || is_vminmax || is_vector_permute;
+                             is_vshift || is_vector_narrow_shift || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare || is_vector_fp_compare;
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
@@ -1931,6 +1968,35 @@ module moon_vector_unit (
               default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_shift(vreg[vs2][i*64 +: 64],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
                   ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*64 +: 6]), vsew_q, instr_i[31:26]);
+            endcase
+          end
+        end
+      end else if (is_vector_narrow_shift) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b000: vreg[vd][i*8 +: 8] <= vector_narrow_shift(
+                (i < 8) ? {48'd0, vreg[vs2][i*16 +: 16]} : {48'd0, vreg[vs2 + 5'd1][(i-8)*16 +: 16]},
+                (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : {2'b00, vreg[vs1][i*8 +: 4]}),
+                vsew_q,
+                (instr_i[31:26] == 6'b101101)
+              );
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_narrow_shift(
+                (i < 4) ? {32'd0, vreg[vs2][i*32 +: 32]} : {32'd0, vreg[vs2 + 5'd1][(i-4)*32 +: 32]},
+                (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : {1'b0, vreg[vs1][i*16 +: 5]}),
+                vsew_q,
+                (instr_i[31:26] == 6'b101101)
+              );
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_narrow_shift(
+                (i < 2) ? vreg[vs2][i*64 +: 64] : vreg[vs2 + 5'd1][(i-2)*64 +: 64],
+                (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
+                ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*32 +: 6]),
+                vsew_q,
+                (instr_i[31:26] == 6'b101101)
+              );
+              default: ;
             endcase
           end
         end
