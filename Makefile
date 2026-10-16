@@ -144,6 +144,9 @@ soc-rvv-widen-arith-test:
 soc-rvv-widen-macc-test:
 	$(PYTHON) tb/soc/run_soc_test.py $(PWD)/tb/tests/asm/rvv/test_rvv_widen_macc.hex
 
+soc-rvv-int-ext-test:
+	$(PYTHON) tb/soc/run_soc_test.py $(PWD)/tb/tests/asm/rvv/test_rvv_int_ext.hex
+
 soc-rvv-fp-mac-test:
 	$(PYTHON) tb/soc/run_soc_test.py $(PWD)/tb/tests/asm/rvv/test_rvv_fp_mac.hex
 
