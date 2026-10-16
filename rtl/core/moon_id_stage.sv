@@ -122,22 +122,7 @@ module moon_id_stage
   assign csr_addr = if_id_instr_i[31:20];
   wire is_fp_fma_opcode = (opcode == 7'b1000011) || (opcode == 7'b1000111) ||
                           (opcode == 7'b1001011) || (opcode == 7'b1001111);
-  wire is_vector_fp_scalar_op = (opcode == 7'b1010111) && (funct3 == 3'b101) &&
-                                ((if_id_instr_i[31:26] == 6'b000000) ||
-                                 (if_id_instr_i[31:26] == 6'b000010) ||
-                                 (if_id_instr_i[31:26] == 6'b000100) ||
-                                 (if_id_instr_i[31:26] == 6'b000110) ||
-                                 (if_id_instr_i[31:26] == 6'b001000) ||
-                                 (if_id_instr_i[31:26] == 6'b001001) ||
-                                 (if_id_instr_i[31:26] == 6'b001010) ||
-                                 (if_id_instr_i[31:26] == 6'b011000) ||
-                                 (if_id_instr_i[31:26] == 6'b011001) ||
-                                 (if_id_instr_i[31:26] == 6'b011011) ||
-                                 (if_id_instr_i[31:26] == 6'b011100) ||
-                                 (if_id_instr_i[31:26] == 6'b100000) ||
-                                 (if_id_instr_i[31:26] == 6'b100100) ||
-                                 ((if_id_instr_i[31:26] >= 6'b101000) &&
-                                  (if_id_instr_i[31:26] <= 6'b101111)));
+  wire is_vector_fp_scalar_op = (opcode == 7'b1010111) && (funct3 == 3'b101);
   wire is_vector_strided_store = (opcode == OPCODE_STORE_FP) &&
                                  (if_id_instr_i[27:26] == 2'b10);
 
