@@ -75,6 +75,7 @@ module moon_vector_unit (
   logic         is_vector_fp_widen_addsub;
   logic         is_vector_fp_widen_mul;
   logic         is_vector_fp_widen_arith;
+  logic         is_vector_fp_widen_mac;
   logic         is_vector_fp_widen_op;
   logic         is_vector_fp_narrow_cvt;
   logic         is_vector_fp_narrow_float_cvt;
@@ -1326,7 +1327,14 @@ module moon_vector_unit (
                                   (instr_i[31:26] == 6'b111000) &&
                                   (vsew_q == 3'b010);
   assign is_vector_fp_widen_arith = is_vector_fp_widen_addsub || is_vector_fp_widen_mul;
-  assign is_vector_fp_widen_op = is_vector_fp_widen_cvt || is_vector_fp_widen_float_cvt || is_vector_fp_widen_arith;
+  assign is_vector_fp_widen_mac = (instr_i[6:0] == 7'b1010111) &&
+                                  ((instr_i[14:12] == 3'b001) || is_vector_fp_scalar_form) &&
+                                  ((instr_i[31:26] == 6'b111100) ||
+                                   (instr_i[31:26] == 6'b111101) ||
+                                   (instr_i[31:26] == 6'b111110) ||
+                                   (instr_i[31:26] == 6'b111111)) &&
+                                  (vsew_q == 3'b010);
+  assign is_vector_fp_widen_op = is_vector_fp_widen_cvt || is_vector_fp_widen_float_cvt || is_vector_fp_widen_arith || is_vector_fp_widen_mac;
   assign is_vector_fp_narrow_cvt = (instr_i[6:0] == 7'b1010111) &&
                                    (instr_i[31:26] == 6'b010010) &&
                                    ((instr_i[19:15] == 5'd16) ||
@@ -1359,10 +1367,10 @@ module moon_vector_unit (
                                       !instr_i[28];
   always_comb begin
     case (instr_i[31:26])
-      6'b101010, 6'b101110: vector_fp_mac_opcode = 7'b1000111;
-      6'b101001, 6'b101111: vector_fp_mac_opcode = 7'b1001011;
-      6'b101011, 6'b101101: vector_fp_mac_opcode = 7'b1001111;
-      default:             vector_fp_mac_opcode = 7'b1000011;
+      6'b101010, 6'b101110, 6'b111110: vector_fp_mac_opcode = 7'b1000111;
+      6'b101001, 6'b101111, 6'b111111: vector_fp_mac_opcode = 7'b1001011;
+      6'b101011, 6'b101101, 6'b111101: vector_fp_mac_opcode = 7'b1001111;
+      default:                         vector_fp_mac_opcode = 7'b1000011;
     endcase
   end
   assign is_vector_fp_op = is_vector_fp_addsub || is_vector_fp_mul ||
@@ -1443,7 +1451,7 @@ module moon_vector_unit (
       .operand_a_i      (vector_fp_operand_a[fp_lane]),
       .operand_b_i      (vector_fp_operand_b[fp_lane]),
       .operand_c_i      (vector_fp_operand_c[fp_lane]),
-      .format_i         ((vsew_q == 3'b010) ? 2'b00 : 2'b01),
+      .format_i         (((vsew_q == 3'b010) && !is_vector_fp_widen_mac) ? 2'b00 : 2'b01),
       .opcode_i         (vector_fp_mac_opcode),
       .rounding_mode_i  (frm_i),
       .result_o         (vector_fp_mac_result[fp_lane]),
@@ -1514,7 +1522,19 @@ module moon_vector_unit (
       vector_fp_operand_a[i] = 64'd0;
       vector_fp_operand_b[i] = 64'd0;
       vector_fp_operand_c[i] = 64'd0;
-      if (is_vector_fp_widen_arith) begin
+      if (is_vector_fp_widen_mac) begin
+        if (is_vector_fp_scalar_form) begin
+          vector_fp_operand_a[i] = (scalar_rs1_i[63:32] != 32'hffff_ffff) ?
+                                   64'h7ff8_0000_0000_0000 : f32_to_f64(scalar_rs1_i[31:0]);
+        end else begin
+          vector_fp_operand_a[i] = f32_to_f64(vreg[vs1][i*32 +: 32]);
+        end
+        vector_fp_operand_b[i] = f32_to_f64(vreg[vs2][i*32 +: 32]);
+        if (i < 2)
+          vector_fp_operand_c[i] = vreg[vd][i*64 +: 64];
+        else
+          vector_fp_operand_c[i] = vreg[vd + 5'd1][(i-2)*64 +: 64];
+      end else if (is_vector_fp_widen_arith) begin
         if (instr_i[28]) begin
           if (i < 2)
             vector_fp_operand_a[i] = vreg[vs2][i*64 +: 64];
@@ -1562,16 +1582,20 @@ module moon_vector_unit (
     vector_fp_flags_we_o = valid_i && advance_i &&
                            (is_vector_fp_op || is_vector_fp_compare || is_vector_fp_minmax ||
                             is_vector_fp_int_cvt || is_vector_fp_widen_float_cvt ||
-                            is_vector_fp_narrow_float_cvt || is_vector_fp_widen_arith);
+                            is_vector_fp_narrow_float_cvt || is_vector_fp_widen_arith ||
+                            is_vector_fp_widen_mac);
     for (int i = 0; i < 4; i++) begin
       if (valid_i && advance_i &&
           (is_vector_fp_op || is_vector_fp_compare || is_vector_fp_minmax ||
            is_vector_fp_int_cvt || is_vector_fp_widen_float_cvt ||
-           is_vector_fp_narrow_float_cvt || is_vector_fp_widen_arith) &&
+           is_vector_fp_narrow_float_cvt || is_vector_fp_widen_arith ||
+           is_vector_fp_widen_mac) &&
           (i < vl_q) &&
           (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i]) &&
           ((vsew_q == 3'b010) || (i < 2))) begin
-        if (is_vector_fp_widen_arith)
+        if (is_vector_fp_widen_mac)
+          vector_fp_flags_o = vector_fp_flags_o | vector_fp_mac_flags[i];
+        else if (is_vector_fp_widen_arith)
           vector_fp_flags_o = vector_fp_flags_o | (is_vector_fp_widen_mul ? vector_fp_mul_flags[i] : vector_fp_lane_flags[i]);
         else if (is_vector_fp_widen_float_cvt)
           vector_fp_flags_o = vector_fp_flags_o | vector_fp_widen_float_flags[i];
@@ -1979,13 +2003,15 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (i < 2) begin
-              vreg[vd][i*64 +: 64] <= is_vector_fp_widen_arith ?
-                (is_vector_fp_widen_mul ? vector_fp_mul_result[i] : vector_fp_result[i]) :
-                (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i]);
+              vreg[vd][i*64 +: 64] <= is_vector_fp_widen_mac ? vector_fp_mac_result[i] :
+                (is_vector_fp_widen_arith ?
+                  (is_vector_fp_widen_mul ? vector_fp_mul_result[i] : vector_fp_result[i]) :
+                  (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i]));
             end else begin
-              vreg[vd + 5'd1][(i-2)*64 +: 64] <= is_vector_fp_widen_arith ?
-                (is_vector_fp_widen_mul ? vector_fp_mul_result[i] : vector_fp_result[i]) :
-                (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i]);
+              vreg[vd + 5'd1][(i-2)*64 +: 64] <= is_vector_fp_widen_mac ? vector_fp_mac_result[i] :
+                (is_vector_fp_widen_arith ?
+                  (is_vector_fp_widen_mul ? vector_fp_mul_result[i] : vector_fp_result[i]) :
+                  (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i]));
             end
           end
         end
