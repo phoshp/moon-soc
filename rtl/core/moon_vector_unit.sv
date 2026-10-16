@@ -96,6 +96,7 @@ module moon_vector_unit (
   logic         is_vector_widen_reduction;
   logic         is_vector_int_widen_arith;
   logic         is_vector_int_widen_macc;
+  logic         is_vector_int_ext;
   logic         is_vslideup;
   logic         is_vslidedown;
   logic         is_vslide1up;
@@ -792,6 +793,75 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_int_ext_source(
+    input logic [127:0] source,
+    input integer       index,
+    input logic [2:0]   sew,
+    input logic [4:0]   ext_type
+  );
+    case (ext_type[2:1])
+      2'b11: begin // vf2
+        case (sew)
+          3'b001: vector_int_ext_source = {56'd0, source[index*8 +: 8]};
+          3'b010: vector_int_ext_source = {48'd0, source[index*16 +: 16]};
+          default: vector_int_ext_source = {32'd0, source[index*32 +: 32]};
+        endcase
+      end
+      2'b10: begin // vf4
+        case (sew)
+          3'b010: vector_int_ext_source = {56'd0, source[index*8 +: 8]};
+          default: vector_int_ext_source = {48'd0, source[index*16 +: 16]};
+        endcase
+      end
+      default: begin // vf8
+        vector_int_ext_source = {56'd0, source[index*8 +: 8]};
+      end
+    endcase
+  endfunction
+
+  function automatic logic [63:0] vector_int_ext(
+    input logic [63:0] op_source,
+    input logic [2:0]  sew,
+    input logic [4:0]  ext_type
+  );
+    logic is_signed;
+    is_signed = ext_type[0];
+    case (sew)
+      3'b001: begin // e16 (vf2: source is e8)
+        vector_int_ext = is_signed ?
+          {48'd0, 16'($signed(op_source[7:0]))} :
+          {48'd0, 16'(op_source[7:0])};
+      end
+      3'b010: begin // e32
+        if (ext_type[2:1] == 2'b11) begin // vf2: source is e16
+          vector_int_ext = is_signed ?
+            {32'd0, 32'($signed(op_source[15:0]))} :
+            {32'd0, 32'(op_source[15:0])};
+        end else begin // vf4: source is e8
+          vector_int_ext = is_signed ?
+            {32'd0, 32'($signed(op_source[7:0]))} :
+            {32'd0, 32'(op_source[7:0])};
+        end
+      end
+      3'b011: begin // e64
+        if (ext_type[2:1] == 2'b11) begin // vf2: source is e32
+          vector_int_ext = is_signed ?
+            64'($signed(op_source[31:0])) :
+            64'(op_source[31:0]);
+        end else if (ext_type[2:1] == 2'b10) begin // vf4: source is e16
+          vector_int_ext = is_signed ?
+            64'($signed(op_source[15:0])) :
+            64'(op_source[15:0]);
+        end else begin // vf8: source is e8
+          vector_int_ext = is_signed ?
+            64'($signed(op_source[7:0])) :
+            64'(op_source[7:0]);
+        end
+      end
+      default: vector_int_ext = 64'd0;
+    endcase
+  endfunction
+
   function automatic logic vector_compare(
     input logic [63:0] operand_a,
     input logic [63:0] operand_b,
@@ -1130,6 +1200,12 @@ module moon_vector_unit (
                                        (instr_i[31:26] == 6'b111110) ||
                                        (instr_i[31:26] == 6'b111111)))) &&
                                     (vsew_q != 3'b011);
+  assign is_vector_int_ext = (instr_i[6:0] == 7'b1010111) &&
+                             (instr_i[31:26] == 6'b010010) &&
+                             (instr_i[14:12] == 3'b010) &&
+                             ((((instr_i[19:15] == 5'b00110) || (instr_i[19:15] == 5'b00111)) && (vsew_q != 3'b000)) ||
+                              (((instr_i[19:15] == 5'b00100) || (instr_i[19:15] == 5'b00101)) && ((vsew_q == 3'b010) || (vsew_q == 3'b011))) ||
+                              (((instr_i[19:15] == 5'b00010) || (instr_i[19:15] == 5'b00011)) && (vsew_q == 3'b011)));
   assign is_vector_fp_addsub = (instr_i[6:0] == 7'b1010111) &&
                                ((instr_i[31:26] == 6'b000000) ||
                                 (instr_i[31:26] == 6'b000010)) &&
@@ -1264,7 +1340,7 @@ module moon_vector_unit (
                              is_vector_fp_widen_op || is_vector_fp_narrow_op ||
                              is_vector_fp_signinj ||
                              is_vsub_vv || is_vsub_vx || is_vlogic ||
-                             is_vshift || is_vector_narrow_shift || is_vminmax || is_vector_permute;
+                             is_vshift || is_vector_narrow_shift || is_vector_int_ext || is_vminmax || is_vector_permute;
   assign is_vector_mask_result_op = is_vmask_logic || is_vcompare || is_vector_fp_compare;
   assign vd  = instr_i[11:7];
   assign vs1 = instr_i[19:15];
@@ -2273,6 +2349,32 @@ module moon_vector_unit (
                     instr_i[14:12] == 3'b110
                   );
               end
+              default: ;
+            endcase
+          end
+        end
+      end else if (is_vector_int_ext) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b001: if (i < 8)
+                vreg[vd][i*16 +: 16] <= vector_int_ext(
+                  vector_int_ext_source(vreg[vs2], i, vsew_q, instr_i[19:15]),
+                  vsew_q,
+                  instr_i[19:15]
+                );
+              3'b010: if (i < 4)
+                vreg[vd][i*32 +: 32] <= vector_int_ext(
+                  vector_int_ext_source(vreg[vs2], i, vsew_q, instr_i[19:15]),
+                  vsew_q,
+                  instr_i[19:15]
+                );
+              3'b011: if (i < 2)
+                vreg[vd][i*64 +: 64] <= vector_int_ext(
+                  vector_int_ext_source(vreg[vs2], i, vsew_q, instr_i[19:15]),
+                  vsew_q,
+                  instr_i[19:15]
+                );
               default: ;
             endcase
           end
