@@ -124,9 +124,12 @@ module moon_fpu_cvt
         3'b010: round_up = sign && discarded;
         3'b011: round_up = !sign && discarded;
         3'b100: round_up = extended_sig[2];
+        3'b101: round_up = 1'b0; // Round-to-odd (jamming)
         default: round_up = 1'b0;
       endcase
       rounded_sig = extended_sig[26:3] + round_up;
+      if (rounding_mode_i == 3'b101 && discarded && !extended_sig[3])
+        rounded_sig[0] = 1'b1;
       if (rounded_sig[24]) begin
         rounded_sig = rounded_sig >> 1;
         target_exponent = target_exponent + 1;
@@ -135,6 +138,7 @@ module moon_fpu_cvt
         flags_o[2] = 1'b1;
         flags_o[0] = 1'b1;
         if ((rounding_mode_i == 3'b001) ||
+            (rounding_mode_i == 3'b101) ||
             ((rounding_mode_i == 3'b010) && !sign) ||
             ((rounding_mode_i == 3'b011) && sign))
           result_o = {32'hffff_ffff, sign, 8'hfe, 23'h7fffff};
