@@ -141,6 +141,9 @@ soc-rvv-narrow-shift-test:
 soc-rvv-widen-arith-test:
 	$(PYTHON) tb/soc/run_soc_test.py $(PWD)/tb/tests/asm/rvv/test_rvv_widen_arith.hex
 
+soc-rvv-widen-macc-test:
+	$(PYTHON) tb/soc/run_soc_test.py $(PWD)/tb/tests/asm/rvv/test_rvv_widen_macc.hex
+
 soc-rvv-fp-mac-test:
 	$(PYTHON) tb/soc/run_soc_test.py $(PWD)/tb/tests/asm/rvv/test_rvv_fp_mac.hex
 
