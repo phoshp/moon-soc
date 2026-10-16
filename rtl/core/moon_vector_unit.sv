@@ -94,6 +94,7 @@ module moon_vector_unit (
   logic         is_vmask_logic;
   logic         is_vector_reduction;
   logic         is_vector_widen_reduction;
+  logic         is_vector_int_widen_arith;
   logic         is_vslideup;
   logic         is_vslidedown;
   logic         is_vslide1up;
@@ -664,6 +665,74 @@ module moon_vector_unit (
     endcase
   endfunction
 
+  function automatic logic [63:0] vector_widen_arith(
+    input logic [63:0] op_a,
+    input logic [63:0] op_b,
+    input logic [2:0]  sew,
+    input logic [5:0]  funct6
+  );
+    case (sew)
+      3'b000: begin
+        logic [15:0] a_u, b_u;
+        logic signed [15:0] a_s, b_s;
+        a_u = funct6[2] ? op_a[15:0] : {8'd0, op_a[7:0]};
+        a_s = funct6[2] ? $signed(op_a[15:0]) : {{8{op_a[7]}}, op_a[7:0]};
+        b_u = {8'd0, op_b[7:0]};
+        b_s = {{8{op_b[7]}}, op_b[7:0]};
+
+        case (funct6)
+          6'b110000, 6'b110100: vector_widen_arith = {48'd0, 16'(a_u + b_u)};
+          6'b110001, 6'b110101: vector_widen_arith = {48'd0, 16'($signed(a_s) + $signed(b_s))};
+          6'b110010, 6'b110110: vector_widen_arith = {48'd0, 16'(a_u - b_u)};
+          6'b110011, 6'b110111: vector_widen_arith = {48'd0, 16'($signed(a_s) - $signed(b_s))};
+          6'b111000:            vector_widen_arith = {48'd0, 16'(op_a[7:0] * op_b[7:0])};
+          6'b111010:            vector_widen_arith = {48'd0, 16'($signed(a_s) * $signed({1'b0, op_b[7:0]}))};
+          6'b111011:            vector_widen_arith = {48'd0, 16'($signed(op_a[7:0]) * $signed(op_b[7:0]))};
+          default:              vector_widen_arith = 64'd0;
+        endcase
+      end
+      3'b001: begin
+        logic [31:0] a_u, b_u;
+        logic signed [31:0] a_s, b_s;
+        a_u = funct6[2] ? op_a[31:0] : {16'd0, op_a[15:0]};
+        a_s = funct6[2] ? $signed(op_a[31:0]) : {{16{op_a[15]}}, op_a[15:0]};
+        b_u = {16'd0, op_b[15:0]};
+        b_s = {{16{op_b[15]}}, op_b[15:0]};
+
+        case (funct6)
+          6'b110000, 6'b110100: vector_widen_arith = {32'd0, 32'(a_u + b_u)};
+          6'b110001, 6'b110101: vector_widen_arith = {32'd0, 32'($signed(a_s) + $signed(b_s))};
+          6'b110010, 6'b110110: vector_widen_arith = {32'd0, 32'(a_u - b_u)};
+          6'b110011, 6'b110111: vector_widen_arith = {32'd0, 32'($signed(a_s) - $signed(b_s))};
+          6'b111000:            vector_widen_arith = {32'd0, 32'(32'(op_a[15:0]) * 32'(op_b[15:0]))};
+          6'b111010:            vector_widen_arith = {32'd0, 32'($signed(a_s) * $signed({1'b0, op_b[15:0]}))};
+          6'b111011:            vector_widen_arith = {32'd0, 32'($signed(32'($signed(op_a[15:0]))) * $signed(32'($signed(op_b[15:0]))))};
+          default:              vector_widen_arith = 64'd0;
+        endcase
+      end
+      3'b010: begin
+        logic [63:0] a_u, b_u;
+        logic signed [63:0] a_s, b_s;
+        a_u = funct6[2] ? op_a : {32'd0, op_a[31:0]};
+        a_s = funct6[2] ? $signed(op_a) : {{32{op_a[31]}}, op_a[31:0]};
+        b_u = {32'd0, op_b[31:0]};
+        b_s = {{32{op_b[31]}}, op_b[31:0]};
+
+        case (funct6)
+          6'b110000, 6'b110100: vector_widen_arith = a_u + b_u;
+          6'b110001, 6'b110101: vector_widen_arith = 64'($signed(a_s) + $signed(b_s));
+          6'b110010, 6'b110110: vector_widen_arith = a_u - b_u;
+          6'b110011, 6'b110111: vector_widen_arith = 64'($signed(a_s) - $signed(b_s));
+          6'b111000:            vector_widen_arith = 64'(op_a[31:0]) * 64'(op_b[31:0]);
+          6'b111010:            vector_widen_arith = 64'($signed(a_s) * $signed({1'b0, op_b[31:0]}));
+          6'b111011:            vector_widen_arith = 64'($signed(64'($signed(op_a[31:0]))) * $signed(64'($signed(op_b[31:0]))));
+          default:              vector_widen_arith = 64'd0;
+        endcase
+      end
+      default: vector_widen_arith = 64'd0;
+    endcase
+  endfunction
+
   function automatic logic vector_compare(
     input logic [63:0] operand_a,
     input logic [63:0] operand_b,
@@ -977,6 +1046,20 @@ module moon_vector_unit (
                                      (instr_i[14:12] == 3'b000) &&
                                      ((instr_i[31:26] == 6'b110000) ||
                                       (instr_i[31:26] == 6'b110001));
+  assign is_vector_int_widen_arith = (instr_i[6:0] == 7'b1010111) &&
+                                     ((instr_i[14:12] == 3'b010) || (instr_i[14:12] == 3'b110)) &&
+                                     ((instr_i[31:26] == 6'b110000) ||
+                                      (instr_i[31:26] == 6'b110001) ||
+                                      (instr_i[31:26] == 6'b110010) ||
+                                      (instr_i[31:26] == 6'b110011) ||
+                                      (instr_i[31:26] == 6'b110100) ||
+                                      (instr_i[31:26] == 6'b110101) ||
+                                      (instr_i[31:26] == 6'b110110) ||
+                                      (instr_i[31:26] == 6'b110111) ||
+                                      (instr_i[31:26] == 6'b111000) ||
+                                      (instr_i[31:26] == 6'b111010) ||
+                                      (instr_i[31:26] == 6'b111011)) &&
+                                     (vsew_q != 3'b011);
   assign is_vector_fp_addsub = (instr_i[6:0] == 7'b1010111) &&
                                ((instr_i[31:26] == 6'b000000) ||
                                 (instr_i[31:26] == 6'b000010)) &&
@@ -2000,6 +2083,62 @@ module moon_vector_unit (
             endcase
           end
         end
+      end else if (is_vector_int_widen_arith) begin
+        for (int i = 0; i < 16; i++) begin
+          if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
+            case (vsew_q)
+              3'b000: begin
+                if (i < 8)
+                  vreg[vd][i*16 +: 16] <= vector_widen_arith(
+                    (instr_i[28]) ? {48'd0, vreg[vs2][i*16 +: 16]} : {56'd0, vreg[vs2][i*8 +: 8]},
+                    (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
+                    vsew_q,
+                    instr_i[31:26]
+                  );
+                else
+                  vreg[vd + 5'd1][(i-8)*16 +: 16] <= vector_widen_arith(
+                    (instr_i[28]) ? {48'd0, vreg[vs2 + 5'd1][(i-8)*16 +: 16]} : {56'd0, vreg[vs2][i*8 +: 8]},
+                    (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
+                    vsew_q,
+                    instr_i[31:26]
+                  );
+              end
+              3'b001: if (i < 8) begin
+                if (i < 4)
+                  vreg[vd][i*32 +: 32] <= vector_widen_arith(
+                    (instr_i[28]) ? {32'd0, vreg[vs2][i*32 +: 32]} : {48'd0, vreg[vs2][i*16 +: 16]},
+                    (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
+                    vsew_q,
+                    instr_i[31:26]
+                  );
+                else
+                  vreg[vd + 5'd1][(i-4)*32 +: 32] <= vector_widen_arith(
+                    (instr_i[28]) ? {32'd0, vreg[vs2 + 5'd1][(i-4)*32 +: 32]} : {48'd0, vreg[vs2][i*16 +: 16]},
+                    (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
+                    vsew_q,
+                    instr_i[31:26]
+                  );
+              end
+              3'b010: if (i < 4) begin
+                if (i < 2)
+                  vreg[vd][i*64 +: 64] <= vector_widen_arith(
+                    (instr_i[28]) ? vreg[vs2][i*64 +: 64] : {32'd0, vreg[vs2][i*32 +: 32]},
+                    (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
+                    vsew_q,
+                    instr_i[31:26]
+                  );
+                else
+                  vreg[vd + 5'd1][(i-2)*64 +: 64] <= vector_widen_arith(
+                    (instr_i[28]) ? vreg[vs2 + 5'd1][(i-2)*64 +: 64] : {32'd0, vreg[vs2][i*32 +: 32]},
+                    (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
+                    vsew_q,
+                    instr_i[31:26]
+                  );
+              end
+              default: ;
+            endcase
+          end
+        end
       end else if (is_vector_fp_compare) begin
         for (int i = 0; i < 4; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) &&
@@ -2056,20 +2195,39 @@ module moon_vector_unit (
         end
       end
 
-      if (vtype_q[7:6] != 2'b00 && is_vector_fp_widen_op) begin
-        for (int i = 0; i < 4; i++) begin
+      if (vtype_q[7:6] != 2'b00 && (is_vector_fp_widen_op || is_vector_int_widen_arith)) begin
+        for (int i = 0; i < 16; i++) begin
           if (i >= vector_vstart_i) begin
-            if ((i >= vl_q) && vtype_q[6]) begin
-              if (i < 2)
-                vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-              else
-                vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-            end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
-              if (i < 2)
-                vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-              else
-                vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-            end
+            case (vsew_q)
+              3'b000: begin
+                if ((i >= vl_q) && vtype_q[6]) begin
+                  if (i < 8) vreg[vd][i*16 +: 16] <= 16'hffff;
+                  else       vreg[vd + 5'd1][(i-8)*16 +: 16] <= 16'hffff;
+                end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
+                  if (i < 8) vreg[vd][i*16 +: 16] <= 16'hffff;
+                  else       vreg[vd + 5'd1][(i-8)*16 +: 16] <= 16'hffff;
+                end
+              end
+              3'b001: if (i < 8) begin
+                if ((i >= vl_q) && vtype_q[6]) begin
+                  if (i < 4) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+                  else       vreg[vd + 5'd1][(i-4)*32 +: 32] <= 32'hffff_ffff;
+                end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
+                  if (i < 4) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+                  else       vreg[vd + 5'd1][(i-4)*32 +: 32] <= 32'hffff_ffff;
+                end
+              end
+              3'b010: if (i < 4) begin
+                if ((i >= vl_q) && vtype_q[6]) begin
+                  if (i < 2) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                  else       vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
+                  if (i < 2) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                  else       vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                end
+              end
+              default: ;
+            endcase
           end
         end
       end else if (vtype_q[7:6] != 2'b00 && (is_vector_data_op || is_vector_mask_result_op)) begin
