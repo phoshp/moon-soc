@@ -96,7 +96,7 @@ module moon_icache
       state_q     <= state_d;
       miss_addr_q <= miss_addr_d;
       beat_cnt_q  <= beat_cnt_d;
-      refill_line_q <= refill_line_d;
+      for (int i = 0; i < 16; i++) refill_line_q[i] <= refill_line_d[i];
 
       // FENCE.I: Invalidate entire cache
       if (fence_i_i) begin
@@ -122,7 +122,7 @@ module moon_icache
     state_d       = state_q;
     miss_addr_d   = miss_addr_q;
     beat_cnt_d    = beat_cnt_q;
-    refill_line_d = refill_line_q;
+    for (int i = 0; i < 16; i++) refill_line_d[i] = refill_line_q[i];
 
     m_ar_o        = '0;
     m_r_ready_o   = 1'b0;

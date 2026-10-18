@@ -220,8 +220,10 @@ module moon_soc_top
     .m1_b_ready_o  (core_b_ready[1])
   );
 
-  assign core_aw[0] = '0;
-  assign core_w[0]  = '0;
+  always_comb begin
+    core_aw[0] = '0;
+    core_w[0]  = '0;
+  end
 
   // --------------------------------------------------------------------------
   // 3. AXI4 System Crossbar

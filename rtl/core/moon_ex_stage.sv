@@ -336,22 +336,22 @@ module moon_ex_stage
       .flags_o         (fp_int_cvt_flags)
     );
   end else begin : gen_no_scalar_fpu
-    assign fp_add_result = '0;
-    assign fp_add_flags = '0;
-    assign fp_mul_result = '0;
-    assign fp_mul_flags = '0;
-    assign fp_cmp_result = '0;
-    assign fp_cmp_flags = '0;
-    assign fp_div_result = '0;
-    assign fp_div_flags = '0;
-    assign fp_sqrt_result = '0;
-    assign fp_sqrt_flags = '0;
-    assign fp_fma_result = '0;
-    assign fp_fma_flags = '0;
-    assign fp_cvt_result = '0;
-    assign fp_cvt_flags = '0;
-    assign fp_int_cvt_result = '0;
-    assign fp_int_cvt_flags = '0;
+    assign fp_add_result = 64'd0;
+    assign fp_add_flags = 5'd0;
+    assign fp_mul_result = 64'd0;
+    assign fp_mul_flags = 5'd0;
+    assign fp_cmp_result = 64'd0;
+    assign fp_cmp_flags = 5'd0;
+    assign fp_div_result = 64'd0;
+    assign fp_div_flags = 5'd0;
+    assign fp_sqrt_result = 64'd0;
+    assign fp_sqrt_flags = 5'd0;
+    assign fp_fma_result = 64'd0;
+    assign fp_fma_flags = 5'd0;
+    assign fp_cvt_result = 64'd0;
+    assign fp_cvt_flags = 5'd0;
+    assign fp_int_cvt_result = 64'd0;
+    assign fp_int_cvt_flags = 5'd0;
   end
 
   assign fp_fma_instruction = (id_ex_instr_i[6:0] == 7'b1000011) ||

@@ -1539,24 +1539,26 @@ module moon_vector_unit #(
     );
   end
   end else begin : gen_no_vector_fp
-    assign vector_fp_result = '0;
-    assign vector_fp_mul_result = '0;
-    assign vector_fp_div_result = '0;
-    assign vector_fp_sqrt_result = '0;
-    assign vector_fp_mac_result = '0;
-    assign vector_fp_compare_result = '0;
-    assign vector_fp_int_cvt_result = '0;
-    assign vector_fp_widen_float_result = '0;
-    assign vector_fp_narrow_float_result = '0;
-    assign vector_fp_lane_flags = '0;
-    assign vector_fp_mul_flags = '0;
-    assign vector_fp_div_flags = '0;
-    assign vector_fp_sqrt_flags = '0;
-    assign vector_fp_mac_flags = '0;
-    assign vector_fp_compare_flags = '0;
-    assign vector_fp_int_cvt_flags = '0;
-    assign vector_fp_widen_float_flags = '0;
-    assign vector_fp_narrow_float_flags = '0;
+    for (genvar lane = 0; lane < 4; lane++) begin : gen_tie_zero
+      assign vector_fp_result[lane] = 64'd0;
+      assign vector_fp_mul_result[lane] = 64'd0;
+      assign vector_fp_div_result[lane] = 64'd0;
+      assign vector_fp_sqrt_result[lane] = 64'd0;
+      assign vector_fp_mac_result[lane] = 64'd0;
+      assign vector_fp_compare_result[lane] = 64'd0;
+      assign vector_fp_int_cvt_result[lane] = 64'd0;
+      assign vector_fp_widen_float_result[lane] = 64'd0;
+      assign vector_fp_narrow_float_result[lane] = 64'd0;
+      assign vector_fp_lane_flags[lane] = 5'd0;
+      assign vector_fp_mul_flags[lane] = 5'd0;
+      assign vector_fp_div_flags[lane] = 5'd0;
+      assign vector_fp_sqrt_flags[lane] = 5'd0;
+      assign vector_fp_mac_flags[lane] = 5'd0;
+      assign vector_fp_compare_flags[lane] = 5'd0;
+      assign vector_fp_int_cvt_flags[lane] = 5'd0;
+      assign vector_fp_widen_float_flags[lane] = 5'd0;
+      assign vector_fp_narrow_float_flags[lane] = 5'd0;
+    end
   end
 
   always_comb begin : prepare_vector_narrow_operands

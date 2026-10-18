@@ -147,7 +147,7 @@ module moon_dcache
       io_rdata_q   <= io_rdata_d;
       aw_done_q    <= aw_done_d;
       w_done_q     <= w_done_d;
-      refill_line_q<= refill_line_d;
+      for (int i = 0; i < 8; i++) refill_line_q[i] <= refill_line_d[i];
 
       // Handle in-place write hits
       if (state_q == ST_IDLE && req_i && !is_uncached_io && hit_any && we_i) begin
@@ -210,7 +210,7 @@ module moon_dcache
     io_rdata_d    = io_rdata_q;
     aw_done_d     = aw_done_q;
     w_done_d      = w_done_q;
-    refill_line_d = refill_line_q;
+    for (int i = 0; i < 8; i++) refill_line_d[i] = refill_line_q[i];
 
     m_ar_o      = '0;
     m_r_ready_o = 1'b0;

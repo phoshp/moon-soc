@@ -142,8 +142,10 @@ module moon_csr
   // Physical Memory Protection Registers
   logic [7:0]      pmpcfg_q [0:15];
   logic [XLEN-1:0] pmpaddr_q [0:15];
-  assign pmpcfg_o  = pmpcfg_q;
-  assign pmpaddr_o = pmpaddr_q;
+  for (genvar pmp_i = 0; pmp_i < 16; pmp_i++) begin : gen_pmp_out
+    assign pmpcfg_o[pmp_i]  = pmpcfg_q[pmp_i];
+    assign pmpaddr_o[pmp_i] = pmpaddr_q[pmp_i];
+  end
 
   // fcsr: [7:5]=frm, [4:0]=fflags
   logic [2:0]  fcsr_frm;
