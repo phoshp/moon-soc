@@ -1,4 +1,5 @@
 import os
+import inspect
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles
@@ -7,7 +8,8 @@ from cocotb.triggers import RisingEdge, ClockCycles
 async def run_cpu_test(dut):
     """Run Moon-SoC RV64 core test with cocotb."""
     # Clock generator: 10ns period (100 MHz)
-    cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
+    clock_kw = "unit" if "unit" in inspect.signature(Clock).parameters else "units"
+    cocotb.start_soon(Clock(dut.clk, 10, **{clock_kw: "ns"}).start())
 
     # Apply reset
     dut.rst_n.value = 0
