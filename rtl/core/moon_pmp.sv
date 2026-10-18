@@ -43,7 +43,6 @@ module moon_pmp
     logic [XLEN-1:0] base_paddr;
     logic [XLEN-1:0] top_paddr;
     logic [XLEN-1:0] mask;
-    int trail_ones;
 
     case (mode)
       2'b00: return 1'b0; // OFF
@@ -59,12 +58,12 @@ module moon_pmp
       end
 
       2'b11: begin // NAPOT
-        trail_ones = 0;
-        for (int b = 0; b < XLEN; b++) begin
-          if (curr_pmpaddr[b]) trail_ones = trail_ones + 1;
-          else break;
-        end
-        mask = ~((64'd1 << (trail_ones + 1)) - 64'd1);
+        // Naturally aligned power-of-two mask computation:
+        // Trailing ones followed by a zero in curr_pmpaddr encode the size (2^(k+3) bytes).
+        // curr_pmpaddr ^ (curr_pmpaddr + 1'b1) yields ones from bit 0 up to the first zero bit k.
+        // Inverting this gives a mask with 0s for bits 0..k and 1s for bits k+1..XLEN-1.
+        // This eliminates the 64-iteration procedural loop, break, and dynamic barrel shifter.
+        mask = ~(curr_pmpaddr ^ (curr_pmpaddr + 1'b1));
         return ((curr_pmpaddr & mask) == ((paddr >> 2) & mask));
       end
 

@@ -27,6 +27,9 @@ module moon_fpu_div
     logic [51:0] frac_a, frac_b;
     logic [52:0] sig_a, sig_b, rounded_sig;
     logic [109:0] numerator, quotient, remainder;
+    logic [54:0] num32;
+    logic [23:0] den32, rem32;
+    logic [27:0] q32;
     logic [56:0] ext_quotient;
     logic nan_a, nan_b, snan_a, snan_b;
     logic inf_a, inf_b, zero_a, zero_b, boxing_error;
@@ -35,6 +38,10 @@ module moon_fpu_div
 
     result_o = '0;
     flags_o = '0;
+    num32 = '0;
+    den32 = '0;
+    rem32 = '0;
+    q32 = '0;
     frac_bits = is_single_i ? 23 : 52;
     exp_bits = is_single_i ? 8 : 11;
     bias = is_single_i ? 127 : 1023;
@@ -125,9 +132,18 @@ module moon_fpu_div
           exp_b = exp_b - 1;
         end
       end
-      numerator = {{57{1'b0}}, sig_a} << (frac_bits + 4);
-      quotient = numerator / sig_b;
-      remainder = numerator % sig_b;
+      if (is_single_i) begin
+        num32 = {31'd0, sig_a[23:0]} << 27;
+        den32 = sig_b[23:0];
+        q32   = num32 / den32;
+        rem32 = num32 % den32;
+        quotient = {29'd0, q32};
+        remainder = {29'd0, rem32};
+      end else begin
+        numerator = {{57{1'b0}}, sig_a} << 56;
+        quotient = numerator / sig_b;
+        remainder = numerator % sig_b;
+      end
       quotient[0] = quotient[0] | (remainder != 0);
       if (quotient[frac_bits+4]) begin
         ext_quotient = quotient[56:0] >> 1;

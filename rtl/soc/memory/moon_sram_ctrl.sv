@@ -8,6 +8,7 @@
 `define MOON_SRAM_CTRL_SV
 
 `include "axi_pkg.sv"
+`include "openram_sram_wrapper.sv"
 
 module moon_sram_ctrl
   import axi_pkg::*;
@@ -33,7 +34,7 @@ module moon_sram_ctrl
 );
 
   localparam int NUM_WORDS = SRAM_SIZE_BYTES / 8; // 64-bit words (16384 words)
-  logic [7:0] sram_mem [0:NUM_WORDS-1][7:0];
+  localparam int ADDR_W    = $clog2(NUM_WORDS);
 
   // --------------------------------------------------------------------------
   // Write Path
@@ -68,7 +69,7 @@ module moon_sram_ctrl
 
   logic [AXI_ADDR_WIDTH-1:0] w_rel_addr;
   assign w_rel_addr = w_addr_q - BASE_ADDR;
-  wire [13:0] w_word_idx = w_rel_addr[16:3];
+  wire [ADDR_W-1:0] w_word_idx = w_rel_addr[ADDR_W+2:3];
 
   always_comb begin
     w_state_d    = w_state_q;
@@ -115,17 +116,6 @@ module moon_sram_ctrl
     endcase
   end
 
-  // Synchronous SRAM Write commit
-  always_ff @(posedge clk_i) begin
-    if (w_state_q == W_BURST && s_w_i.valid && (w_word_idx < NUM_WORDS)) begin
-      for (int b = 0; b < 8; b++) begin
-        if (s_w_i.strb[b]) begin
-          sram_mem[w_word_idx][b] <= s_w_i.data[b*8 +: 8];
-        end
-      end
-    end
-  end
-
   // --------------------------------------------------------------------------
   // Read Path
   // --------------------------------------------------------------------------
@@ -138,38 +128,39 @@ module moon_sram_ctrl
   r_state_e r_state_q, r_state_d;
   logic [AXI_ID_WIDTH-1:0]   r_id_q,   r_id_d;
   logic [AXI_ADDR_WIDTH-1:0] r_addr_q, r_addr_d;
-  logic [AXI_DATA_WIDTH-1:0] r_data_q, r_data_d;
   logic [7:0]                r_len_q,  r_len_d;
   logic [7:0]                r_cnt_q,  r_cnt_d;
-
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      r_state_q <= R_IDLE;
-      r_id_q    <= '0;
-      r_addr_q  <= '0;
-      r_data_q  <= '0;
-      r_len_q   <= '0;
-      r_cnt_q   <= '0;
-    end else begin
-      r_state_q <= r_state_d;
-      r_id_q    <= r_id_d;
-      r_addr_q  <= r_addr_d;
-      r_data_q  <= r_data_d;
-      r_len_q   <= r_len_d;
-      r_cnt_q   <= r_cnt_d;
-    end
-  end
+  logic                      r_valid_idx_q;
 
   logic [AXI_ADDR_WIDTH-1:0] r_rel_addr;
   assign r_rel_addr = r_addr_q - BASE_ADDR;
-  wire [13:0] r_word_idx = r_rel_addr[16:3];
+  wire [ADDR_W-1:0] r_word_idx = r_rel_addr[ADDR_W+2:3];
   wire is_last_rbeat = (r_cnt_q == r_len_q);
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      r_state_q     <= R_IDLE;
+      r_id_q        <= '0;
+      r_addr_q      <= '0;
+      r_len_q       <= '0;
+      r_cnt_q       <= '0;
+      r_valid_idx_q <= 1'b0;
+    end else begin
+      r_state_q     <= r_state_d;
+      r_id_q        <= r_id_d;
+      r_addr_q      <= r_addr_d;
+      r_len_q       <= r_len_d;
+      r_cnt_q       <= r_cnt_d;
+      if (r_state_q == R_READ) begin
+        r_valid_idx_q <= (r_rel_addr < SRAM_SIZE_BYTES);
+      end
+    end
+  end
 
   always_comb begin
     r_state_d    = r_state_q;
     r_id_d       = r_id_q;
     r_addr_d     = r_addr_q;
-    r_data_d     = r_data_q;
     r_len_d      = r_len_q;
     r_cnt_d      = r_cnt_q;
     s_ar_ready_o = 1'b0;
@@ -188,20 +179,13 @@ module moon_sram_ctrl
       end
 
       R_READ: begin
-        if (r_word_idx < NUM_WORDS) begin
-          for (int b = 0; b < 8; b++) begin
-            r_data_d[b*8 +: 8] = sram_mem[r_word_idx][b];
-          end
-        end else begin
-          r_data_d = '0;
-        end
         r_state_d = R_RESP;
       end
 
       R_RESP: begin
         s_r_o.valid = 1'b1;
         s_r_o.id    = r_id_q;
-        s_r_o.data  = r_data_q;
+        s_r_o.data  = r_valid_idx_q ? openram_rdata : '0;
         s_r_o.resp  = AXI_RESP_OKAY;
         s_r_o.last  = is_last_rbeat;
         if (s_r_ready_i) begin
@@ -218,6 +202,34 @@ module moon_sram_ctrl
       default: r_state_d = R_IDLE;
     endcase
   end
+
+  // --------------------------------------------------------------------------
+  // OpenRAM Macro Wrapper Instantiation
+  // --------------------------------------------------------------------------
+  logic [AXI_DATA_WIDTH-1:0] openram_rdata;
+  wire sram_wr_en = (w_state_q == W_BURST) && s_w_i.valid && (w_rel_addr < SRAM_SIZE_BYTES);
+  wire sram_rd_en = (r_state_q == R_READ) && (r_rel_addr < SRAM_SIZE_BYTES);
+
+  openram_sram_wrapper #(
+    .DATA_WIDTH  (AXI_DATA_WIDTH),
+    .ADDR_WIDTH  (ADDR_W),
+    .WMASK_WIDTH (AXI_STRB_WIDTH)
+  ) u_openram (
+    // Port 0: Synchronous Write
+    .clk0   (clk_i),
+    .csb0   (!sram_wr_en),
+    .web0   (!sram_wr_en),
+    .wmask0 (s_w_i.strb),
+    .addr0  (w_word_idx),
+    .din0   (s_w_i.data),
+    .dout0  (),
+
+    // Port 1: Synchronous Read
+    .clk1   (clk_i),
+    .csb1   (!sram_rd_en),
+    .addr1  (r_word_idx),
+    .dout1  (openram_rdata)
+  );
 
 endmodule : moon_sram_ctrl
 
