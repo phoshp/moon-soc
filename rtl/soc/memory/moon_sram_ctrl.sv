@@ -157,6 +157,34 @@ module moon_sram_ctrl
     end
   end
 
+  // --------------------------------------------------------------------------
+  // OpenRAM Macro Wrapper Instantiation
+  // --------------------------------------------------------------------------
+  logic [AXI_DATA_WIDTH-1:0] openram_rdata;
+  wire sram_wr_en = (w_state_q == W_BURST) && s_w_i.valid && (w_rel_addr < SRAM_SIZE_BYTES);
+  wire sram_rd_en = (r_state_q == R_READ) && (r_rel_addr < SRAM_SIZE_BYTES);
+
+  openram_sram_wrapper #(
+    .DATA_WIDTH  (AXI_DATA_WIDTH),
+    .ADDR_WIDTH  (ADDR_W),
+    .WMASK_WIDTH (AXI_STRB_WIDTH)
+  ) u_openram (
+    // Port 0: Synchronous Write
+    .clk0   (clk_i),
+    .csb0   (!sram_wr_en),
+    .web0   (!sram_wr_en),
+    .wmask0 (s_w_i.strb),
+    .addr0  (w_word_idx),
+    .din0   (s_w_i.data),
+    .dout0  (),
+
+    // Port 1: Synchronous Read
+    .clk1   (clk_i),
+    .csb1   (!sram_rd_en),
+    .addr1  (r_word_idx),
+    .dout1  (openram_rdata)
+  );
+
   always_comb begin
     r_state_d    = r_state_q;
     r_id_d       = r_id_q;
@@ -202,34 +230,6 @@ module moon_sram_ctrl
       default: r_state_d = R_IDLE;
     endcase
   end
-
-  // --------------------------------------------------------------------------
-  // OpenRAM Macro Wrapper Instantiation
-  // --------------------------------------------------------------------------
-  logic [AXI_DATA_WIDTH-1:0] openram_rdata;
-  wire sram_wr_en = (w_state_q == W_BURST) && s_w_i.valid && (w_rel_addr < SRAM_SIZE_BYTES);
-  wire sram_rd_en = (r_state_q == R_READ) && (r_rel_addr < SRAM_SIZE_BYTES);
-
-  openram_sram_wrapper #(
-    .DATA_WIDTH  (AXI_DATA_WIDTH),
-    .ADDR_WIDTH  (ADDR_W),
-    .WMASK_WIDTH (AXI_STRB_WIDTH)
-  ) u_openram (
-    // Port 0: Synchronous Write
-    .clk0   (clk_i),
-    .csb0   (!sram_wr_en),
-    .web0   (!sram_wr_en),
-    .wmask0 (s_w_i.strb),
-    .addr0  (w_word_idx),
-    .din0   (s_w_i.data),
-    .dout0  (),
-
-    // Port 1: Synchronous Read
-    .clk1   (clk_i),
-    .csb1   (!sram_rd_en),
-    .addr1  (r_word_idx),
-    .dout1  (openram_rdata)
-  );
 
 endmodule : moon_sram_ctrl
 

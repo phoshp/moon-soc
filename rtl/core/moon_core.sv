@@ -237,27 +237,7 @@ module moon_core
   logic [XLEN-1:0]  mem_aligned_load_data;
   logic [XLEN-1:0]  ex_fwd_val;
 
-  always_comb begin
-    if (ex_mem_is_jal || ex_mem_is_jalr) begin
-      ex_fwd_val = ex_mem_link_pc;
-    end else if (ex_mem_is_mul) begin
-      ex_fwd_val = ex_mem_mul_res;
-    end else if (ex_mem_is_div) begin
-      ex_fwd_val = ex_mem_div_res;
-    end else if (ex_mem_is_sc) begin
-      ex_fwd_val = mem_sc_success ? 64'd0 : 64'd1;
-    end else if (ex_mem_is_load || ex_mem_is_lr || (ex_mem_is_amo && !ex_mem_is_sc)) begin
-      ex_fwd_val = mem_aligned_load_data;
-    end else begin
-      ex_fwd_val = ex_mem_alu_res;
-    end
-  end
-
-  assign vector_mem_fault = vector_mem_req && trap_enter && !is_interrupt &&
-                            ((trap_cause == CAUSE_PAGE_FAULT_LOAD) ||
-                             (trap_cause == CAUSE_PAGE_FAULT_STORE) ||
-                             (trap_cause == CAUSE_LOAD_ACCESS_FAULT) ||
-                             (trap_cause == CAUSE_STORE_ACCESS_FAULT));
+  // WB Stage Pipeline Signals
   logic             mem_wb_is_jal;
   logic             mem_wb_is_jalr;
   logic             mem_wb_regwrite;
@@ -281,8 +261,6 @@ module moon_core
   logic [4:0]       wb_rd;
   logic [XLEN-1:0]  wb_wdata;
   logic [FLEN-1:0]  wb_fp_wdata;
-
-  assign wb_fp_wdata = mem_wb_fp_word ? {32'hffff_ffff, wb_wdata[31:0]} : wb_wdata;
 
   // Hazard and Forwarding
   fwd_sel_e         fwd_a;
@@ -310,6 +288,31 @@ module moon_core
   logic             interrupt_pending;
   logic [62:0]      interrupt_cause;
   logic [XLEN-1:0]  csr_rdata;
+  logic [2:0]       frm;
+
+  always_comb begin
+    if (ex_mem_is_jal || ex_mem_is_jalr) begin
+      ex_fwd_val = ex_mem_link_pc;
+    end else if (ex_mem_is_mul) begin
+      ex_fwd_val = ex_mem_mul_res;
+    end else if (ex_mem_is_div) begin
+      ex_fwd_val = ex_mem_div_res;
+    end else if (ex_mem_is_sc) begin
+      ex_fwd_val = mem_sc_success ? 64'd0 : 64'd1;
+    end else if (ex_mem_is_load || ex_mem_is_lr || (ex_mem_is_amo && !ex_mem_is_sc)) begin
+      ex_fwd_val = mem_aligned_load_data;
+    end else begin
+      ex_fwd_val = ex_mem_alu_res;
+    end
+  end
+
+  assign vector_mem_fault = vector_mem_req && trap_enter && !is_interrupt &&
+                            ((trap_cause == CAUSE_PAGE_FAULT_LOAD) ||
+                             (trap_cause == CAUSE_PAGE_FAULT_STORE) ||
+                             (trap_cause == CAUSE_LOAD_ACCESS_FAULT) ||
+                             (trap_cause == CAUSE_STORE_ACCESS_FAULT));
+
+  assign wb_fp_wdata = mem_wb_fp_word ? {32'hffff_ffff, wb_wdata[31:0]} : wb_wdata;
 
   // --------------------------------------------------------------------------
   // Trap Controller Logic
@@ -808,8 +811,6 @@ module moon_core
     .flush_ex_o         (flush_ex),
     .flush_mem_o        (flush_mem)
   );
-
-  logic [2:0] frm;
 
   // --------------------------------------------------------------------------
   // 7. CSR Unit Instantiation
