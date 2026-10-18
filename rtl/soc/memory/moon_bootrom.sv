@@ -33,11 +33,12 @@ module moon_bootrom
 );
 
   localparam int NUM_WORDS = ROM_SIZE_BYTES / 4; // 32-bit words
+  (* syn_ramstyle = "block", ram_style = "block" *)
   logic [31:0] rom_mem [0:NUM_WORDS-1];
 
   // Optional simulation firmware load
   initial begin
-    string hex_file;
+    reg [8*256-1:0] hex_file;
     if ($value$plusargs("bootrom_hex=%s", hex_file)) begin
       $readmemh(hex_file, rom_mem);
     end else if ($value$plusargs("hex_file=%s", hex_file)) begin
@@ -60,9 +61,17 @@ module moon_bootrom
   r_state_e r_state_q, r_state_d;
   logic [AXI_ID_WIDTH-1:0]   r_id_q,   r_id_d;
   logic [AXI_ADDR_WIDTH-1:0] r_addr_q, r_addr_d;
-  logic [AXI_DATA_WIDTH-1:0] r_data_q, r_data_d;
+  logic [AXI_DATA_WIDTH-1:0] r_data_q;
   logic [7:0]                r_len_q,  r_len_d;
   logic [7:0]                r_cnt_q,  r_cnt_d;
+
+  // Address offset calculation
+  logic [AXI_ADDR_WIDTH-1:0] rel_addr;
+  assign rel_addr = r_addr_q - BASE_ADDR;
+  wire [14:0] word_idx_lo = rel_addr[14:2];
+  wire [14:0] word_idx_hi = word_idx_lo + 15'd1;
+
+  wire is_last_beat = (r_cnt_q == r_len_q);
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -76,25 +85,19 @@ module moon_bootrom
       r_state_q <= r_state_d;
       r_id_q    <= r_id_d;
       r_addr_q  <= r_addr_d;
-      r_data_q  <= r_data_d;
       r_len_q   <= r_len_d;
       r_cnt_q   <= r_cnt_d;
+      if (r_state_q == R_READ) begin
+        r_data_q <= {(word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi] : 32'h0,
+                     (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo] : 32'h0};
+      end
     end
   end
-
-  // Address offset calculation
-  logic [AXI_ADDR_WIDTH-1:0] rel_addr;
-  assign rel_addr = r_addr_q - BASE_ADDR;
-  wire [14:0] word_idx_lo = rel_addr[14:2];
-  wire [14:0] word_idx_hi = word_idx_lo + 15'd1;
-
-  wire is_last_beat = (r_cnt_q == r_len_q);
 
   always_comb begin
     r_state_d    = r_state_q;
     r_id_d       = r_id_q;
     r_addr_d     = r_addr_q;
-    r_data_d     = r_data_q;
     r_len_d      = r_len_q;
     r_cnt_d      = r_cnt_q;
     s_ar_ready_o = 1'b0;
@@ -113,11 +116,6 @@ module moon_bootrom
       end
 
       R_READ: begin
-        // Read 64 bits (two 32-bit words) from ROM
-        logic [31:0] lo_word, hi_word;
-        lo_word   = (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo] : 32'h0;
-        hi_word   = (word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi] : 32'h0;
-        r_data_d  = {hi_word, lo_word};
         r_state_d = R_RESP;
       end
 
