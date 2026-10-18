@@ -52,7 +52,10 @@ module tb_moon_core (
   // Core Instantiation
   // --------------------------------------------------------------------------
   moon_core #(
-    .HART_ID(0)
+    .HART_ID(0),
+    .ENABLE_FPU(1'b1),
+    .ENABLE_VECTOR(1'b1),
+    .ENABLE_VECTOR_FP(1'b1)
   ) dut (
     .clk_i          (clk),
     .rst_ni         (rst_n),

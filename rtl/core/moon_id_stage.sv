@@ -12,7 +12,9 @@
 
 module moon_id_stage
   import moon_pkg::*;
-(
+#(
+  parameter bit ENABLE_FPU = 1'b0
+)(
   input  logic             clk_i,
   input  logic             rst_ni,
 
@@ -182,19 +184,25 @@ module moon_id_stage
     .rd_data_i   (wb_wdata_i)
   );
 
-  moon_fregfile u_fregfile (
-    .clk_i      (clk_i),
-    .rst_ni     (rst_ni),
-    .rs1_addr_i (rs1),
-    .rs1_data_o (fp_rs1_data),
-    .rs2_addr_i (rs2),
-    .rs2_data_o (fp_rs2_data),
-    .rs3_addr_i (if_id_instr_i[31:27]),
-    .rs3_data_o (fp_rs3_data),
-    .rd_we_i    (wb_fp_we_i),
-    .rd_addr_i  (wb_fp_rd_i),
-    .rd_data_i  (wb_fp_wdata_i)
-  );
+  if (ENABLE_FPU) begin : gen_fregfile
+    moon_fregfile u_fregfile (
+      .clk_i      (clk_i),
+      .rst_ni     (rst_ni),
+      .rs1_addr_i (rs1),
+      .rs1_data_o (fp_rs1_data),
+      .rs2_addr_i (rs2),
+      .rs2_data_o (fp_rs2_data),
+      .rs3_addr_i (if_id_instr_i[31:27]),
+      .rs3_data_o (fp_rs3_data),
+      .rd_we_i    (wb_fp_we_i),
+      .rd_addr_i  (wb_fp_rd_i),
+      .rd_data_i  (wb_fp_wdata_i)
+    );
+  end else begin : gen_no_fregfile
+    assign fp_rs1_data = '0;
+    assign fp_rs2_data = '0;
+    assign fp_rs3_data = '0;
+  end
 
   // --------------------------------------------------------------------------
   // Immediate Field Generation

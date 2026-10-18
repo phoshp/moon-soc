@@ -37,8 +37,9 @@ module moon_soc_top
   parameter int DCACHE_SETS     = 128,
   parameter int ICACHE_WAYS     = 4,
   parameter int DCACHE_WAYS     = 4,
-  parameter bit ENABLE_FPU       = 1'b1,
-  parameter bit ENABLE_VECTOR_FP = 1'b1
+  parameter bit ENABLE_FPU       = 1'b0,
+  parameter bit ENABLE_VECTOR    = 1'b0,
+  parameter bit ENABLE_VECTOR_FP = 1'b0
 )(
   input  logic clk_i,
   input  logic rst_ni,
@@ -141,6 +142,7 @@ module moon_soc_top
   moon_core #(
     .HART_ID(HART_ID),
     .ENABLE_FPU(ENABLE_FPU),
+    .ENABLE_VECTOR(ENABLE_VECTOR),
     .ENABLE_VECTOR_FP(ENABLE_VECTOR_FP)
   ) u_core (
     .clk_i               (clk_core),

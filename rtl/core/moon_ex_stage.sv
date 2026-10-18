@@ -24,8 +24,9 @@
 module moon_ex_stage
   import moon_pkg::*;
 #(
-  parameter bit ENABLE_FPU = 1'b1,
-  parameter bit ENABLE_VECTOR_FP = 1'b1
+  parameter bit ENABLE_FPU = 1'b0,
+  parameter bit ENABLE_VECTOR = 1'b0,
+  parameter bit ENABLE_VECTOR_FP = 1'b0
 )(
   input  logic             clk_i,
   input  logic             rst_ni,
@@ -220,45 +221,50 @@ module moon_ex_stage
   logic [FLEN-1:0] fp_sign_result;
   logic [2:0]      fp_rounding_mode;
 
-  always_comb begin : fp_misc_comb
-    logic sign_a, sign_b, sign_out;
-    logic [10:0] exp_field;
-    logic [51:0] fraction;
-    logic [9:0] class_bits;
+  if (ENABLE_FPU) begin : gen_fp_misc
+    always_comb begin : fp_misc_comb
+      logic sign_a, sign_b, sign_out;
+      logic [10:0] exp_field;
+      logic [51:0] fraction;
+      logic [9:0] class_bits;
 
-    sign_a = id_ex_fp_word_i ? id_ex_rs1_data_i[31] : id_ex_rs1_data_i[63];
-    sign_b = id_ex_fp_word_i ? id_ex_rs2_data_i[31] : id_ex_rs2_data_i[63];
-    case (id_ex_fp_sign_op_i)
-      2'b00: sign_out = sign_b;
-      2'b01: sign_out = ~sign_b;
-      default: sign_out = sign_a ^ sign_b;
-    endcase
-    if (id_ex_fp_word_i) begin
-      if ((id_ex_rs1_data_i[63:32] != 32'hffff_ffff) ||
-          (id_ex_rs2_data_i[63:32] != 32'hffff_ffff))
-        fp_sign_result = 64'hffff_ffff_7fc0_0000;
-      else
-        fp_sign_result = {32'hffff_ffff, sign_out, id_ex_rs1_data_i[30:0]};
-    end else begin
-      fp_sign_result = {sign_out, id_ex_rs1_data_i[62:0]};
-    end
+      sign_a = id_ex_fp_word_i ? id_ex_rs1_data_i[31] : id_ex_rs1_data_i[63];
+      sign_b = id_ex_fp_word_i ? id_ex_rs2_data_i[31] : id_ex_rs2_data_i[63];
+      case (id_ex_fp_sign_op_i)
+        2'b00: sign_out = sign_b;
+        2'b01: sign_out = ~sign_b;
+        default: sign_out = sign_a ^ sign_b;
+      endcase
+      if (id_ex_fp_word_i) begin
+        if ((id_ex_rs1_data_i[63:32] != 32'hffff_ffff) ||
+            (id_ex_rs2_data_i[63:32] != 32'hffff_ffff))
+          fp_sign_result = 64'hffff_ffff_7fc0_0000;
+        else
+          fp_sign_result = {32'hffff_ffff, sign_out, id_ex_rs1_data_i[30:0]};
+      end else begin
+        fp_sign_result = {sign_out, id_ex_rs1_data_i[62:0]};
+      end
 
-    exp_field = id_ex_fp_word_i ? {3'b0, id_ex_rs1_data_i[30:23]} : id_ex_rs1_data_i[62:52];
-    fraction = id_ex_fp_word_i ? {29'b0, id_ex_rs1_data_i[22:0]} : id_ex_rs1_data_i[51:0];
-    class_bits = '0;
-    if (id_ex_fp_word_i && (id_ex_rs1_data_i[63:32] != 32'hffff_ffff)) begin
-      class_bits[9] = 1'b1;
-    end else if ((exp_field == (id_ex_fp_word_i ? 11'h0ff : 11'h7ff)) && (fraction == 0)) begin
-      class_bits[sign_a ? 0 : 7] = 1'b1;
-    end else if (exp_field == (id_ex_fp_word_i ? 11'h0ff : 11'h7ff)) begin
-      class_bits[fraction[id_ex_fp_word_i ? 22 : 51] ? 9 : 8] = 1'b1;
-    end else if (exp_field == 0) begin
-      if (fraction == 0) class_bits[sign_a ? 3 : 4] = 1'b1;
-      else class_bits[sign_a ? 2 : 5] = 1'b1;
-    end else begin
-      class_bits[sign_a ? 1 : 6] = 1'b1;
+      exp_field = id_ex_fp_word_i ? {3'b0, id_ex_rs1_data_i[30:23]} : id_ex_rs1_data_i[62:52];
+      fraction = id_ex_fp_word_i ? {29'b0, id_ex_rs1_data_i[22:0]} : id_ex_rs1_data_i[51:0];
+      class_bits = '0;
+      if (id_ex_fp_word_i && (id_ex_rs1_data_i[63:32] != 32'hffff_ffff)) begin
+        class_bits[9] = 1'b1;
+      end else if ((exp_field == (id_ex_fp_word_i ? 11'h0ff : 11'h7ff)) && (fraction == 0)) begin
+        class_bits[sign_a ? 0 : 7] = 1'b1;
+      end else if (exp_field == (id_ex_fp_word_i ? 11'h0ff : 11'h7ff)) begin
+        class_bits[fraction[id_ex_fp_word_i ? 22 : 51] ? 9 : 8] = 1'b1;
+      end else if (exp_field == 0) begin
+        if (fraction == 0) class_bits[sign_a ? 3 : 4] = 1'b1;
+        else class_bits[sign_a ? 2 : 5] = 1'b1;
+      end else begin
+        class_bits[sign_a ? 1 : 6] = 1'b1;
+      end
+      fp_class_result = {54'd0, class_bits};
     end
-    fp_class_result = {54'd0, class_bits};
+  end else begin : gen_no_fp_misc
+    assign fp_sign_result = '0;
+    assign fp_class_result = '0;
   end
 
   assign fp_rounding_mode = (id_ex_fp_rm_i == 3'b111) ? frm_i : id_ex_fp_rm_i;
@@ -366,28 +372,29 @@ module moon_ex_stage
                                   (id_ex_instr_i[31:27] == 5'b11010);
 
   always_comb begin
-    if (fp_fma_instruction) fp_result_selected = fp_fma_result;
-    else if (id_ex_fp_cvt_i)
+    if (ENABLE_FPU && fp_fma_instruction) fp_result_selected = fp_fma_result;
+    else if (ENABLE_FPU && id_ex_fp_cvt_i)
       fp_result_selected = fp_int_cvt_instruction ? fp_int_cvt_result : fp_cvt_result;
-    else if (id_ex_fp_div_i)
+    else if (ENABLE_FPU && id_ex_fp_div_i)
       fp_result_selected = fp_sqrt_instruction ? fp_sqrt_result : fp_div_result;
-    else if (id_ex_fp_mul_i) fp_result_selected = fp_mul_result;
-    else if (id_ex_fp_add_i) fp_result_selected = fp_add_result;
-    else if (id_ex_fp_cmp_i) fp_result_selected = fp_cmp_result;
-    else if (id_ex_fp_sign_i) fp_result_selected = fp_sign_result;
-    else if (id_ex_fp_class_i) fp_result_selected = fp_class_result;
-    else if (vector_scalar_result_valid) fp_result_selected = vector_scalar_result;
+    else if (ENABLE_FPU && id_ex_fp_mul_i) fp_result_selected = fp_mul_result;
+    else if (ENABLE_FPU && id_ex_fp_add_i) fp_result_selected = fp_add_result;
+    else if (ENABLE_FPU && id_ex_fp_cmp_i) fp_result_selected = fp_cmp_result;
+    else if (ENABLE_FPU && id_ex_fp_sign_i) fp_result_selected = fp_sign_result;
+    else if (ENABLE_FPU && id_ex_fp_class_i) fp_result_selected = fp_class_result;
+    else if (ENABLE_VECTOR && vector_scalar_result_valid) fp_result_selected = vector_scalar_result;
     else fp_result_selected = alu_result;
 
-    if (vector_fp_flags_we) fp_flags_selected = vector_fp_flags;
-    else if (fp_fma_instruction) fp_flags_selected = fp_fma_flags;
-    else if (id_ex_fp_cvt_i)
+    if (ENABLE_VECTOR && vector_fp_flags_we) fp_flags_selected = vector_fp_flags;
+    else if (ENABLE_FPU && fp_fma_instruction) fp_flags_selected = fp_fma_flags;
+    else if (ENABLE_FPU && id_ex_fp_cvt_i)
       fp_flags_selected = fp_int_cvt_instruction ? fp_int_cvt_flags : fp_cvt_flags;
-    else if (id_ex_fp_div_i)
+    else if (ENABLE_FPU && id_ex_fp_div_i)
       fp_flags_selected = fp_sqrt_instruction ? fp_sqrt_flags : fp_div_flags;
-    else if (id_ex_fp_mul_i) fp_flags_selected = fp_mul_flags;
-    else if (id_ex_fp_cmp_i) fp_flags_selected = fp_cmp_flags;
-    else fp_flags_selected = fp_add_flags;
+    else if (ENABLE_FPU && id_ex_fp_mul_i) fp_flags_selected = fp_mul_flags;
+    else if (ENABLE_FPU && id_ex_fp_cmp_i) fp_flags_selected = fp_cmp_flags;
+    else if (ENABLE_FPU) fp_flags_selected = fp_add_flags;
+    else fp_flags_selected = 5'd0;
   end
 
   assign alu_in_a = id_ex_alu_src_a_pc_i  ? id_ex_pc_i  : operand_a_fwd;
@@ -401,39 +408,57 @@ module moon_ex_stage
     .zero_o      (alu_zero)
   );
 
-  moon_vector_unit #(
-    .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
-  ) u_vector_unit (
-    .clk_i                  (clk_i),
-    .rst_ni                 (rst_ni),
-    .valid_i                (id_ex_valid_i),
-    .advance_i              (!stall_mem_i && !flush_mem_i),
-    .instr_i                (id_ex_instr_i),
-    .scalar_rs1_i           (((id_ex_instr_i[6:0] == 7'b1010111) &&
-                              (id_ex_instr_i[14:12] == 3'b101)) ?
-                             id_ex_rs1_data_i : operand_a_fwd),
-    .scalar_rs2_i           (operand_b_fwd),
-    .frm_i                  (frm_i),
-    .vector_vstart_i        (vector_vstart_i),
-    .vector_mem_fault_i     (vector_mem_fault_i),
-    .vector_vstart_clear_o  (vector_vstart_clear_o),
-    .vector_vxsat_set_o     (vector_vxsat_set_o),
-    .vector_fp_flags_o      (vector_fp_flags),
-    .vector_fp_flags_we_o   (vector_fp_flags_we),
-    .vector_mem_vstart_o    (vector_mem_vstart_o),
-    .vector_vl_o            (vector_vl_o),
-    .vector_vtype_o         (vector_vtype_o),
-    .scalar_result_valid_o  (vector_scalar_result_valid),
-    .scalar_result_o        (vector_scalar_result),
-    .mem_req_o              (vector_unit_mem_req),
-    .mem_we_o               (vector_unit_mem_we),
-    .mem_addr_o             (vector_unit_mem_addr),
-    .mem_wdata_o            (vector_unit_mem_wdata),
-    .mem_wstrb_o             (vector_unit_mem_wstrb),
-    .mem_valid_i             (vector_mem_valid_i),
-    .mem_rdata_i             (vector_mem_rdata_i),
-    .mem_busy_o              (vector_mem_busy_o)
-  );
+  if (ENABLE_VECTOR) begin : gen_vector_unit
+    moon_vector_unit #(
+      .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
+    ) u_vector_unit (
+      .clk_i                  (clk_i),
+      .rst_ni                 (rst_ni),
+      .valid_i                (id_ex_valid_i),
+      .advance_i              (!stall_mem_i && !flush_mem_i),
+      .instr_i                (id_ex_instr_i),
+      .scalar_rs1_i           (((id_ex_instr_i[6:0] == 7'b1010111) &&
+                                (id_ex_instr_i[14:12] == 3'b101)) ?
+                               id_ex_rs1_data_i : operand_a_fwd),
+      .scalar_rs2_i           (operand_b_fwd),
+      .frm_i                  (frm_i),
+      .vector_vstart_i        (vector_vstart_i),
+      .vector_mem_fault_i     (vector_mem_fault_i),
+      .vector_vstart_clear_o  (vector_vstart_clear_o),
+      .vector_vxsat_set_o     (vector_vxsat_set_o),
+      .vector_fp_flags_o      (vector_fp_flags),
+      .vector_fp_flags_we_o   (vector_fp_flags_we),
+      .vector_mem_vstart_o    (vector_mem_vstart_o),
+      .vector_vl_o            (vector_vl_o),
+      .vector_vtype_o         (vector_vtype_o),
+      .scalar_result_valid_o  (vector_scalar_result_valid),
+      .scalar_result_o        (vector_scalar_result),
+      .mem_req_o              (vector_unit_mem_req),
+      .mem_we_o               (vector_unit_mem_we),
+      .mem_addr_o             (vector_unit_mem_addr),
+      .mem_wdata_o            (vector_unit_mem_wdata),
+      .mem_wstrb_o            (vector_unit_mem_wstrb),
+      .mem_valid_i            (vector_mem_valid_i),
+      .mem_rdata_i            (vector_mem_rdata_i),
+      .mem_busy_o             (vector_mem_busy_o)
+    );
+  end else begin : gen_no_vector_unit
+    assign vector_vstart_clear_o = 1'b0;
+    assign vector_vxsat_set_o = 1'b0;
+    assign vector_fp_flags = 5'd0;
+    assign vector_fp_flags_we = 1'b0;
+    assign vector_mem_vstart_o = 64'd0;
+    assign vector_vl_o = 64'd0;
+    assign vector_vtype_o = 64'd0;
+    assign vector_scalar_result_valid = 1'b0;
+    assign vector_scalar_result = 64'd0;
+    assign vector_unit_mem_req = 1'b0;
+    assign vector_unit_mem_we = 1'b0;
+    assign vector_unit_mem_addr = 64'd0;
+    assign vector_unit_mem_wdata = 64'd0;
+    assign vector_unit_mem_wstrb = 8'd0;
+    assign vector_mem_busy_o = 1'b0;
+  end
 
   assign vector_mem_req_o = vector_unit_mem_req;
   assign vector_mem_we_o = vector_unit_mem_we;
