@@ -2153,110 +2153,98 @@ module moon_vector_unit #(
                                         vector_fp_mul_result[i] : vector_fp_result[i])));
           end
         end
-      end else if (is_vector_permute) begin : blk_vpermute
-        logic [127:0] permute_vd;
-        permute_vd = vreg[vd];
+      end else if (is_vector_permute) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i]) &&
               !(is_vslideup &&
                 (i < ((instr_i[14:12] == 3'b011) ? instr_i[19:15] : scalar_rs1_i)))) begin
             case (vsew_q)
-              3'b000: permute_vd[i*8 +: 8] = vector_permute_element(
+              3'b000: vreg[vd][i*8 +: 8] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
-              3'b001: if (i < 8) permute_vd[i*16 +: 16] = vector_permute_element(
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
-              3'b010: if (i < 4) permute_vd[i*32 +: 32] = vector_permute_element(
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
-              default: if (i < 2) permute_vd[i*64 +: 64] = vector_permute_element(
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_permute_element(
                 vreg[vs2], vreg[vs1], i[4:0], vl_q, vsew_q,
                 instr_i[31:26], instr_i[14:12], scalar_rs1_i, instr_i[19:15]);
             endcase
           end
         end
-        vreg[vd] <= permute_vd;
-      end else if (is_vector_sat) begin : blk_vsat
-        logic [127:0] sat_vd;
-        sat_vd = vreg[vd];
+      end else if (is_vector_sat) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: sat_vd[i*8 +: 8] = vector_sat_result(
+              3'b000: vreg[vd][i*8 +: 8] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              3'b001: if (i < 8) sat_vd[i*16 +: 16] = vector_sat_result(
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              3'b010: if (i < 4) sat_vd[i*32 +: 32] = vector_sat_result(
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              default: if (i < 2) sat_vd[i*64 +: 64] = vector_sat_result(
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_sat_result(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vsat_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
             endcase
           end
         end
-        vreg[vd] <= sat_vd;
-      end else if (is_vdivrem_vv || is_vdivrem_vx) begin : blk_vdivrem
-        logic [127:0] divrem_vd;
-        divrem_vd = vreg[vd];
+      end else if (is_vdivrem_vv || is_vdivrem_vx) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: divrem_vd[i*8 +: 8] = vector_divrem(
+              3'b000: vreg[vd][i*8 +: 8] <= vector_divrem(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vdivrem_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              3'b001: if (i < 8) divrem_vd[i*16 +: 16] = vector_divrem(
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_divrem(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vdivrem_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              3'b010: if (i < 4) divrem_vd[i*32 +: 32] = vector_divrem(
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_divrem(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vdivrem_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              default: if (i < 2) divrem_vd[i*64 +: 64] = vector_divrem(
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_divrem(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 is_vdivrem_vv ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
             endcase
           end
         end
-        vreg[vd] <= divrem_vd;
       end else if (is_vmulh_vv || is_vmulh_vx || is_vmulhu_vv ||
-                   is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx) begin : blk_vmulh
-        logic [127:0] mulh_vd;
-        mulh_vd = vreg[vd];
+                   is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: mulh_vd[i*8 +: 8] = vector_mul_high(
+              3'b000: vreg[vd][i*8 +: 8] <= vector_mul_high(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              3'b010: if (i < 4) mulh_vd[i*32 +: 32] = vector_mul_high(
+              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_mul_high(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              3'b001: if (i < 8) mulh_vd[i*16 +: 16] = vector_mul_high(
+              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_mul_high(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
-              default: if (i < 2) mulh_vd[i*64 +: 64] = vector_mul_high(
+              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_mul_high(
                 vector_element(vreg[vs2], i[4:0], vsew_q),
                 (instr_i[14:12] == 3'b010) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i,
                 vsew_q, instr_i[31:26]);
             endcase
           end
         end
-        vreg[vd] <= mulh_vd;
       end else if (is_vmul_vv || is_vmul_vx) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
@@ -2524,28 +2512,26 @@ module moon_vector_unit #(
                            !vector_fp_compare_result[i][0] :
                            vector_fp_compare_result[i][0];
         end
-      end else if (is_vcompare) begin : blk_vcompare
-        logic [127:0] compare_vd;
-        compare_vd = vreg[vd];
+      end else if (is_vcompare) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: compare_vd[i] = vector_compare(
+              3'b000: vreg[vd][i] <= vector_compare(
                   vector_element(vreg[vs2], i[4:0], vsew_q),
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
                   ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
                    vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
-              3'b001: if (i < 8) compare_vd[i] = vector_compare(
+              3'b001: if (i < 8) vreg[vd][i] <= vector_compare(
                   vector_element(vreg[vs2], i[4:0], vsew_q),
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
                   ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
                    vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
-              3'b010: if (i < 4) compare_vd[i] = vector_compare(
+              3'b010: if (i < 4) vreg[vd][i] <= vector_compare(
                   vector_element(vreg[vs2], i[4:0], vsew_q),
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
                   ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
                    vector_element(vreg[vs1], i[4:0], vsew_q)), vsew_q, instr_i[31:26]);
-              default: if (i < 2) compare_vd[i] = vector_compare(
+              default: if (i < 2) vreg[vd][i] <= vector_compare(
                   vector_element(vreg[vs2], i[4:0], vsew_q),
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
                   ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} :
@@ -2553,7 +2539,6 @@ module moon_vector_unit #(
             endcase
           end
         end
-        vreg[vd] <= compare_vd;
       end else if (is_vminmax) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin

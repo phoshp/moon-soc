@@ -129,6 +129,8 @@ module moon_dcache
       miss_we_q    <= 1'b0;
       beat_cnt_q   <= '0;
       io_rdata_q   <= '0;
+      aw_done_q    <= 1'b0;
+      w_done_q     <= 1'b0;
       for (int i = 0; i < 8; i++) refill_line_q[i] <= '0;
       for (int s = 0; s < NUM_SETS; s++) begin
         lru_cnt[s] <= '0;
