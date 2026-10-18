@@ -4,6 +4,7 @@
 # ============================================================================
 
 import os
+import inspect
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
@@ -14,12 +15,14 @@ async def run_soc_test(dut):
     cocotb.log.info("Starting Moon-SoC Top-Level Cocotb Test...")
 
     # Start 100 MHz clock (10 ns period)
-    clock = Clock(dut.clk, 10, unit="ns")
+    clock_kw = "unit" if "unit" in inspect.signature(Clock).parameters else "units"
+    timer_kw = "unit" if "unit" in inspect.signature(Timer).parameters else "units"
+    clock = Clock(dut.clk, 10, **{clock_kw: "ns"})
     cocotb.start_soon(clock.start())
 
     # Initialize Inputs
     dut.rst_n.value = 0
-    await Timer(50, unit="ns")
+    await Timer(50, **{timer_kw: "ns"})
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
     cocotb.log.info("Reset released.")
@@ -36,9 +39,9 @@ async def run_soc_test(dut):
         await RisingEdge(dut.clk)
         cycle += 1
 
-        pc = dut.debug_pc.value.to_unsigned()
+        pc = int(dut.debug_pc.value)
         if verbose and (pc != last_pc):
-            cocotb.log.info(f"Cycle {cycle:5d} | PC: 0x{pc:016x} | Instr: 0x{dut.debug_instr.value.to_unsigned():08x}")
+            cocotb.log.info(f"Cycle {cycle:5d} | PC: 0x{pc:016x} | Instr: 0x{int(dut.debug_instr.value):08x}")
         last_pc = pc
 
         if dut.test_passed.value == 1:
@@ -47,7 +50,7 @@ async def run_soc_test(dut):
 
         if dut.test_failed.value == 1:
             failed = True
-            err_code = dut.test_error_code.value.to_unsigned()
+            err_code = int(dut.test_error_code.value)
             cocotb.log.error(f">>> [FAIL] Test failed at cycle {cycle} with error code: 0x{err_code:08x} at PC 0x{pc:016x}")
             break
 
@@ -56,4 +59,4 @@ async def run_soc_test(dut):
     elif not failed:
         raise AssertionError(f"Moon-SoC test timed out after {max_cycles} cycles at PC 0x{last_pc:016x}")
     else:
-        raise AssertionError(f"Test failed at cycle {cycle} with error code 0x{dut.test_error_code.value.to_unsigned():08x}")
+        raise AssertionError(f"Test failed at cycle {cycle} with error code 0x{int(dut.test_error_code.value):08x}")

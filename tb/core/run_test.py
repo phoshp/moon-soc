@@ -4,7 +4,11 @@
 import os
 import sys
 from pathlib import Path
-from cocotb_tools.runner import get_runner
+import xml.etree.ElementTree as ET
+try:
+    from cocotb_tools.runner import get_runner
+except ImportError:
+    from cocotb.runner import get_runner
 
 def run_test(test_hex=None, waves=False, verbose=False):
     repo_root = Path(__file__).resolve().parent.parent.parent
@@ -44,7 +48,7 @@ def run_test(test_hex=None, waves=False, verbose=False):
     if cocotb_dir not in sys.path:
         sys.path.insert(0, cocotb_dir)
 
-    runner.test(
+    results_file = runner.test(
         hdl_toplevel="tb_moon_core",
         hdl_toplevel_lang="verilog",
         test_module="test_moon_core",
@@ -57,6 +61,30 @@ def run_test(test_hex=None, waves=False, verbose=False):
         },
         waves=waves,
     )
+    _assert_results_passed(_resolve_results_file(build_dir, results_file))
+
+
+def _assert_results_passed(results_xml):
+    if not results_xml.exists():
+        raise RuntimeError(f"Missing cocotb results file: {results_xml}")
+    root = ET.parse(results_xml).getroot()
+    failed = 0
+    for suite in root.findall(".//testsuite"):
+        failed += int(suite.attrib.get("failures", "0"))
+        failed += int(suite.attrib.get("errors", "0"))
+    if failed:
+        raise RuntimeError(f"Cocotb reported {failed} test failure(s); see {results_xml}")
+
+
+def _resolve_results_file(build_dir, reported_path):
+    if reported_path:
+        candidate = Path(reported_path)
+        if candidate.exists():
+            return candidate
+    for candidate in (build_dir / "results.xml", *sorted(build_dir.glob("test_*.None"))):
+        if candidate.exists():
+            return candidate
+    return build_dir / "results.xml"
 
 def test_moon_core():
     """Pytest entrypoint for Moon-SoC RV64 cocotb regression."""
