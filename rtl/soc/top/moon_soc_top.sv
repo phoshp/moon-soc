@@ -31,12 +31,12 @@ module moon_soc_top
   import axi_pkg::*;
 #(
   parameter int HART_ID = 0,
-  parameter int ROM_SIZE_BYTES  = 32768,  // 32 KB Boot ROM
-  parameter int SRAM_SIZE_BYTES = 131072, // 128 KB On-Chip SRAM
-  parameter int ICACHE_SETS     = 128,
-  parameter int DCACHE_SETS     = 128,
-  parameter int ICACHE_WAYS     = 4,
-  parameter int DCACHE_WAYS     = 4,
+  parameter int ROM_SIZE_BYTES  = 4096,  // 4 KB Boot ROM
+  parameter int SRAM_SIZE_BYTES = 4096,  // 4 KB On-Chip SRAM (Sky130 OpenRAM macro target)
+  parameter int ICACHE_SETS     = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-I Cache
+  parameter int DCACHE_SETS     = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-D Cache
+  parameter int ICACHE_WAYS     = 2,
+  parameter int DCACHE_WAYS     = 2,
   parameter bit ENABLE_FPU       = 1'b0,
   parameter bit ENABLE_VECTOR    = 1'b0,
   parameter bit ENABLE_VECTOR_FP = 1'b0

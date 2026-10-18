@@ -16,10 +16,10 @@ module moon_l1_cache_subsystem
   import moon_pkg::*;
   import axi_pkg::*;
 #(
-  parameter int ICACHE_WAYS = 4,
-  parameter int DCACHE_WAYS = 4,
-  parameter int ICACHE_SETS = 128,
-  parameter int DCACHE_SETS = 128,
+  parameter int ICACHE_WAYS = 2,
+  parameter int DCACHE_WAYS = 2,
+  parameter int ICACHE_SETS = 32,
+  parameter int DCACHE_SETS = 32,
   parameter int LINE_BYTES  = 64
 )(
   input  logic clk_i,

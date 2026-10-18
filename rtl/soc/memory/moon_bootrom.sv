@@ -33,6 +33,7 @@ module moon_bootrom
 );
 
   localparam int NUM_WORDS = ROM_SIZE_BYTES / 4; // 32-bit words
+  localparam int ADDR_W    = $clog2(NUM_WORDS);
   (* syn_ramstyle = "block", ram_style = "block" *)
   logic [31:0] rom_mem [0:NUM_WORDS-1];
 
@@ -68,8 +69,8 @@ module moon_bootrom
   // Address offset calculation
   logic [AXI_ADDR_WIDTH-1:0] rel_addr;
   assign rel_addr = r_addr_q - BASE_ADDR;
-  wire [14:0] word_idx_lo = rel_addr[14:2];
-  wire [14:0] word_idx_hi = word_idx_lo + 15'd1;
+  wire [ADDR_W:0] word_idx_lo = {1'b0, rel_addr[ADDR_W+1:2]};
+  wire [ADDR_W:0] word_idx_hi = word_idx_lo + 1'b1;
 
   wire is_last_beat = (r_cnt_q == r_len_q);
 
@@ -88,8 +89,8 @@ module moon_bootrom
       r_len_q   <= r_len_d;
       r_cnt_q   <= r_cnt_d;
       if (r_state_q == R_READ) begin
-        r_data_q <= {(word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi] : 32'h0,
-                     (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo] : 32'h0};
+        r_data_q <= {(word_idx_hi < NUM_WORDS) ? rom_mem[word_idx_hi[ADDR_W-1:0]] : 32'h0,
+                     (word_idx_lo < NUM_WORDS) ? rom_mem[word_idx_lo[ADDR_W-1:0]] : 32'h0};
       end
     end
   end

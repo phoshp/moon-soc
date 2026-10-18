@@ -52,7 +52,7 @@ module tb_moon_soc (
   // --------------------------------------------------------------------------
   moon_soc_top #(
     .HART_ID(0),
-    .ROM_SIZE_BYTES(32768),
+    .ROM_SIZE_BYTES(4096),
     .SRAM_SIZE_BYTES(131072),
     .ENABLE_FPU(1'b1),
     .ENABLE_VECTOR(1'b1),

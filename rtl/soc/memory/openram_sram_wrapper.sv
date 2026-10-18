@@ -11,7 +11,7 @@
 
 module openram_sram_wrapper #(
   parameter int DATA_WIDTH  = 64,
-  parameter int ADDR_WIDTH  = 14, // 16384 words = 128 KB for 64-bit data
+  parameter int ADDR_WIDTH  = 9,  // 512 words = 4 KB for 64-bit data (matches Sky130 2x2KB macros)
   parameter int WMASK_WIDTH = DATA_WIDTH / 8
 )(
   input  logic                   clk0,
@@ -29,6 +29,37 @@ module openram_sram_wrapper #(
   output logic [DATA_WIDTH-1:0]  dout1
 );
 
+`ifdef USE_OPENRAM_MACRO
+  // Physical Sky130 1RW1R OpenRAM Macro instances (2x 32-bit macros for 64-bit AXI data width)
+  // Each macro is 2 KB (512 words x 32 bits, 4 byte masks), combined = 4 KB (512 words x 64 bits)
+  sky130_sram_2kbyte_1rw1r_32x512_8 u_sram_lo (
+    .clk0   (clk0),
+    .csb0   (csb0),
+    .web0   (web0),
+    .wmask0 (wmask0[3:0]),
+    .addr0  (addr0[8:0]),
+    .din0   (din0[31:0]),
+    .dout0  (dout0[31:0]),
+    .clk1   (clk1),
+    .csb1   (csb1),
+    .addr1  (addr1[8:0]),
+    .dout1  (dout1[31:0])
+  );
+
+  sky130_sram_2kbyte_1rw1r_32x512_8 u_sram_hi (
+    .clk0   (clk0),
+    .csb0   (csb0),
+    .web0   (web0),
+    .wmask0 (wmask0[7:4]),
+    .addr0  (addr0[8:0]),
+    .din0   (din0[63:32]),
+    .dout0  (dout0[63:32]),
+    .clk1   (clk1),
+    .csb1   (csb1),
+    .addr1  (addr1[8:0]),
+    .dout1  (dout1[63:32])
+  );
+`else
   localparam int NUM_WORDS = 1 << ADDR_WIDTH;
 
   // Synthesis ram_style attribute ensures mapping to BRAM/SRAM macros
@@ -65,6 +96,7 @@ module openram_sram_wrapper #(
 
   assign dout0 = dout0_reg;
   assign dout1 = dout1_reg;
+`endif
 
 endmodule : openram_sram_wrapper
 
