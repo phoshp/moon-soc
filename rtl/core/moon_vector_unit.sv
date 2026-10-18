@@ -424,55 +424,83 @@ module moon_vector_unit (
     input logic [2:0] sew,
     input logic [5:0] operation
   );
-    logic signed [63:0] signed_a;
-    logic signed [63:0] signed_b;
-    logic [63:0] unsigned_a;
-    logic [63:0] unsigned_b;
     logic [63:0] result;
-    logic [63:0] mask;
     begin
       case (sew)
         3'b000: begin
-          signed_a = {{56{operand_a[7]}}, operand_a[7:0]};
-          signed_b = {{56{operand_b[7]}}, operand_b[7:0]};
-          unsigned_a = {56'd0, operand_a[7:0]};
-          unsigned_b = {56'd0, operand_b[7:0]};
-          mask = 64'hff;
+          logic signed [7:0] s_a, s_b, s_res;
+          logic [7:0] u_a, u_b, u_res;
+          s_a = operand_a[7:0];
+          s_b = operand_b[7:0];
+          u_a = operand_a[7:0];
+          u_b = operand_b[7:0];
+          if (operation[0]) begin
+            if (s_b == 0) s_res = operation[1] ? s_a : 8'hff;
+            else if (s_a == -8'sd128 && s_b == -8'sd1) s_res = operation[1] ? 8'd0 : -8'sd128;
+            else s_res = operation[1] ? (s_a % s_b) : (s_a / s_b);
+            result = {56'd0, s_res};
+          end else begin
+            if (u_b == 0) u_res = operation[1] ? u_a : 8'hff;
+            else u_res = operation[1] ? (u_a % u_b) : (u_a / u_b);
+            result = {56'd0, u_res};
+          end
         end
         3'b001: begin
-          signed_a = {{48{operand_a[15]}}, operand_a[15:0]};
-          signed_b = {{48{operand_b[15]}}, operand_b[15:0]};
-          unsigned_a = {48'd0, operand_a[15:0]};
-          unsigned_b = {48'd0, operand_b[15:0]};
-          mask = 64'hffff;
+          logic signed [15:0] s_a, s_b, s_res;
+          logic [15:0] u_a, u_b, u_res;
+          s_a = operand_a[15:0];
+          s_b = operand_b[15:0];
+          u_a = operand_a[15:0];
+          u_b = operand_b[15:0];
+          if (operation[0]) begin
+            if (s_b == 0) s_res = operation[1] ? s_a : 16'hffff;
+            else if (s_a == -16'sd32768 && s_b == -16'sd1) s_res = operation[1] ? 16'd0 : -16'sd32768;
+            else s_res = operation[1] ? (s_a % s_b) : (s_a / s_b);
+            result = {48'd0, s_res};
+          end else begin
+            if (u_b == 0) u_res = operation[1] ? u_a : 16'hffff;
+            else u_res = operation[1] ? (u_a % u_b) : (u_a / u_b);
+            result = {48'd0, u_res};
+          end
         end
         3'b010: begin
-          signed_a = {{32{operand_a[31]}}, operand_a[31:0]};
-          signed_b = {{32{operand_b[31]}}, operand_b[31:0]};
-          unsigned_a = {32'd0, operand_a[31:0]};
-          unsigned_b = {32'd0, operand_b[31:0]};
-          mask = 64'hffff_ffff;
+          logic signed [31:0] s_a, s_b, s_res;
+          logic [31:0] u_a, u_b, u_res;
+          s_a = operand_a[31:0];
+          s_b = operand_b[31:0];
+          u_a = operand_a[31:0];
+          u_b = operand_b[31:0];
+          if (operation[0]) begin
+            if (s_b == 0) s_res = operation[1] ? s_a : 32'hffff_ffff;
+            else if (s_a == -32'sd2147483648 && s_b == -32'sd1) s_res = operation[1] ? 32'd0 : -32'sd2147483648;
+            else s_res = operation[1] ? (s_a % s_b) : (s_a / s_b);
+            result = {32'd0, s_res};
+          end else begin
+            if (u_b == 0) u_res = operation[1] ? u_a : 32'hffff_ffff;
+            else u_res = operation[1] ? (u_a % u_b) : (u_a / u_b);
+            result = {32'd0, u_res};
+          end
         end
         default: begin
-          signed_a = operand_a;
-          signed_b = operand_b;
-          unsigned_a = operand_a;
-          unsigned_b = operand_b;
-          mask = 64'hffff_ffff_ffff_ffff;
+          logic signed [63:0] s_a, s_b, s_res;
+          logic [63:0] u_a, u_b, u_res;
+          s_a = operand_a;
+          s_b = operand_b;
+          u_a = operand_a;
+          u_b = operand_b;
+          if (operation[0]) begin
+            if (s_b == 0) s_res = operation[1] ? s_a : 64'hffff_ffff_ffff_ffff;
+            else if (s_a == -64'sd9223372036854775808 && s_b == -64'sd1) s_res = operation[1] ? 64'd0 : -64'sd9223372036854775808;
+            else s_res = operation[1] ? (s_a % s_b) : (s_a / s_b);
+            result = s_res;
+          end else begin
+            if (u_b == 0) u_res = operation[1] ? u_a : 64'hffff_ffff_ffff_ffff;
+            else u_res = operation[1] ? (u_a % u_b) : (u_a / u_b);
+            result = u_res;
+          end
         end
       endcase
-      if (operation[0]) begin
-        if (signed_b == 0)
-          result = operation[1] ? signed_a : mask;
-        else
-          result = operation[1] ? (signed_a % signed_b) : (signed_a / signed_b);
-      end else begin
-        if (unsigned_b == 0)
-          result = operation[1] ? unsigned_a : mask;
-        else
-          result = operation[1] ? (unsigned_a % unsigned_b) : (unsigned_a / unsigned_b);
-      end
-      vector_divrem = result & mask;
+      vector_divrem = result;
     end
   endfunction
 
@@ -521,7 +549,7 @@ module moon_vector_unit (
           unsigned_a = {96'd0, operand_a[31:0]};
           unsigned_b = {96'd0, operand_b[31:0]};
           signed_max = 2147483647;
-          signed_min = -2147483648;
+          signed_min = -128'sd2147483648;
           unsigned_max = 32'hffff_ffff;
         end
         default: begin

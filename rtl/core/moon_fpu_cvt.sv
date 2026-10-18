@@ -39,9 +39,11 @@ module moon_fpu_cvt
     logic discarded;
     logic round_up;
     logic tiny;
+    logic [4:0] shift_clamped;
 
     result_o = '0;
     flags_o = '0;
+    shift_clamped = '0;
     sign = single_source_i ? operand_i[31] : operand_i[63];
     source_exp = single_source_i ? {3'b0, operand_i[30:23]} : operand_i[62:52];
     source_frac = single_source_i ? {29'b0, operand_i[22:0]} : operand_i[51:0];
@@ -106,12 +108,13 @@ module moon_fpu_cvt
       if (target_exponent < -126) begin
         tiny = 1'b1;
         shift_amount = -126 - target_exponent;
-        sticky = 1'b0;
-        for (int i = 0; i < 1100; i++) begin
-          if (i < shift_amount) begin
-            sticky = sticky | extended_sig[0];
-            extended_sig = {1'b0, extended_sig[26:1]};
-          end
+        if (shift_amount >= 27) begin
+          sticky = |extended_sig;
+          extended_sig = '0;
+        end else begin
+          shift_clamped = shift_amount[4:0];
+          sticky = (shift_clamped > 0) && |(extended_sig & ((27'd1 << shift_clamped) - 27'd1));
+          extended_sig = extended_sig >> shift_clamped;
         end
         extended_sig[0] = extended_sig[0] | sticky;
         target_exponent = -126;

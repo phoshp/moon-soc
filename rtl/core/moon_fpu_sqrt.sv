@@ -17,24 +17,43 @@ module moon_fpu_sqrt
   output logic [FLEN-1:0] result_o,
   output logic [4:0]      flags_o
 );
-  function automatic logic [63:0] integer_sqrt(input logic [127:0] value);
-    logic [129:0] remainder;
-    logic [129:0] trial;
-    logic [65:0] root;
+  function automatic logic [63:0] integer_sqrt(input logic [127:0] value, input logic is_single);
     begin
-      remainder = '0;
-      root = '0;
-      trial = '0;
-      for (int i = 63; i >= 0; i--) begin
-        remainder = (remainder << 2) | ((value >> (i * 2)) & 128'd3);
-        root = root << 1;
-        trial = (root << 1) | 130'd1;
-        if (remainder >= trial) begin
-          remainder = remainder - trial;
-          root = root | 66'd1;
+      if (is_single) begin
+        logic [29:0] remainder;
+        logic [29:0] trial;
+        logic [28:0] root;
+        remainder = '0;
+        root = '0;
+        trial = '0;
+        for (int i = 27; i >= 0; i--) begin
+          remainder = (remainder << 2) | ((value >> (i * 2)) & 128'd3);
+          root = root << 1;
+          trial = (root << 1) | 30'd1;
+          if (remainder >= trial) begin
+            remainder = remainder - trial;
+            root = root | 29'd1;
+          end
         end
+        integer_sqrt = {36'd0, root[27:0]};
+      end else begin
+        logic [57:0] remainder;
+        logic [57:0] trial;
+        logic [56:0] root;
+        remainder = '0;
+        root = '0;
+        trial = '0;
+        for (int i = 55; i >= 0; i--) begin
+          remainder = (remainder << 2) | ((value >> (i * 2)) & 128'd3);
+          root = root << 1;
+          trial = (root << 1) | 58'd1;
+          if (remainder >= trial) begin
+            remainder = remainder - trial;
+            root = root | 57'd1;
+          end
+        end
+        integer_sqrt = {8'd0, root[55:0]};
       end
-      integer_sqrt = root[63:0];
     end
   endfunction
 
@@ -77,7 +96,7 @@ module moon_fpu_sqrt
     exp_encoded = 0;
     radicand = {75'd0, significand} << (frac_bits + 6);
     if (exponent[0]) radicand = radicand << 1;
-    root = integer_sqrt(radicand);
+    root = integer_sqrt(radicand, is_single_i);
     ext_sig = root[55:0];
     root_wide = {64'd0, root};
     square_remainder = radicand - (root_wide * root_wide);
