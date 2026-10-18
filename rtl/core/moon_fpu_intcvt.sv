@@ -104,7 +104,11 @@ module moon_fpu_intcvt
         else begin
           shift_amount = -shift_amount;
           extended_sig = {1'b0, magnitude64} >> shift_amount;
-          for (int i = 0; i < 64; i++) if (i < shift_amount) sticky_bit |= magnitude64[i];
+          if (shift_amount >= 64) begin
+            sticky_bit = |magnitude64;
+          end else if (shift_amount > 0) begin
+            sticky_bit = |(magnitude64 & ((64'd1 << shift_amount) - 64'd1));
+          end
           extended_sig[0] |= sticky_bit;
         end
         discarded = |extended_sig[2:0];
@@ -162,8 +166,9 @@ module moon_fpu_intcvt
         end else begin
           magnitude = significand >> shift_amount;
           guard_bit = significand[shift_amount-1];
-          for (int i = 0; i < 53; i++)
-            if (i < shift_amount-1) sticky_bit |= significand[i];
+          if (shift_amount > 1) begin
+            sticky_bit = |(significand & ((53'd1 << (shift_amount - 1)) - 53'd1));
+          end
         end
         discarded = guard_bit || sticky_bit;
         case (rounding_mode_i)

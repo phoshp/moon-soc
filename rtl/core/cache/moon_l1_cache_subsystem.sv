@@ -18,6 +18,8 @@ module moon_l1_cache_subsystem
 #(
   parameter int ICACHE_WAYS = 4,
   parameter int DCACHE_WAYS = 4,
+  parameter int ICACHE_SETS = 128,
+  parameter int DCACHE_SETS = 128,
   parameter int LINE_BYTES  = 64
 )(
   input  logic clk_i,
@@ -78,7 +80,7 @@ module moon_l1_cache_subsystem
   // --------------------------------------------------------------------------
   moon_icache #(
     .NUM_WAYS   (ICACHE_WAYS),
-    .NUM_SETS   (128),
+    .NUM_SETS   (ICACHE_SETS),
     .LINE_BYTES (LINE_BYTES)
   ) u_icache (
     .clk_i        (clk_i),
@@ -99,7 +101,7 @@ module moon_l1_cache_subsystem
   // --------------------------------------------------------------------------
   moon_dcache #(
     .NUM_WAYS   (DCACHE_WAYS),
-    .NUM_SETS   (128),
+    .NUM_SETS   (DCACHE_SETS),
     .LINE_BYTES (LINE_BYTES)
   ) u_dcache (
     .clk_i        (clk_i),

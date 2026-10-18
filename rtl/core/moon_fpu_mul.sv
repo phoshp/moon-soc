@@ -126,7 +126,11 @@ module moon_fpu_mul
       if (exp_field_b != 0) sig_b[52] = 1'b1;
     end
 
-    product = sig_a * sig_b;
+    if (is_single_i) begin
+      product = {58'd0, 48'(sig_a[23:0] * sig_b[23:0])};
+    end else begin
+      product = sig_a * sig_b;
+    end
     if (is_nan_a || is_nan_b || boxing_error) begin
       if (is_single_i) result_o = 64'hffff_ffff_7fc0_0000;
       else result_o = 64'h7ff8_0000_0000_0000;
@@ -141,10 +145,19 @@ module moon_fpu_mul
       if (is_single_i) result_o = {32'hffff_ffff, sign_result, 31'd0};
       else result_o = {sign_result, 63'd0};
     end else begin
-      for (int i = 0; i < 106; i++) begin
-        if (product[i]) begin
-          top_product = i;
-          found_top = 1'b1;
+      if (is_single_i) begin
+        for (int i = 0; i < 48; i++) begin
+          if (product[i]) begin
+            top_product = i;
+            found_top = 1'b1;
+          end
+        end
+      end else begin
+        for (int i = 0; i < 106; i++) begin
+          if (product[i]) begin
+            top_product = i;
+            found_top = 1'b1;
+          end
         end
       end
       if (!found_top) begin
@@ -155,8 +168,10 @@ module moon_fpu_mul
       if (shift_amount >= 0) begin
         shifted_product = {1'b0, product} >> shift_amount;
         ext_product = shifted_product[56:0];
-        for (int i = 0; i < 106; i++) begin
-          if (i < shift_amount) lower_sticky = lower_sticky | product[i];
+        if (shift_amount >= 106) begin
+          lower_sticky = |product;
+        end else if (shift_amount > 0) begin
+          lower_sticky = |(product & ((106'd1 << shift_amount) - 106'd1));
         end
         ext_product[0] = ext_product[0] | lower_sticky;
       end else begin

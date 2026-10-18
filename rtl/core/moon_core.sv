@@ -32,6 +32,7 @@ module moon_core
   import moon_pkg::*;
 #(
   parameter int HART_ID = 0,
+  parameter bit ENABLE_FPU = 1'b1,
   parameter bit ENABLE_VECTOR_FP = 1'b1
 )(
   input  logic             clk_i,
@@ -544,6 +545,7 @@ module moon_core
   // 3. EX Stage Instantiation
   // --------------------------------------------------------------------------
   moon_ex_stage #(
+    .ENABLE_FPU       (ENABLE_FPU),
     .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
   ) u_ex_stage (
     .clk_i                (clk_i),

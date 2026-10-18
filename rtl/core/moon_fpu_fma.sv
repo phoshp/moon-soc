@@ -143,7 +143,11 @@ module moon_fpu_fma
       sig_c = sig_c << (frac_bits - top_c);
       exp_c = exp_c - (frac_bits - top_c);
     end
-    product = sig_a * sig_b;
+    if (format_i == 2'b00) begin
+      product = {58'd0, 48'(sig_a[23:0] * sig_b[23:0])};
+    end else begin
+      product = sig_a * sig_b;
+    end
     top_a = 0;
     for (int i = 0; i < 106; i++) if (product[i]) top_a = i;
     exp_prod_top = exp_a + exp_b + top_a - (2 * frac_bits);
@@ -193,7 +197,11 @@ module moon_fpu_fma
     if (!result_is_zero) begin
       if (shift_amount > 0) begin
         ext_sig = result_mag >> shift_amount;
-        for (int i = 0; i < 128; i++) if (i < shift_amount) sticky_from_norm |= result_mag[i];
+        if (shift_amount >= 128) begin
+          sticky_from_norm = |result_mag;
+        end else if (shift_amount > 0) begin
+          sticky_from_norm = |(result_mag & ((128'd1 << shift_amount) - 128'd1));
+        end
       end else begin
         ext_sig = result_mag << (-shift_amount);
       end

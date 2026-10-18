@@ -24,6 +24,7 @@
 module moon_ex_stage
   import moon_pkg::*;
 #(
+  parameter bit ENABLE_FPU = 1'b1,
   parameter bit ENABLE_VECTOR_FP = 1'b1
 )(
   input  logic             clk_i,
@@ -262,61 +263,96 @@ module moon_ex_stage
 
   assign fp_rounding_mode = (id_ex_fp_rm_i == 3'b111) ? frm_i : id_ex_fp_rm_i;
 
-  moon_fpu_add u_fpu_add (
-    .operand_a_i       (id_ex_rs1_data_i),
-    .operand_b_i       (id_ex_rs2_data_i),
-    .is_single_i       (id_ex_fp_word_i),
-    .subtract_i        (id_ex_fp_sub_i),
-    .rounding_mode_i   (fp_rounding_mode),
-    .result_o          (fp_add_result),
-    .flags_o           (fp_add_flags)
-  );
+  if (ENABLE_FPU) begin : gen_scalar_fpu
+    moon_fpu_add u_fpu_add (
+      .operand_a_i       (id_ex_rs1_data_i),
+      .operand_b_i       (id_ex_rs2_data_i),
+      .is_single_i       (id_ex_fp_word_i),
+      .subtract_i        (id_ex_fp_sub_i),
+      .rounding_mode_i   (fp_rounding_mode),
+      .result_o          (fp_add_result),
+      .flags_o           (fp_add_flags)
+    );
 
-  moon_fpu_mul u_fpu_mul (
-    .operand_a_i       (id_ex_rs1_data_i),
-    .operand_b_i       (id_ex_rs2_data_i),
-    .is_single_i       (id_ex_fp_word_i),
-    .rounding_mode_i   (fp_rounding_mode),
-    .result_o          (fp_mul_result),
-    .flags_o           (fp_mul_flags)
-  );
+    moon_fpu_mul u_fpu_mul (
+      .operand_a_i       (id_ex_rs1_data_i),
+      .operand_b_i       (id_ex_rs2_data_i),
+      .is_single_i       (id_ex_fp_word_i),
+      .rounding_mode_i   (fp_rounding_mode),
+      .result_o          (fp_mul_result),
+      .flags_o           (fp_mul_flags)
+    );
 
-  moon_fpu_cmp u_fpu_cmp (
-    .operand_a_i (id_ex_rs1_data_i),
-    .operand_b_i (id_ex_rs2_data_i),
-    .is_single_i (id_ex_fp_word_i),
-    .operation_i (id_ex_fp_cmp_op_i),
-    .result_o    (fp_cmp_result),
-    .flags_o     (fp_cmp_flags)
-  );
+    moon_fpu_cmp u_fpu_cmp (
+      .operand_a_i (id_ex_rs1_data_i),
+      .operand_b_i (id_ex_rs2_data_i),
+      .is_single_i (id_ex_fp_word_i),
+      .operation_i (id_ex_fp_cmp_op_i),
+      .result_o    (fp_cmp_result),
+      .flags_o     (fp_cmp_flags)
+    );
 
-  moon_fpu_div u_fpu_div (
-    .operand_a_i       (id_ex_rs1_data_i),
-    .operand_b_i       (id_ex_rs2_data_i),
-    .is_single_i       (id_ex_fp_word_i),
-    .rounding_mode_i   (fp_rounding_mode),
-    .result_o          (fp_div_result),
-    .flags_o           (fp_div_flags)
-  );
+    moon_fpu_div u_fpu_div (
+      .operand_a_i       (id_ex_rs1_data_i),
+      .operand_b_i       (id_ex_rs2_data_i),
+      .is_single_i       (id_ex_fp_word_i),
+      .rounding_mode_i   (fp_rounding_mode),
+      .result_o          (fp_div_result),
+      .flags_o           (fp_div_flags)
+    );
 
-  moon_fpu_sqrt u_fpu_sqrt (
-    .operand_i       (id_ex_rs1_data_i),
-    .is_single_i     (id_ex_fp_word_i),
-    .rounding_mode_i (fp_rounding_mode),
-    .result_o        (fp_sqrt_result),
-    .flags_o         (fp_sqrt_flags)
-  );
+    moon_fpu_sqrt u_fpu_sqrt (
+      .operand_i       (id_ex_rs1_data_i),
+      .is_single_i     (id_ex_fp_word_i),
+      .rounding_mode_i (fp_rounding_mode),
+      .result_o        (fp_sqrt_result),
+      .flags_o         (fp_sqrt_flags)
+    );
 
-  moon_fpu_fma u_fpu_fma (
-    .operand_a_i     (id_ex_rs1_data_i),
-    .operand_b_i     (id_ex_rs2_data_i),
-    .operand_c_i     (id_ex_fp_rs3_data_i),
-    .format_i        (id_ex_instr_i[26:25]),
-    .opcode_i        (id_ex_instr_i[6:0]),
-    .rounding_mode_i (fp_rounding_mode),
-    .result_o        (fp_fma_result),
-    .flags_o         (fp_fma_flags)
-  );
+    moon_fpu_fma u_fpu_fma (
+      .operand_a_i     (id_ex_rs1_data_i),
+      .operand_b_i     (id_ex_rs2_data_i),
+      .operand_c_i     (id_ex_fp_rs3_data_i),
+      .format_i        (id_ex_instr_i[26:25]),
+      .opcode_i        (id_ex_instr_i[6:0]),
+      .rounding_mode_i (fp_rounding_mode),
+      .result_o        (fp_fma_result),
+      .flags_o         (fp_fma_flags)
+    );
+
+    moon_fpu_cvt u_fpu_cvt (
+      .operand_i       (id_ex_rs1_data_i),
+      .single_source_i (id_ex_instr_i[25]),
+      .rounding_mode_i (fp_rounding_mode),
+      .result_o        (fp_cvt_result),
+      .flags_o         (fp_cvt_flags)
+    );
+
+    moon_fpu_intcvt u_fpu_intcvt (
+      .operand_i       ((id_ex_instr_i[31:27] == 5'b11010) ? operand_a_fwd : id_ex_rs1_data_i),
+      .instruction_i   (id_ex_instr_i),
+      .rounding_mode_i (fp_rounding_mode),
+      .result_o        (fp_int_cvt_result),
+      .flags_o         (fp_int_cvt_flags)
+    );
+  end else begin : gen_no_scalar_fpu
+    assign fp_add_result = '0;
+    assign fp_add_flags = '0;
+    assign fp_mul_result = '0;
+    assign fp_mul_flags = '0;
+    assign fp_cmp_result = '0;
+    assign fp_cmp_flags = '0;
+    assign fp_div_result = '0;
+    assign fp_div_flags = '0;
+    assign fp_sqrt_result = '0;
+    assign fp_sqrt_flags = '0;
+    assign fp_fma_result = '0;
+    assign fp_fma_flags = '0;
+    assign fp_cvt_result = '0;
+    assign fp_cvt_flags = '0;
+    assign fp_int_cvt_result = '0;
+    assign fp_int_cvt_flags = '0;
+  end
 
   assign fp_fma_instruction = (id_ex_instr_i[6:0] == 7'b1000011) ||
                               (id_ex_instr_i[6:0] == 7'b1000111) ||
@@ -325,22 +361,6 @@ module moon_ex_stage
 
   assign fp_sqrt_instruction = (id_ex_instr_i[31:25] == 7'b0101100) ||
                                (id_ex_instr_i[31:25] == 7'b0101101);
-
-  moon_fpu_cvt u_fpu_cvt (
-    .operand_i       (id_ex_rs1_data_i),
-    .single_source_i (id_ex_instr_i[25]),
-    .rounding_mode_i (fp_rounding_mode),
-    .result_o        (fp_cvt_result),
-    .flags_o         (fp_cvt_flags)
-  );
-
-  moon_fpu_intcvt u_fpu_intcvt (
-    .operand_i       ((id_ex_instr_i[31:27] == 5'b11010) ? operand_a_fwd : id_ex_rs1_data_i),
-    .instruction_i   (id_ex_instr_i),
-    .rounding_mode_i (fp_rounding_mode),
-    .result_o        (fp_int_cvt_result),
-    .flags_o         (fp_int_cvt_flags)
-  );
 
   assign fp_int_cvt_instruction = (id_ex_instr_i[31:27] == 5'b11000) ||
                                   (id_ex_instr_i[31:27] == 5'b11010);

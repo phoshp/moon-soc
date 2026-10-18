@@ -193,10 +193,19 @@ module moon_fpu_add
         if (ext_result == 0) begin
           sign_result = (rounding_mode_i == 3'b010);
         end else begin
-          for (int i = 0; i < 56; i++) begin
-            if (!ext_result[top_bit] && (exp_result > emin)) begin
-              ext_result = ext_result << 1;
-              exp_result = exp_result - 1;
+          if (is_single_i) begin
+            for (int i = 0; i < 27; i++) begin
+              if (!ext_result[top_bit] && (exp_result > emin)) begin
+                ext_result = ext_result << 1;
+                exp_result = exp_result - 1;
+              end
+            end
+          end else begin
+            for (int i = 0; i < 56; i++) begin
+              if (!ext_result[top_bit] && (exp_result > emin)) begin
+                ext_result = ext_result << 1;
+                exp_result = exp_result - 1;
+              end
             end
           end
         end

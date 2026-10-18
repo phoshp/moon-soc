@@ -33,6 +33,11 @@ module moon_soc_top
   parameter int HART_ID = 0,
   parameter int ROM_SIZE_BYTES  = 32768,  // 32 KB Boot ROM
   parameter int SRAM_SIZE_BYTES = 131072, // 128 KB On-Chip SRAM
+  parameter int ICACHE_SETS     = 128,
+  parameter int DCACHE_SETS     = 128,
+  parameter int ICACHE_WAYS     = 4,
+  parameter int DCACHE_WAYS     = 4,
+  parameter bit ENABLE_FPU       = 1'b1,
   parameter bit ENABLE_VECTOR_FP = 1'b1
 )(
   input  logic clk_i,
@@ -135,6 +140,7 @@ module moon_soc_top
   // --------------------------------------------------------------------------
   moon_core #(
     .HART_ID(HART_ID),
+    .ENABLE_FPU(ENABLE_FPU),
     .ENABLE_VECTOR_FP(ENABLE_VECTOR_FP)
   ) u_core (
     .clk_i               (clk_core),
@@ -174,7 +180,12 @@ module moon_soc_top
   axi_b_t  [1:0] core_b;
   logic    [1:0] core_b_ready;
 
-  moon_l1_cache_subsystem u_l1_cache (
+  moon_l1_cache_subsystem #(
+    .ICACHE_WAYS (ICACHE_WAYS),
+    .DCACHE_WAYS (DCACHE_WAYS),
+    .ICACHE_SETS (ICACHE_SETS),
+    .DCACHE_SETS (DCACHE_SETS)
+  ) u_l1_cache (
     .clk_i         (clk_core),
     .rst_ni        (rst_core_n),
     .imem_req_i    (imem_req),
