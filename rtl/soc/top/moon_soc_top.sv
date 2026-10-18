@@ -32,7 +32,8 @@ module moon_soc_top
 #(
   parameter int HART_ID = 0,
   parameter int ROM_SIZE_BYTES  = 32768,  // 32 KB Boot ROM
-  parameter int SRAM_SIZE_BYTES = 131072  // 128 KB On-Chip SRAM
+  parameter int SRAM_SIZE_BYTES = 131072, // 128 KB On-Chip SRAM
+  parameter bit ENABLE_VECTOR_FP = 1'b1
 )(
   input  logic clk_i,
   input  logic rst_ni,
@@ -133,7 +134,8 @@ module moon_soc_top
   // 1. CPU Core Instantiation
   // --------------------------------------------------------------------------
   moon_core #(
-    .HART_ID(HART_ID)
+    .HART_ID(HART_ID),
+    .ENABLE_VECTOR_FP(ENABLE_VECTOR_FP)
   ) u_core (
     .clk_i               (clk_core),
     .rst_ni              (rst_core_n),

@@ -6,7 +6,9 @@
 `ifndef MOON_VECTOR_UNIT_SV
 `define MOON_VECTOR_UNIT_SV
 
-module moon_vector_unit (
+module moon_vector_unit #(
+  parameter bit ENABLE_VECTOR_FP = 1'b1
+) (
   input  logic        clk_i,
   input  logic        rst_ni,
   input  logic        valid_i,
@@ -1440,6 +1442,7 @@ module moon_vector_unit (
   assign vs1 = instr_i[19:15];
   assign vs2 = instr_i[24:20];
 
+  if (ENABLE_VECTOR_FP) begin : gen_vector_fp
   for (genvar fp_lane = 0; fp_lane < 4; fp_lane++) begin : gen_vector_fp_add
     moon_fpu_add u_vector_fpu_add (
       .operand_a_i      (vector_fp_operand_a[fp_lane]),
@@ -1534,6 +1537,26 @@ module moon_vector_unit (
       .result_o         (vector_fp_narrow_float_result[fp_lane]),
       .flags_o          (vector_fp_narrow_float_flags[fp_lane])
     );
+  end
+  end else begin : gen_no_vector_fp
+    assign vector_fp_result = '0;
+    assign vector_fp_mul_result = '0;
+    assign vector_fp_div_result = '0;
+    assign vector_fp_sqrt_result = '0;
+    assign vector_fp_mac_result = '0;
+    assign vector_fp_compare_result = '0;
+    assign vector_fp_int_cvt_result = '0;
+    assign vector_fp_widen_float_result = '0;
+    assign vector_fp_narrow_float_result = '0;
+    assign vector_fp_lane_flags = '0;
+    assign vector_fp_mul_flags = '0;
+    assign vector_fp_div_flags = '0;
+    assign vector_fp_sqrt_flags = '0;
+    assign vector_fp_mac_flags = '0;
+    assign vector_fp_compare_flags = '0;
+    assign vector_fp_int_cvt_flags = '0;
+    assign vector_fp_widen_float_flags = '0;
+    assign vector_fp_narrow_float_flags = '0;
   end
 
   always_comb begin : prepare_vector_narrow_operands
@@ -1845,6 +1868,21 @@ module moon_vector_unit (
       vector_mem_vd_q <= '0;
       for (int i = 0; i < 32; i++) vreg[i] <= '0;
     end else begin
+      logic [4:0]   vreg_wr_addr_a;
+      logic [127:0] vreg_wr_data_a;
+      logic         vreg_wr_en_a;
+
+      logic [4:0]   vreg_wr_addr_b;
+      logic [127:0] vreg_wr_data_b;
+      logic         vreg_wr_en_b;
+
+      vreg_wr_en_a   = 1'b0;
+      vreg_wr_addr_a = (vector_mem_active_q || vector_mem_done_q) ? vector_mem_vd_q : vd;
+      vreg_wr_data_a = vreg[(vector_mem_active_q || vector_mem_done_q) ? vector_mem_vd_q : vd];
+
+      vreg_wr_en_b   = 1'b0;
+      vreg_wr_addr_b = vd + 5'd1;
+      vreg_wr_data_b = vreg[vd + 5'd1];
       if (vector_mem_fault_i) begin
         vector_mem_active_q <= 1'b0;
         vector_mem_done_q <= 1'b0;
@@ -1885,14 +1923,10 @@ module moon_vector_unit (
       end else if (vector_mem_active_q && mem_valid_i && mem_req_o) begin
         if (!vector_mem_store_q) begin
           case (vector_mem_sew_q)
-            3'b000: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 8 +: 8] <=
-                      mem_rdata_i[vector_mem_offset * 8 +: 8];
-            3'b001: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 16 +: 16] <=
-                      mem_rdata_i[vector_mem_offset * 8 +: 16];
-            3'b010: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 32 +: 32] <=
-                      mem_rdata_i[vector_mem_offset * 8 +: 32];
-            default: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 64 +: 64] <=
-                       mem_rdata_i[63:0];
+            3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 8 +: 8] = mem_rdata_i[vector_mem_offset * 8 +: 8]; end
+            3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 16 +: 16] = mem_rdata_i[vector_mem_offset * 8 +: 16]; end
+            3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 32 +: 32] = mem_rdata_i[vector_mem_offset * 8 +: 32]; end
+            default: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 64 +: 64] = mem_rdata_i[63:0]; end
           endcase
         end
         if (vector_mem_count_q + 1'b1 >= vector_mem_vl_q) begin
@@ -1907,10 +1941,10 @@ module moon_vector_unit (
           vector_mem_count_q < vector_mem_vl_q && !instr_i[25] &&
           !vreg[0][vector_mem_count_q] && vtype_q[7]) begin
         case (vector_mem_sew_q)
-          3'b000: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 8 +: 8] <= 8'hff;
-          3'b001: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 16 +: 16] <= 16'hffff;
-          3'b010: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 32 +: 32] <= 32'hffff_ffff;
-          default: vreg[vector_mem_vd_q][int'(vector_mem_count_q) * 64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+          3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 8 +: 8] = 8'hff; end
+          3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 16 +: 16] = 16'hffff; end
+          3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 32 +: 32] = 32'hffff_ffff; end
+          default: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[int'(vector_mem_count_q) * 64 +: 64] = 64'hffff_ffff_ffff_ffff; end
         endcase
       end
 
@@ -1918,10 +1952,10 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if (i >= vector_mem_vl_q) begin
             case (vector_mem_sew_q)
-              3'b000: vreg[vector_mem_vd_q][i*8 +: 8] <= 8'hff;
-              3'b001: if (i < 8) vreg[vector_mem_vd_q][i*16 +: 16] <= 16'hffff;
-              3'b010: if (i < 4) vreg[vector_mem_vd_q][i*32 +: 32] <= 32'hffff_ffff;
-              default: if (i < 2) vreg[vector_mem_vd_q][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[i*8 +: 8] = 8'hff; end
+              3'b001: if (i < 8) begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
+              3'b010: if (i < 4) begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_addr_a = vector_mem_vd_q; vreg_wr_data_a[i*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
             endcase
           end
         end
@@ -1938,23 +1972,23 @@ module moon_vector_unit (
         end
       end else if (is_vmv_v_x) begin
         case (vsew_q)
-          3'b000: for (int i = 0; i < 16; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*8 +: 8] <= scalar_rs1_i[7:0];
-          3'b001: for (int i = 0; i < 8; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*16 +: 16] <= scalar_rs1_i[15:0];
-          3'b010: for (int i = 0; i < 4; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*32 +: 32] <= scalar_rs1_i[31:0];
-          default: for (int i = 0; i < 2; i++) if ((i < vl_q) && (i >= vector_vstart_i)) vreg[vd][i*64 +: 64] <= scalar_rs1_i;
+          3'b000: for (int i = 0; i < 16; i++) if ((i < vl_q) && (i >= vector_vstart_i)) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = scalar_rs1_i[7:0]; end
+          3'b001: for (int i = 0; i < 8; i++) if ((i < vl_q) && (i >= vector_vstart_i)) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = scalar_rs1_i[15:0]; end
+          3'b010: for (int i = 0; i < 4; i++) if ((i < vl_q) && (i >= vector_vstart_i)) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = scalar_rs1_i[31:0]; end
+          default: for (int i = 0; i < 2; i++) if ((i < vl_q) && (i >= vector_vstart_i)) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = scalar_rs1_i; end
         endcase
       end else if (is_vmask_logic) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i)) begin
             case (instr_i[31:26])
-              6'b011000: vreg[vd][i] <= vreg[vs2][i] & ~vreg[vs1][i];
-              6'b011001: vreg[vd][i] <= vreg[vs2][i] & vreg[vs1][i];
-              6'b011010: vreg[vd][i] <= vreg[vs2][i] | vreg[vs1][i];
-              6'b011011: vreg[vd][i] <= vreg[vs2][i] ^ vreg[vs1][i];
-              6'b011100: vreg[vd][i] <= ~(vreg[vs2][i] ^ vreg[vs1][i]);
-              6'b011101: vreg[vd][i] <= ~(vreg[vs2][i] & vreg[vs1][i]);
-              6'b011110: vreg[vd][i] <= ~(vreg[vs2][i] | vreg[vs1][i]);
-              default:   vreg[vd][i] <= vreg[vs2][i] | ~vreg[vs1][i];
+              6'b011000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = vreg[vs2][i] & ~vreg[vs1][i]; end
+              6'b011001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = vreg[vs2][i] & vreg[vs1][i]; end
+              6'b011010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = vreg[vs2][i] | vreg[vs1][i]; end
+              6'b011011: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = vreg[vs2][i] ^ vreg[vs1][i]; end
+              6'b011100: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = ~(vreg[vs2][i] ^ vreg[vs1][i]); end
+              6'b011101: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = ~(vreg[vs2][i] & vreg[vs1][i]); end
+              6'b011110: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = ~(vreg[vs2][i] | vreg[vs1][i]); end
+              default:   begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = vreg[vs2][i] | ~vreg[vs1][i]; end
             endcase
           end
         end
@@ -1963,55 +1997,55 @@ module moon_vector_unit (
           if (i < vl_q) begin
             if (instr_i[25] || vreg[0][i]) begin
               case (instr_i[19:15])
-                5'd1: vreg[vd][i] <= !mask_first_found || (i < mask_first_index);
-                5'd2: vreg[vd][i] <= mask_first_found && (i == mask_first_index);
-                default: vreg[vd][i] <= !mask_first_found || (i <= mask_first_index);
+                5'd1: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = !mask_first_found || (i < mask_first_index); end
+                5'd2: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = mask_first_found && (i == mask_first_index); end
+                default: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = !mask_first_found || (i <= mask_first_index); end
               endcase
             end else if (vtype_q[7]) begin
-              vreg[vd][i] <= 1'b1;
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = 1'b1; end
             end
           end else begin
             // Mask-manipulation tails follow vta; with tu they are preserved.
-            if (vtype_q[6]) vreg[vd][i] <= 1'b1;
+            if (vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = 1'b1; end
           end
         end
       end else if (is_vector_reduction) begin
         case (vsew_q)
           3'b000: begin
-            vreg[vd][7:0] <= vector_reduce_result[7:0];
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[7:0] = vector_reduce_result[7:0]; end
             if (vtype_q[6])
-              for (int i = 1; i < 16; i++) vreg[vd][i*8 +: 8] <= 8'hff;
+              for (int i = 1; i < 16; i++) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = 8'hff; end
           end
           3'b001: begin
-            vreg[vd][15:0] <= vector_reduce_result[15:0];
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[15:0] = vector_reduce_result[15:0]; end
             if (vtype_q[6])
-              for (int i = 1; i < 8; i++) vreg[vd][i*16 +: 16] <= 16'hffff;
+              for (int i = 1; i < 8; i++) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
           end
           3'b010: begin
-            vreg[vd][31:0] <= vector_reduce_result[31:0];
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[31:0] = vector_reduce_result[31:0]; end
             if (vtype_q[6])
-              for (int i = 1; i < 4; i++) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+              for (int i = 1; i < 4; i++) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
           end
           default: begin
-            vreg[vd][63:0] <= vector_reduce_result;
-            if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[63:0] = vector_reduce_result; end
+            if (vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[127:64] = 64'hffff_ffff_ffff_ffff; end
           end
         endcase
       end else if (is_vector_widen_reduction && (vsew_q != 3'b011)) begin
         case (vsew_q)
           3'b000: begin
-            vreg[vd][15:0] <= vector_widen_reduce_result[15:0];
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[15:0] = vector_widen_reduce_result[15:0]; end
             if (vtype_q[6])
-              for (int i = 1; i < 8; i++) vreg[vd][i*16 +: 16] <= 16'hffff;
+              for (int i = 1; i < 8; i++) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
           end
           3'b001: begin
-            vreg[vd][31:0] <= vector_widen_reduce_result[31:0];
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[31:0] = vector_widen_reduce_result[31:0]; end
             if (vtype_q[6])
-              for (int i = 1; i < 4; i++) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+              for (int i = 1; i < 4; i++) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
           end
           default: begin
-            vreg[vd][63:0] <= vector_widen_reduce_result;
-            if (vtype_q[6]) vreg[vd][127:64] <= 64'hffff_ffff_ffff_ffff;
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[63:0] = vector_widen_reduce_result; end
+            if (vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[127:64] = 64'hffff_ffff_ffff_ffff; end
           end
         endcase
       end else if (is_vector_fp_class) begin
@@ -2019,11 +2053,11 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010)
-              vreg[vd][i*32 +: 32] <= {22'd0, classify_floating(
-                {32'd0, vreg[vs2][i*32 +: 32]}, 1'b1)};
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = {22'd0, classify_floating(
+                {32'd0, vreg[vs2][i*32 +: 32]}, 1'b1)}; end
             else if ((vsew_q == 3'b011) && (i < 2))
-              vreg[vd][i*64 +: 64] <= {54'd0, classify_floating(
-                vreg[vs2][i*64 +: 64], 1'b0)};
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = {54'd0, classify_floating(
+                vreg[vs2][i*64 +: 64], 1'b0)}; end
           end
         end
       end else if (is_vector_fp_widen_op) begin
@@ -2031,15 +2065,15 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (i < 2) begin
-              vreg[vd][i*64 +: 64] <= is_vector_fp_widen_mac ? vector_fp_mac_result[i] :
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = is_vector_fp_widen_mac ? vector_fp_mac_result[i] :
                 (is_vector_fp_widen_arith ?
                   (is_vector_fp_widen_mul ? vector_fp_mul_result[i] : vector_fp_result[i]) :
-                  (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i]));
+                  (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i])); end
             end else begin
-              vreg[vd + 5'd1][(i-2)*64 +: 64] <= is_vector_fp_widen_mac ? vector_fp_mac_result[i] :
+              begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-2)*64 +: 64] = is_vector_fp_widen_mac ? vector_fp_mac_result[i] :
                 (is_vector_fp_widen_arith ?
                   (is_vector_fp_widen_mul ? vector_fp_mul_result[i] : vector_fp_result[i]) :
-                  (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i]));
+                  (is_vector_fp_widen_float_cvt ? vector_fp_widen_float_result[i] : vector_fp_int_cvt_result[i])); end
             end
           end
         end
@@ -2047,7 +2081,7 @@ module moon_vector_unit (
         for (int i = 0; i < 4; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
-            vreg[vd][i*32 +: 32] <= vector_fp_narrow_float_result[i][31:0];
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_fp_narrow_float_result[i][31:0]; end
           end
         end
       end else if (is_vector_fp_int_cvt) begin
@@ -2055,9 +2089,9 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010)
-              vreg[vd][i*32 +: 32] <= vector_fp_int_cvt_result[i][31:0];
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_fp_int_cvt_result[i][31:0]; end
             else if ((vsew_q == 3'b011) && (i < 2))
-              vreg[vd][i*64 +: 64] <= vector_fp_int_cvt_result[i];
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_fp_int_cvt_result[i]; end
           end
         end
       end else if (is_vector_fp_minmax) begin
@@ -2065,9 +2099,9 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010)
-              vreg[vd][i*32 +: 32] <= vector_fp_compare_result[i][31:0];
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_fp_compare_result[i][31:0]; end
             else if ((vsew_q == 3'b011) && (i < 2))
-              vreg[vd][i*64 +: 64] <= vector_fp_compare_result[i];
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_fp_compare_result[i]; end
           end
         end
       end else if (is_vector_fp_signinj) begin
@@ -2076,29 +2110,23 @@ module moon_vector_unit (
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010) begin
               case (instr_i[31:26])
-                6'b001000: vreg[vd][i*32 +: 32] <=
-                  {is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31],
-                   vreg[vs2][i*32+30 -: 31]};
-                6'b001001: vreg[vd][i*32 +: 32] <=
-                  {~(is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31]),
-                   vreg[vs2][i*32+30 -: 31]};
-                default: vreg[vd][i*32 +: 32] <=
-                  {vreg[vs2][i*32+31] ^
+                6'b001000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = {is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31],
+                   vreg[vs2][i*32+30 -: 31]}; end
+                6'b001001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = {~(is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31]),
+                   vreg[vs2][i*32+30 -: 31]}; end
+                default: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = {vreg[vs2][i*32+31] ^
                    (is_vector_fp_scalar_form ? scalar_rs1_i[31] : vreg[vs1][i*32+31]),
-                   vreg[vs2][i*32+30 -: 31]};
+                   vreg[vs2][i*32+30 -: 31]}; end
               endcase
             end else if ((vsew_q == 3'b011) && (i < 2)) begin
               case (instr_i[31:26])
-                6'b001000: vreg[vd][i*64 +: 64] <=
-                  {is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63],
-                   vreg[vs2][i*64+62 -: 63]};
-                6'b001001: vreg[vd][i*64 +: 64] <=
-                  {~(is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63]),
-                   vreg[vs2][i*64+62 -: 63]};
-                default: vreg[vd][i*64 +: 64] <=
-                  {vreg[vs2][i*64+63] ^
+                6'b001000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = {is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63],
+                   vreg[vs2][i*64+62 -: 63]}; end
+                6'b001001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = {~(is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63]),
+                   vreg[vs2][i*64+62 -: 63]}; end
+                default: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = {vreg[vs2][i*64+63] ^
                    (is_vector_fp_scalar_form ? scalar_rs1_i[63] : vreg[vs1][i*64+63]),
-                   vreg[vs2][i*64+62 -: 63]};
+                   vreg[vs2][i*64+62 -: 63]}; end
               endcase
             end
           end
@@ -2108,7 +2136,7 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i])) begin
             if (vsew_q == 3'b010)
-              vreg[vd][i*32 +: 32] <= is_vector_fp_mac ?
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = is_vector_fp_mac ?
                                        vector_fp_mac_result[i][31:0] :
                                        (is_vector_fp_sqrt ?
                                        vector_fp_sqrt_result[i][31:0] :
@@ -2116,16 +2144,16 @@ module moon_vector_unit (
                                        vector_fp_div_result[i][31:0] :
                                        (is_vector_fp_mul ?
                                        vector_fp_mul_result[i][31:0] :
-                                       vector_fp_result[i][31:0])));
+                                       vector_fp_result[i][31:0]))); end
             else if ((vsew_q == 3'b011) && (i < 2))
-              vreg[vd][i*64 +: 64] <= is_vector_fp_mac ?
+              begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = is_vector_fp_mac ?
                                        vector_fp_mac_result[i] :
                                        (is_vector_fp_sqrt ?
                                        vector_fp_sqrt_result[i] :
                                        (is_vector_fp_div ?
                                        vector_fp_div_result[i] :
                                        (is_vector_fp_mul ?
-                                        vector_fp_mul_result[i] : vector_fp_result[i])));
+                                        vector_fp_mul_result[i] : vector_fp_result[i]))); end
           end
         end
       end else if (is_vector_permute) begin : blk_vpermute
@@ -2152,7 +2180,7 @@ module moon_vector_unit (
             endcase
           end
         end
-        vreg[vd] <= permute_vd;
+        begin vreg_wr_en_a = 1'b1; vreg_wr_data_a = permute_vd; end
       end else if (is_vector_sat) begin : blk_vsat
         logic [127:0] sat_vd;
         sat_vd = vreg[vd];
@@ -2178,7 +2206,7 @@ module moon_vector_unit (
             endcase
           end
         end
-        vreg[vd] <= sat_vd;
+        vreg_wr_en_a = 1'b1; vreg_wr_data_a = sat_vd;
       end else if (is_vdivrem_vv || is_vdivrem_vx) begin : blk_vdivrem
         logic [127:0] divrem_vd;
         divrem_vd = vreg[vd];
@@ -2204,7 +2232,7 @@ module moon_vector_unit (
             endcase
           end
         end
-        vreg[vd] <= divrem_vd;
+        vreg_wr_en_a = 1'b1; vreg_wr_data_a = divrem_vd;
       end else if (is_vmulh_vv || is_vmulh_vx || is_vmulhu_vv ||
                    is_vmulhu_vx || is_vmulhsu_vv || is_vmulhsu_vx) begin : blk_vmulh
         logic [127:0] mulh_vd;
@@ -2231,19 +2259,19 @@ module moon_vector_unit (
             endcase
           end
         end
-        vreg[vd] <= mulh_vd;
+        vreg_wr_en_a = 1'b1; vreg_wr_data_a = mulh_vd;
       end else if (is_vmul_vv || is_vmul_vx) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
-                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
-              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
-                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
-              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
-                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_element(vreg[vs2], i[4:0], vsew_q) *
-                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i);
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i); end
+              3'b001: if (i < 8) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i); end
+              3'b010: if (i < 4) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_element(vreg[vs2], i[4:0], vsew_q) *
+                ((is_vmul_vv) ? vector_element(vreg[vs1], i[4:0], vsew_q) : scalar_rs1_i); end
             endcase
           end
         end
@@ -2251,10 +2279,10 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b0);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b0);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32], vreg[vs1][i*32 +: 32], vsew_q, 1'b0);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64], vreg[vs1][i*64 +: 64], vsew_q, 1'b0);
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b0); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b0); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_addsub(vreg[vs2][i*32 +: 32], vreg[vs1][i*32 +: 32], vsew_q, 1'b0); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_addsub(vreg[vs2][i*64 +: 64], vreg[vs1][i*64 +: 64], vsew_q, 1'b0); end
             endcase
           end
         end
@@ -2262,14 +2290,14 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8],
-                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16],
-                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32],
-                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64],
-                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0);
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_addsub(vreg[vs2][i*8 +: 8],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_addsub(vreg[vs2][i*16 +: 16],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_addsub(vreg[vs2][i*32 +: 32],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_addsub(vreg[vs2][i*64 +: 64],
+                  (instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : scalar_rs1_i, vsew_q, 1'b0); end
             endcase
           end
         end
@@ -2277,10 +2305,10 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b1);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b1);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32], vreg[vs1][i*32 +: 32], vsew_q, 1'b1);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64], vreg[vs1][i*64 +: 64], vsew_q, 1'b1);
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_addsub(vreg[vs2][i*8 +: 8], vreg[vs1][i*8 +: 8], vsew_q, 1'b1); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_addsub(vreg[vs2][i*16 +: 16], vreg[vs1][i*16 +: 16], vsew_q, 1'b1); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_addsub(vreg[vs2][i*32 +: 32], vreg[vs1][i*32 +: 32], vsew_q, 1'b1); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_addsub(vreg[vs2][i*64 +: 64], vreg[vs1][i*64 +: 64], vsew_q, 1'b1); end
             endcase
           end
         end
@@ -2288,10 +2316,10 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_addsub(vreg[vs2][i*8 +: 8], scalar_rs1_i, vsew_q, 1'b1);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_addsub(vreg[vs2][i*16 +: 16], scalar_rs1_i, vsew_q, 1'b1);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_addsub(vreg[vs2][i*32 +: 32], scalar_rs1_i, vsew_q, 1'b1);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_addsub(vreg[vs2][i*64 +: 64], scalar_rs1_i, vsew_q, 1'b1);
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_addsub(vreg[vs2][i*8 +: 8], scalar_rs1_i, vsew_q, 1'b1); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_addsub(vreg[vs2][i*16 +: 16], scalar_rs1_i, vsew_q, 1'b1); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_addsub(vreg[vs2][i*32 +: 32], scalar_rs1_i, vsew_q, 1'b1); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_addsub(vreg[vs2][i*64 +: 64], scalar_rs1_i, vsew_q, 1'b1); end
             endcase
           end
         end
@@ -2299,18 +2327,18 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_logic(vreg[vs2][i*8 +: 8],
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_logic(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
-                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*8 +: 8]), vsew_q, instr_i[31:26]);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_logic(vreg[vs2][i*16 +: 16],
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*8 +: 8]), vsew_q, instr_i[31:26]); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_logic(vreg[vs2][i*16 +: 16],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
-                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*16 +: 16]), vsew_q, instr_i[31:26]);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_logic(vreg[vs2][i*32 +: 32],
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*16 +: 16]), vsew_q, instr_i[31:26]); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_logic(vreg[vs2][i*32 +: 32],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
-                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]), vsew_q, instr_i[31:26]);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_logic(vreg[vs2][i*64 +: 64],
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*32 +: 32]), vsew_q, instr_i[31:26]); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_logic(vreg[vs2][i*64 +: 64],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i :
-                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*64 +: 64]), vsew_q, instr_i[31:26]);
+                  ((instr_i[14:12] == 3'b011) ? {{59{instr_i[19]}}, instr_i[19:15]} : vreg[vs1][i*64 +: 64]), vsew_q, instr_i[31:26]); end
             endcase
           end
         end
@@ -2318,18 +2346,18 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_shift(vreg[vs2][i*8 +: 8],
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_shift(vreg[vs2][i*8 +: 8],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
-                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*8 +: 6]), vsew_q, instr_i[31:26]);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_shift(vreg[vs2][i*16 +: 16],
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*8 +: 6]), vsew_q, instr_i[31:26]); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_shift(vreg[vs2][i*16 +: 16],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
-                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*16 +: 6]), vsew_q, instr_i[31:26]);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_shift(vreg[vs2][i*32 +: 32],
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*16 +: 6]), vsew_q, instr_i[31:26]); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_shift(vreg[vs2][i*32 +: 32],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
-                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*32 +: 6]), vsew_q, instr_i[31:26]);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_shift(vreg[vs2][i*64 +: 64],
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*32 +: 6]), vsew_q, instr_i[31:26]); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_shift(vreg[vs2][i*64 +: 64],
                   (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
-                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*64 +: 6]), vsew_q, instr_i[31:26]);
+                  ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*64 +: 6]), vsew_q, instr_i[31:26]); end
             endcase
           end
         end
@@ -2337,27 +2365,27 @@ module moon_vector_unit (
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_narrow_shift(
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_narrow_shift(
                 (i < 8) ? {48'd0, vreg[vs2][i*16 +: 16]} : {48'd0, vreg[vs2 + 5'd1][(i-8)*16 +: 16]},
                 (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
                 ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : {2'b00, vreg[vs1][i*8 +: 4]}),
                 vsew_q,
                 (instr_i[31:26] == 6'b101101)
-              );
-              3'b001: if (i < 8) vreg[vd][i*16 +: 16] <= vector_narrow_shift(
+              ); end
+              3'b001: if (i < 8) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_narrow_shift(
                 (i < 4) ? {32'd0, vreg[vs2][i*32 +: 32]} : {32'd0, vreg[vs2 + 5'd1][(i-4)*32 +: 32]},
                 (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
                 ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : {1'b0, vreg[vs1][i*16 +: 5]}),
                 vsew_q,
                 (instr_i[31:26] == 6'b101101)
-              );
-              3'b010: if (i < 4) vreg[vd][i*32 +: 32] <= vector_narrow_shift(
+              ); end
+              3'b010: if (i < 4) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_narrow_shift(
                 (i < 2) ? vreg[vs2][i*64 +: 64] : vreg[vs2 + 5'd1][(i-2)*64 +: 64],
                 (instr_i[14:12] == 3'b100) ? scalar_rs1_i[5:0] :
                 ((instr_i[14:12] == 3'b011) ? {1'b0, instr_i[19:15]} : vreg[vs1][i*32 +: 6]),
                 vsew_q,
                 (instr_i[31:26] == 6'b101101)
-              );
+              ); end
               default: ;
             endcase
           end
@@ -2368,51 +2396,51 @@ module moon_vector_unit (
             case (vsew_q)
               3'b000: begin
                 if (i < 8)
-                  vreg[vd][i*16 +: 16] <= vector_widen_arith(
+                  begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_widen_arith(
                     (instr_i[28]) ? {48'd0, vreg[vs2][i*16 +: 16]} : {56'd0, vreg[vs2][i*8 +: 8]},
                     (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
                     vsew_q,
                     instr_i[31:26]
-                  );
+                  ); end
                 else
-                  vreg[vd + 5'd1][(i-8)*16 +: 16] <= vector_widen_arith(
+                  begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-8)*16 +: 16] = vector_widen_arith(
                     (instr_i[28]) ? {48'd0, vreg[vs2 + 5'd1][(i-8)*16 +: 16]} : {56'd0, vreg[vs2][i*8 +: 8]},
                     (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
                     vsew_q,
                     instr_i[31:26]
-                  );
+                  ); end
               end
               3'b001: if (i < 8) begin
                 if (i < 4)
-                  vreg[vd][i*32 +: 32] <= vector_widen_arith(
+                  begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_widen_arith(
                     (instr_i[28]) ? {32'd0, vreg[vs2][i*32 +: 32]} : {48'd0, vreg[vs2][i*16 +: 16]},
                     (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
                     vsew_q,
                     instr_i[31:26]
-                  );
+                  ); end
                 else
-                  vreg[vd + 5'd1][(i-4)*32 +: 32] <= vector_widen_arith(
+                  begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-4)*32 +: 32] = vector_widen_arith(
                     (instr_i[28]) ? {32'd0, vreg[vs2 + 5'd1][(i-4)*32 +: 32]} : {48'd0, vreg[vs2][i*16 +: 16]},
                     (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
                     vsew_q,
                     instr_i[31:26]
-                  );
+                  ); end
               end
               3'b010: if (i < 4) begin
                 if (i < 2)
-                  vreg[vd][i*64 +: 64] <= vector_widen_arith(
+                  begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_widen_arith(
                     (instr_i[28]) ? vreg[vs2][i*64 +: 64] : {32'd0, vreg[vs2][i*32 +: 32]},
                     (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
                     vsew_q,
                     instr_i[31:26]
-                  );
+                  ); end
                 else
-                  vreg[vd + 5'd1][(i-2)*64 +: 64] <= vector_widen_arith(
+                  begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-2)*64 +: 64] = vector_widen_arith(
                     (instr_i[28]) ? vreg[vs2 + 5'd1][(i-2)*64 +: 64] : {32'd0, vreg[vs2][i*32 +: 32]},
                     (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
                     vsew_q,
                     instr_i[31:26]
-                  );
+                  ); end
               end
               default: ;
             endcase
@@ -2424,63 +2452,63 @@ module moon_vector_unit (
             case (vsew_q)
               3'b000: begin
                 if (i < 8)
-                  vreg[vd][i*16 +: 16] <= vector_widen_macc(
+                  begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_widen_macc(
                     {48'd0, vreg[vd][i*16 +: 16]},
                     {56'd0, vreg[vs2][i*8 +: 8]},
                     (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
                     vsew_q,
                     instr_i[31:26],
                     instr_i[14:12] == 3'b110
-                  );
+                  ); end
                 else
-                  vreg[vd + 5'd1][(i-8)*16 +: 16] <= vector_widen_macc(
+                  begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-8)*16 +: 16] = vector_widen_macc(
                     {48'd0, vreg[vd + 5'd1][(i-8)*16 +: 16]},
                     {56'd0, vreg[vs2][i*8 +: 8]},
                     (instr_i[14:12] == 3'b110) ? {56'd0, scalar_rs1_i[7:0]} : {56'd0, vreg[vs1][i*8 +: 8]},
                     vsew_q,
                     instr_i[31:26],
                     instr_i[14:12] == 3'b110
-                  );
+                  ); end
               end
               3'b001: if (i < 8) begin
                 if (i < 4)
-                  vreg[vd][i*32 +: 32] <= vector_widen_macc(
+                  begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_widen_macc(
                     {32'd0, vreg[vd][i*32 +: 32]},
                     {48'd0, vreg[vs2][i*16 +: 16]},
                     (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
                     vsew_q,
                     instr_i[31:26],
                     instr_i[14:12] == 3'b110
-                  );
+                  ); end
                 else
-                  vreg[vd + 5'd1][(i-4)*32 +: 32] <= vector_widen_macc(
+                  begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-4)*32 +: 32] = vector_widen_macc(
                     {32'd0, vreg[vd + 5'd1][(i-4)*32 +: 32]},
                     {48'd0, vreg[vs2][i*16 +: 16]},
                     (instr_i[14:12] == 3'b110) ? {48'd0, scalar_rs1_i[15:0]} : {48'd0, vreg[vs1][i*16 +: 16]},
                     vsew_q,
                     instr_i[31:26],
                     instr_i[14:12] == 3'b110
-                  );
+                  ); end
               end
               3'b010: if (i < 4) begin
                 if (i < 2)
-                  vreg[vd][i*64 +: 64] <= vector_widen_macc(
+                  begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_widen_macc(
                     vreg[vd][i*64 +: 64],
                     {32'd0, vreg[vs2][i*32 +: 32]},
                     (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
                     vsew_q,
                     instr_i[31:26],
                     instr_i[14:12] == 3'b110
-                  );
+                  ); end
                 else
-                  vreg[vd + 5'd1][(i-2)*64 +: 64] <= vector_widen_macc(
+                  begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-2)*64 +: 64] = vector_widen_macc(
                     vreg[vd + 5'd1][(i-2)*64 +: 64],
                     {32'd0, vreg[vs2][i*32 +: 32]},
                     (instr_i[14:12] == 3'b110) ? {32'd0, scalar_rs1_i[31:0]} : {32'd0, vreg[vs1][i*32 +: 32]},
                     vsew_q,
                     instr_i[31:26],
                     instr_i[14:12] == 3'b110
-                  );
+                  ); end
               end
               default: ;
             endcase
@@ -2491,23 +2519,23 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
               3'b001: if (i < 8)
-                vreg[vd][i*16 +: 16] <= vector_int_ext(
+                begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_int_ext(
                   vector_int_ext_source(vreg[vs2], i, vsew_q, instr_i[19:15]),
                   vsew_q,
                   instr_i[19:15]
-                );
+                ); end
               3'b010: if (i < 4)
-                vreg[vd][i*32 +: 32] <= vector_int_ext(
+                begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_int_ext(
                   vector_int_ext_source(vreg[vs2], i, vsew_q, instr_i[19:15]),
                   vsew_q,
                   instr_i[19:15]
-                );
+                ); end
               3'b011: if (i < 2)
-                vreg[vd][i*64 +: 64] <= vector_int_ext(
+                begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_int_ext(
                   vector_int_ext_source(vreg[vs2], i, vsew_q, instr_i[19:15]),
                   vsew_q,
                   instr_i[19:15]
-                );
+                ); end
               default: ;
             endcase
           end
@@ -2517,9 +2545,9 @@ module moon_vector_unit (
           if ((i < vl_q) && (i >= vector_vstart_i) &&
               (instr_i[25] || vreg[0][i]) &&
               ((vsew_q == 3'b010) || (i < 2)))
-            vreg[vd][i] <= is_vector_fp_not_equal ?
+            begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = is_vector_fp_not_equal ?
                            !vector_fp_compare_result[i][0] :
-                           vector_fp_compare_result[i][0];
+                           vector_fp_compare_result[i][0]; end
         end
       end else if (is_vcompare) begin : blk_vcompare
         logic [127:0] compare_vd;
@@ -2550,19 +2578,19 @@ module moon_vector_unit (
             endcase
           end
         end
-        vreg[vd] <= compare_vd;
+        begin vreg_wr_en_a = 1'b1; vreg_wr_data_a = compare_vd; end
       end else if (is_vminmax) begin
         for (int i = 0; i < 16; i++) begin
           if ((i < vl_q) && (i >= vector_vstart_i) && (instr_i[25] || vreg[0][i])) begin
             case (vsew_q)
-              3'b000: vreg[vd][i*8 +: 8] <= vector_minmax(vreg[vs2][i*8 +: 8],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]);
-              3'b001: vreg[vd][i*16 +: 16] <= vector_minmax(vreg[vs2][i*16 +: 16],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*16 +: 16], vsew_q, instr_i[31:26]);
-              3'b010: vreg[vd][i*32 +: 32] <= vector_minmax(vreg[vs2][i*32 +: 32],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*32 +: 32], vsew_q, instr_i[31:26]);
-              default: if (i < 2) vreg[vd][i*64 +: 64] <= vector_minmax(vreg[vs2][i*64 +: 64],
-                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*64 +: 64], vsew_q, instr_i[31:26]);
+              3'b000: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = vector_minmax(vreg[vs2][i*8 +: 8],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*8 +: 8], vsew_q, instr_i[31:26]); end
+              3'b001: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = vector_minmax(vreg[vs2][i*16 +: 16],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*16 +: 16], vsew_q, instr_i[31:26]); end
+              3'b010: begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = vector_minmax(vreg[vs2][i*32 +: 32],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*32 +: 32], vsew_q, instr_i[31:26]); end
+              default: if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = vector_minmax(vreg[vs2][i*64 +: 64],
+                  (instr_i[14:12] == 3'b100) ? scalar_rs1_i : vreg[vs1][i*64 +: 64], vsew_q, instr_i[31:26]); end
             endcase
           end
         end
@@ -2574,29 +2602,29 @@ module moon_vector_unit (
             case (vsew_q)
               3'b000: begin
                 if ((i >= vl_q) && vtype_q[6]) begin
-                  if (i < 8) vreg[vd][i*16 +: 16] <= 16'hffff;
-                  else       vreg[vd + 5'd1][(i-8)*16 +: 16] <= 16'hffff;
+                  if (i < 8) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
+                  else       begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-8)*16 +: 16] = 16'hffff; end
                 end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
-                  if (i < 8) vreg[vd][i*16 +: 16] <= 16'hffff;
-                  else       vreg[vd + 5'd1][(i-8)*16 +: 16] <= 16'hffff;
+                  if (i < 8) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
+                  else       begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-8)*16 +: 16] = 16'hffff; end
                 end
               end
               3'b001: if (i < 8) begin
                 if ((i >= vl_q) && vtype_q[6]) begin
-                  if (i < 4) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
-                  else       vreg[vd + 5'd1][(i-4)*32 +: 32] <= 32'hffff_ffff;
+                  if (i < 4) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
+                  else       begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-4)*32 +: 32] = 32'hffff_ffff; end
                 end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
-                  if (i < 4) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
-                  else       vreg[vd + 5'd1][(i-4)*32 +: 32] <= 32'hffff_ffff;
+                  if (i < 4) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
+                  else       begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-4)*32 +: 32] = 32'hffff_ffff; end
                 end
               end
               3'b010: if (i < 4) begin
                 if ((i >= vl_q) && vtype_q[6]) begin
-                  if (i < 2) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-                  else       vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                  if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
+                  else       begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-2)*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
                 end else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7]) begin
-                  if (i < 2) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
-                  else       vreg[vd + 5'd1][(i-2)*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                  if (i < 2) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
+                  else       begin vreg_wr_en_b = 1'b1; vreg_wr_data_b[(i-2)*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
                 end
               end
               default: ;
@@ -2611,9 +2639,9 @@ module moon_vector_unit (
                  ((vsew_q == 3'b001) && (i < 8)) ||
                  ((vsew_q == 3'b010) && (i < 4)) ||
                  ((vsew_q == 3'b011) && (i < 2)))) begin
-              if ((i >= vl_q) && vtype_q[6]) vreg[vd][i] <= 1'b1;
+              if ((i >= vl_q) && vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = 1'b1; end
               else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7])
-                vreg[vd][i] <= 1'b1;
+                begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i] = 1'b1; end
             end
           end
         end else begin
@@ -2621,34 +2649,41 @@ module moon_vector_unit (
             if (i >= vector_vstart_i) begin
               case (vsew_q)
                 3'b000: begin
-                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*8 +: 8] <= 8'hff;
+                  if ((i >= vl_q) && vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = 8'hff; end
                   else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
                            !(is_vslideup && (i < vector_perm_offset)))
-                    vreg[vd][i*8 +: 8] <= 8'hff;
+                    begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*8 +: 8] = 8'hff; end
                 end
                 3'b001: if (i < 8) begin
-                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*16 +: 16] <= 16'hffff;
+                  if ((i >= vl_q) && vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
                   else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
                            !(is_vslideup && (i < vector_perm_offset)))
-                    vreg[vd][i*16 +: 16] <= 16'hffff;
+                    begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*16 +: 16] = 16'hffff; end
                 end
                 3'b010: if (i < 4) begin
-                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+                  if ((i >= vl_q) && vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
                   else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
                            !(is_vslideup && (i < vector_perm_offset)))
-                    vreg[vd][i*32 +: 32] <= 32'hffff_ffff;
+                    begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*32 +: 32] = 32'hffff_ffff; end
                 end
                 default: if (i < 2) begin
-                  if ((i >= vl_q) && vtype_q[6]) vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                  if ((i >= vl_q) && vtype_q[6]) begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
                   else if ((i < vl_q) && !instr_i[25] && !vreg[0][i] && vtype_q[7] &&
                            !(is_vslideup && (i < vector_perm_offset)))
-                    vreg[vd][i*64 +: 64] <= 64'hffff_ffff_ffff_ffff;
+                    begin vreg_wr_en_a = 1'b1; vreg_wr_data_a[i*64 +: 64] = 64'hffff_ffff_ffff_ffff; end
                 end
               endcase
             end
           end
         end
       end
+      end
+
+      if (vreg_wr_en_a) begin
+        vreg[vreg_wr_addr_a] <= vreg_wr_data_a;
+      end
+      if (vreg_wr_en_b) begin
+        vreg[vreg_wr_addr_b] <= vreg_wr_data_b;
       end
     end
   end

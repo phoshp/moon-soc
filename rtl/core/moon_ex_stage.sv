@@ -23,7 +23,9 @@
 
 module moon_ex_stage
   import moon_pkg::*;
-(
+#(
+  parameter bit ENABLE_VECTOR_FP = 1'b1
+)(
   input  logic             clk_i,
   input  logic             rst_ni,
 
@@ -379,7 +381,9 @@ module moon_ex_stage
     .zero_o      (alu_zero)
   );
 
-  moon_vector_unit u_vector_unit (
+  moon_vector_unit #(
+    .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
+  ) u_vector_unit (
     .clk_i                  (clk_i),
     .rst_ni                 (rst_ni),
     .valid_i                (id_ex_valid_i),
