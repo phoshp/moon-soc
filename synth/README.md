@@ -77,12 +77,8 @@ The SoC floorplan is partitioned into 8 standardized macro blocks:
 6. **System Control Subsystem** (`rtl/soc/sysctrl/moon_sysctrl_subsystem.sv`):
    - Contains Multi-Domain Reset Sequencer, Clock & Reset Generator (CRG), and PMU.
    - Macro Config: `synth/macros/sysctrl_subsystem/config.json`.
-7. **Memory PHY** (`rtl/soc/phy/moon_mem_phy.sv`):
-   - Provides timing isolation registers and pad interface for off-chip DRAM / HyperRAM.
-   - Macro Config: `synth/macros/mem_phy/config.json`.
-8. **I/O PHY** (`rtl/soc/phy/moon_io_phy.sv`):
-   - Provides input synchronizers, glitch filters, and tri-state pad logic for board I/O.
-   - Macro Config: `synth/macros/io_phy/config.json`.
+
+*(Note: Memory PHY `moon_mem_phy.sv` and I/O PHY `moon_io_phy.sv` provide pad drivers and synchronizers at the top-level chip frame and are synthesized directly into the padring/core boundary during top-level assembly rather than as standalone macros).*
 
 ---
 
@@ -91,7 +87,7 @@ The SoC floorplan is partitioned into 8 standardized macro blocks:
 When synthesizing the top-level `moon_soc_top`, Yosys reads the blackbox stub file:
 `synth/macros/blackbox/moon_soc_macros_bb.sv`.
 
-Because all 8 macros are declared with the `(* blackbox *)` attribute, Yosys only synthesizes the top-level interconnect wires (~100 net connections) instead of hundreds of thousands of standard cells.
+Because the 6 major functional subsystems are declared with the `(* blackbox *)` attribute, Yosys only elaborates the top-level interconnect wires and PHY pad boundary logic instead of hundreds of thousands of standard cells.
 
 - **Top-Level Synthesis Time**: **Under 10 seconds** in Yosys.
 - **Top-Level PnR**: OpenROAD uses `synth/top/macro_placement.cfg` to position the hardened macro LEFs on the die and routes global interconnect buses between macro pins.

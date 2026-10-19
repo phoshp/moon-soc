@@ -101,6 +101,10 @@ module moon_io_phy #(
       assign core_spi_miso_o = pad_spi_miso_i;
       assign core_i2c_sda_o  = pad_i2c_sda_i;
       assign core_ext_irq_o  = pad_ext_irq_i;
+
+      // Tie off unused clock/reset in direct pass-through mode to avoid lint warnings
+      logic _unused;
+      assign _unused = &{1'b0, clk_i, rst_ni, 1'b0};
     end
   endgenerate
 

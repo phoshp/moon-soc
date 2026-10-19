@@ -21,6 +21,7 @@
   "CLOCK_PERIOD": 20.0,
   "FP_SIZING": "relative",
   "FP_CORE_UTIL": 35,
-  "DESIGN_IS_CORE": 0,
+  "FP_PDN_MULTILAYER": false,
+  "RT_MAX_LAYER": "met4",
   "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout"
 }

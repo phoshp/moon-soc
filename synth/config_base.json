@@ -2,8 +2,6 @@
   "PDK": "sky130A",
   "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
   "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout",
-  "SYNTH_ELABORATE_ONLY": 0,
-  "FP_PDN_MULTILAYER": 0,
-  "RT_MAX_LAYER": "met4",
-  "DESIGN_IS_CORE": 0
+  "FP_PDN_MULTILAYER": false,
+  "RT_MAX_LAYER": "met4"
 }

@@ -61,6 +61,10 @@ module moon_mem_phy
   assign s_fabric_b_o         = m_ext_b_i;
   assign m_ext_b_ready_o      = s_fabric_b_ready_i;
 
+  // Tie off unused clock/reset in pass-through mode to avoid lint warnings
+  logic _unused;
+  assign _unused = &{1'b0, clk_i, rst_ni, 1'b0};
+
 endmodule : moon_mem_phy
 
 `endif // MOON_MEM_PHY_SV
