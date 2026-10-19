@@ -99,6 +99,8 @@ module moon_sysctrl_subsystem
   // --------------------------------------------------------------------------
   // Power Management Unit (PMU)
   // --------------------------------------------------------------------------
+  logic [1:0] pmu_current_state;
+
   moon_pmu u_pmu (
     .clk_aon_i           (internal_clk_aon),
     .rst_aon_ni          (internal_rst_aon_n),
@@ -109,8 +111,10 @@ module moon_sysctrl_subsystem
     .core_clk_gate_req_o (core_clk_gate_req),
     .peri_clk_gate_req_o (peri_clk_gate_req),
     .pll_pwr_down_req_o  (pll_pwr_down_req),
-    .current_state_o     ()
+    .current_state_o     (pmu_current_state)
   );
+
+  wire _unused_pmu = |{1'b0, pmu_current_state};
 
 endmodule : moon_sysctrl_subsystem
 

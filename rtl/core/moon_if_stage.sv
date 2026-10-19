@@ -67,9 +67,9 @@ module moon_if_stage
   logic [XLEN-1:0] fetch_addr_q, fetch_addr_d;
   logic            discard_hw_q, discard_hw_d;
 
-  // Memory interface request (request new word whenever queue has room)
+  // Memory interface request (request new word whenever queue has room and not in reset)
   assign imem_addr_o = fetch_addr_q;
-  assign imem_req_o  = (q_count_q <= 3'd2);
+  assign imem_req_o  = rst_ni && (q_count_q <= 3'd2);
 
   // Available halfwords in current cycle (buffered + arriving)
   logic [15:0] avail_hw [0:5];

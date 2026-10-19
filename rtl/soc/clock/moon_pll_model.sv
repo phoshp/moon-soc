@@ -29,8 +29,9 @@ module moon_pll_model #(
 );
 
   // Lock Counter
-  logic [$clog2(LOCK_CYCLES):0] lock_cnt_q;
-  logic                         locked_q;
+  localparam int LOCK_CNT_W = $clog2(LOCK_CYCLES) + 1;
+  logic [LOCK_CNT_W-1:0] lock_cnt_q;
+  logic                  locked_q;
 
   always_ff @(posedge ref_clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -39,7 +40,7 @@ module moon_pll_model #(
     end else if (!pll_enable_i) begin
       lock_cnt_q <= '0;
       locked_q   <= 1'b0;
-    end else if (lock_cnt_q < LOCK_CYCLES) begin
+    end else if (lock_cnt_q < LOCK_CNT_W'(LOCK_CYCLES)) begin
       lock_cnt_q <= lock_cnt_q + 1'b1;
       locked_q   <= 1'b0;
     end else begin

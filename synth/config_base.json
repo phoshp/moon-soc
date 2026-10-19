@@ -6,6 +6,6 @@
   "VERILOG_DEFINES": [
     "SYNTHESIS=1"
   ],
-  "FP_PDN_MULTILAYER": false,
+  "PDN_MULTILAYER": false,
   "RT_MAX_LAYER": "met4"
 }

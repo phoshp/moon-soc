@@ -14,9 +14,7 @@
 
 module moon_crg
   import axi_pkg::*;
-#(
-  parameter logic [31:0] BASE_ADDR = 32'h1000_5000
-)(
+(
   input  logic ref_clk_i,        // External reference clock
   input  logic rst_aon_ni,       // Always-on domain reset
 
@@ -181,6 +179,9 @@ module moon_crg
       endcase
     end
   end
+
+  // Tie off unused bus request bits to satisfy lint
+  wire _unused_ok = &{1'b0, req_i.addr[31:8], req_i.prot, req_i.strb, 1'b0};
 
 endmodule : moon_crg
 

@@ -21,13 +21,12 @@ module moon_reset_ctrl (
   output logic rst_mem_no     // Memory domain reset
 );
 
-  // Aggregated raw reset
-  wire agg_rst_n = raw_rst_ni && (!sw_rst_req_i) && (!wdt_rst_req_i);
-
   // 2-Stage Synchronizer for Always-On Domain
+  // Asynchronously asserted only by the external hardware power-on-reset pin (raw_rst_ni)
+  // to avoid combinational reset loops through CRG/PMU software reset registers.
   logic aon_sync_m, aon_sync_q;
-  always_ff @(posedge clk_aon_i or negedge agg_rst_n) begin
-    if (!agg_rst_n) begin
+  always_ff @(posedge clk_aon_i or negedge raw_rst_ni) begin
+    if (!raw_rst_ni) begin
       aon_sync_m <= 1'b0;
       aon_sync_q <= 1'b0;
     end else begin
@@ -37,9 +36,11 @@ module moon_reset_ctrl (
   end
 
   // Reset Sequencer Counter: releases resets in a clean cascade
-  // 1. AON releases -> 2. Memory & Peripherals release -> 3. Core releases
+  // 1. AON releases -> 2. Memory releases -> 3. Peripherals release -> 4. Core releases
   logic [3:0] seq_cnt_q;
   logic       core_rst_q, peri_rst_q, mem_rst_q;
+
+  wire warm_rst_req = sw_rst_req_i || wdt_rst_req_i;
 
   always_ff @(posedge clk_aon_i or negedge aon_sync_q) begin
     if (!aon_sync_q) begin
@@ -47,16 +48,19 @@ module moon_reset_ctrl (
       core_rst_q <= 1'b0;
       peri_rst_q <= 1'b0;
       mem_rst_q  <= 1'b0;
+    end else if (warm_rst_req) begin
+      seq_cnt_q  <= 4'd0;
+      core_rst_q <= 1'b0;
+      peri_rst_q <= 1'b0;
+      mem_rst_q  <= 1'b0;
     end else begin
-      if (seq_cnt_q < 4'd4) begin
+      if (seq_cnt_q < 4'd8) begin
         seq_cnt_q <= seq_cnt_q + 4'd1;
       end
 
-      if (seq_cnt_q >= 4'd2) begin
-        mem_rst_q  <= 1'b1;
-        peri_rst_q <= 1'b1;
-        core_rst_q <= 1'b1;
-      end
+      if (seq_cnt_q >= 4'd2) mem_rst_q  <= 1'b1;
+      if (seq_cnt_q >= 4'd4) peri_rst_q <= 1'b1;
+      if (seq_cnt_q >= 4'd7) core_rst_q <= 1'b1;
     end
   end
 

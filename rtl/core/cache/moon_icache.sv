@@ -129,8 +129,11 @@ module moon_icache
     valid_o       = 1'b0;
     rdata_o       = 32'h0000_0013; // NOP default
 
-    case (state_q)
-      ST_IDLE: begin
+    if (!rst_ni) begin
+      state_d = ST_IDLE;
+    end else begin
+      case (state_q)
+        ST_IDLE: begin
         if (req_i) begin
           if (hit_any) begin
             valid_o = 1'b1;
@@ -182,6 +185,7 @@ module moon_icache
 
       default: state_d = ST_IDLE;
     endcase
+    end
   end
 
 endmodule : moon_icache

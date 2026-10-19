@@ -12,9 +12,7 @@
 
 module moon_pmu
   import axi_pkg::*;
-#(
-  parameter logic [31:0] BASE_ADDR = 32'h1000_5080
-)(
+(
   input  logic clk_aon_i,     // Always-on clock
   input  logic rst_aon_ni,    // Always-on reset
 
@@ -137,6 +135,9 @@ module moon_pmu
       endcase
     end
   end
+
+  // Tie off unused bus request bits to satisfy lint
+  wire _unused_ok = &{1'b0, req_i.addr[31:7], req_i.prot, req_i.strb, req_i.wdata[31:4], 1'b0};
 
 endmodule : moon_pmu
 

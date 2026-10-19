@@ -223,8 +223,11 @@ module moon_dcache
     valid_o = 1'b0;
     rdata_o = '0;
 
-    case (state_q)
-      ST_IDLE: begin
+    if (!rst_ni) begin
+      state_d = ST_IDLE;
+    end else begin
+      case (state_q)
+        ST_IDLE: begin
         if (req_i) begin
           if (is_uncached_io) begin
             // Uncached I/O access
@@ -431,6 +434,7 @@ module moon_dcache
 
       default: state_d = ST_IDLE;
     endcase
+    end
   end
 
 endmodule : moon_dcache
