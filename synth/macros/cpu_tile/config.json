@@ -1,0 +1,23 @@
+{
+  "DESIGN_NAME": "moon_cpu_tile",
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "VERILOG_FILES": [
+    "dir::../../../rtl/core/moon_pkg.sv",
+    "dir::../../../rtl/core/moon_core.sv",
+    "dir::../../../rtl/soc/cpu/moon_cpu_tile.sv"
+  ],
+  "VERILOG_INCLUDE_DIRS": [
+    "dir::../../../rtl/core",
+    "dir::../../../rtl/core/cache",
+    "dir::../../../rtl/core/mmu",
+    "dir::../../../rtl/soc/cpu"
+  ],
+  "CLOCK_PORT": "clk_i",
+  "CLOCK_NET": "clk_i",
+  "CLOCK_PERIOD": 20.0,
+  "FP_SIZING": "relative",
+  "FP_CORE_UTIL": 40,
+  "DESIGN_IS_CORE": 0,
+  "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout"
+}

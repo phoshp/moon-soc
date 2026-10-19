@@ -99,32 +99,39 @@ The core is structured across five sequential pipeline stages connected through 
 - Supports timer, software (IPI), and external interrupt inputs.
 
 ### SoC Subsystems & Infrastructure (`rtl/soc/`)
-- **L1 Cache Subsystem (`rtl/core/cache/`)**:
-  - `moon_icache.sv`: 32 KB 4-way set-associative L1 instruction cache with 64-byte lines, AXI4 burst refill (M0), and FENCE.I support.
-  - `moon_dcache.sv`: 32 KB 4-way set-associative L1 data cache with write-back, write-allocate, AXI4 burst refill/eviction (M1), uncached I/O bypass, and RVA23 Zicbom/Zicboz operations.
+The SoC is structured into modern macro partitions (matching commercial AMD/Intel/Nvidia floorplans) enabling modular ASIC hardening and fast top-level synthesis:
+- **Compute Tile (`rtl/soc/cpu/moon_cpu_tile.sv`)**: Encapsulates `moon_core` (RV64IMA, CSRs, MMU, PMP, optional FPU and Vector co-processors).
+- **Cache Subsystem Tile (`rtl/soc/cache/moon_cache_tile.sv`)**:
+  - `moon_icache.sv`: 4-way set-associative L1 instruction cache with 64-byte lines, AXI4 burst refill (M0), and FENCE.I support.
+  - `moon_dcache.sv`: 4-way set-associative L1 data cache with write-back, write-allocate, AXI4 burst refill/eviction (M1), uncached I/O bypass, and RVA23 Zicbom/Zicboz operations.
   - `moon_l1_cache_subsystem.sv`: Integrated L1 cache wrapper connecting core IF/MEM interfaces directly to AXI4 masters.
-- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates `moon_core`, `moon_l1_cache_subsystem`, 64-bit AXI4 crossbar, AXI-to-APB bridge, Boot ROM, On-Chip SRAM, CLINT, PLIC, UART 16550, CRG, PMU, and external AXI memory port.
-- **Interconnect (`rtl/soc/interconnect/`)**:
+- **Memory Subsystem (`rtl/soc/memory/moon_mem_subsystem.sv`)**:
+  - `moon_bootrom.sv`: Boot ROM at `0x0000_1000`.
+  - `moon_sram_ctrl.sv`: On-Chip SRAM controller at `0x7000_0000` supporting behavioral SRAM and OpenRAM physical macro arrays (`openram_sram_wrapper.sv`).
+- **System Interconnect Fabric (`rtl/soc/interconnect/moon_sys_fabric.sv`)**:
   - `axi_pkg.sv`: AXI4 and APB4 signal definitions, transaction structs, and burst/response codes.
   - `axi_crossbar.sv`: Multi-master, multi-slave 64-bit crossbar switch (M0: Fetch, M1: Data; S0: Boot ROM, S1: SRAM, S2: APB Bridge, S3: External RAM).
   - `axi_to_apb_bridge.sv`: 64-bit AXI4 to 32-bit APB4 transaction converter.
-  - `apb_crossbar.sv`: Address decoder demultiplexing APB peripheral requests (CLINT, PLIC, UART).
-- **Core AXI Adapter (`rtl/soc/adapter/moon_core_axi_adapter.sv`)**: Converts `moon_core`'s `imem` and `dmem` interfaces to AXI4 master channels with prefetch buffering.
-- **Memory Subsystem (`rtl/soc/memory/`)**:
-  - `moon_bootrom.sv`: 32 KB Boot ROM at `0x0000_1000`.
-  - `moon_sram_ctrl.sv`: 128 KB On-Chip SRAM controller at `0x7000_0000`.
-- **Clock Subsystem (`rtl/soc/clock/`)**:
-  - `moon_pll_model.sv`: Digital behavioral PLL frequency synthesizer with lock detection and programmable dividers.
-  - `clk_mux_glitchless.sv`: Dual-input glitchless clock multiplexer for safe dynamic clock switching between reference and PLL clocks.
-  - `cg_cell.sv`: Integrated Clock Gating (ICG) latch cell for glitch-free dynamic clock gating.
-  - `moon_crg.sv`: Clock & Reset Generator with APB registers (`0x1000_5000`) for PLL control and domain clock gating.
-- **Power Management Subsystem (`rtl/soc/pmu/`)**:
-  - `moon_reset_ctrl.sv`: Central reset sequencer with 2-stage synchronizers and multi-cycle domain reset release (AON -> Memory/Periph -> Core).
-  - `moon_pmu.sv`: Multi-state Power Management Unit (`0x1000_5080`) handling RUN, WFI clock gating, SLEEP, DEEP-SLEEP, and wake-up interrupt routing.
-- **Peripherals Subsystem (`rtl/soc/periph/`)**:
+  - `apb_crossbar.sv`: Address decoder demultiplexing APB peripheral requests (CLINT, PLIC, UART, CRG, PMU, SPI, I2C).
+- **Peripheral Subsystem (`rtl/soc/periph/moon_periph_subsystem.sv`)**:
   - `moon_clint.sv`: Core-Local Interruptor (`mtime`, `mtimecmp`, `msip`) at `0x0200_0000`.
   - `moon_plic.sv`: Platform-Level Interrupt Controller at `0x0C00_0000`.
   - `moon_uart.sv`: 16550 UART console controller at `0x1000_0000`.
+  - `moon_spi.sv`: SPI master controller at `0x1000_6000`.
+  - `moon_i2c.sv`: I2C master controller at `0x1000_7000`.
+- **System Control Subsystem (`rtl/soc/sysctrl/moon_sysctrl_subsystem.sv`)**:
+  - `moon_reset_ctrl.sv`: Central reset sequencer with 2-stage synchronizers and multi-cycle domain reset release (AON -> Memory/Periph -> Core).
+  - `moon_crg.sv`: Clock & Reset Generator with APB registers (`0x1000_5000`), glitchless multiplexers (`clk_mux_glitchless.sv`), clock gating cells (`cg_cell.sv`), and PLL synthesizer (`moon_pll_model.sv`).
+  - `moon_pmu.sv`: Multi-state Power Management Unit (`0x1000_5080`) handling RUN, WFI clock gating, SLEEP, DEEP-SLEEP, and wake-up interrupt routing.
+- **PHY Blocks (`rtl/soc/phy/`)**:
+  - `moon_mem_phy.sv`: External Memory PHY providing timing isolation registers for external DRAM/HyperRAM AXI bus pads.
+  - `moon_io_phy.sv`: Peripheral I/O PHY providing pad drivers, tri-state control, and glitch/metastability synchronizers.
+- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates the 8 macro blocks into the unified SoC die.
+- **Synthesis & Macro Infrastructure (`synth/`)**:
+  - `synth/macros/blackbox/moon_soc_macros_bb.sv`: Macro blackbox stubs for instantaneous Yosys top-level elaboration.
+  - `synth/macros/*/config.json`: Independent LibreLane hardening configs for each block.
+  - `synth/top/config.json` & `synth/top/macro_placement.cfg`: Top-level chip assembly and macro floorplan.
+  - `synth/librelane_hierarchical_soc.ipynb`: Automated Google Colab notebook for hardening macros and assembling the top-level chip.
 
 ### Testbench Hierarchy
 - `tb/core/tb_moon_core.sv`: Standalone core memory harness.

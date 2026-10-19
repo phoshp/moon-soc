@@ -1,0 +1,84 @@
+{
+  "DESIGN_NAME": "moon_soc_top",
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "VERILOG_FILES": [
+    "dir::../../rtl/core/moon_pkg.sv",
+    "dir::../../rtl/soc/interconnect/axi_pkg.sv",
+    "dir::../macros/blackbox/moon_soc_macros_bb.sv",
+    "dir::../../rtl/soc/top/moon_soc_top.sv"
+  ],
+  "VERILOG_INCLUDE_DIRS": [
+    "dir::../../rtl/core",
+    "dir::../../rtl/soc/interconnect",
+    "dir::../macros/blackbox",
+    "dir::../../rtl/soc/top"
+  ],
+  "CLOCK_PORT": "clk_i",
+  "CLOCK_NET": "clk_i",
+  "CLOCK_PERIOD": 20.0,
+  "DESIGN_IS_CORE": 1,
+  "FP_SIZING": "absolute",
+  "DIE_AREA": "0 0 2000 1300",
+  "CORE_AREA": "50 50 1950 1250",
+  "FP_MACRO_PLACEMENT_CFG": "dir::macro_placement.cfg",
+  "MACROS": {
+    "u_cpu_tile": {
+      "lef": "dir::../macros/cpu_tile/runs/latest/final/lef/moon_cpu_tile.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/cpu_tile/runs/latest/final/lib/moon_cpu_tile.lib"
+      },
+      "gds": "dir::../macros/cpu_tile/runs/latest/final/gds/moon_cpu_tile.gds"
+    },
+    "u_cache_tile": {
+      "lef": "dir::../macros/cache_tile/runs/latest/final/lef/moon_cache_tile.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/cache_tile/runs/latest/final/lib/moon_cache_tile.lib"
+      },
+      "gds": "dir::../macros/cache_tile/runs/latest/final/gds/moon_cache_tile.gds"
+    },
+    "u_mem_subsystem": {
+      "lef": "dir::../macros/mem_subsystem/runs/latest/final/lef/moon_mem_subsystem.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/mem_subsystem/runs/latest/final/lib/moon_mem_subsystem.lib"
+      },
+      "gds": "dir::../macros/mem_subsystem/runs/latest/final/gds/moon_mem_subsystem.gds"
+    },
+    "u_sys_fabric": {
+      "lef": "dir::../macros/sys_fabric/runs/latest/final/lef/moon_sys_fabric.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/sys_fabric/runs/latest/final/lib/moon_sys_fabric.lib"
+      },
+      "gds": "dir::../macros/sys_fabric/runs/latest/final/gds/moon_sys_fabric.gds"
+    },
+    "u_periph_subsystem": {
+      "lef": "dir::../macros/periph_subsystem/runs/latest/final/lef/moon_periph_subsystem.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/periph_subsystem/runs/latest/final/lib/moon_periph_subsystem.lib"
+      },
+      "gds": "dir::../macros/periph_subsystem/runs/latest/final/gds/moon_periph_subsystem.gds"
+    },
+    "u_sysctrl_subsystem": {
+      "lef": "dir::../macros/sysctrl_subsystem/runs/latest/final/lef/moon_sysctrl_subsystem.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/sysctrl_subsystem/runs/latest/final/lib/moon_sysctrl_subsystem.lib"
+      },
+      "gds": "dir::../macros/sysctrl_subsystem/runs/latest/final/gds/moon_sysctrl_subsystem.gds"
+    },
+    "u_mem_phy": {
+      "lef": "dir::../macros/mem_phy/runs/latest/final/lef/moon_mem_phy.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/mem_phy/runs/latest/final/lib/moon_mem_phy.lib"
+      },
+      "gds": "dir::../macros/mem_phy/runs/latest/final/gds/moon_mem_phy.gds"
+    },
+    "u_io_phy": {
+      "lef": "dir::../macros/io_phy/runs/latest/final/lef/moon_io_phy.lef",
+      "lib": {
+        "nom_tt_025C_1v80": "dir::../macros/io_phy/runs/latest/final/lib/moon_io_phy.lib"
+      },
+      "gds": "dir::../macros/io_phy/runs/latest/final/gds/moon_io_phy.gds"
+    }
+  },
+  "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout"
+}

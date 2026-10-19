@@ -1,0 +1,28 @@
+{
+  "DESIGN_NAME": "moon_sysctrl_subsystem",
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "VERILOG_FILES": [
+    "dir::../../../rtl/soc/interconnect/axi_pkg.sv",
+    "dir::../../../rtl/soc/clock/cg_cell.sv",
+    "dir::../../../rtl/soc/clock/clk_mux_glitchless.sv",
+    "dir::../../../rtl/soc/clock/moon_pll_model.sv",
+    "dir::../../../rtl/soc/clock/moon_crg.sv",
+    "dir::../../../rtl/soc/pmu/moon_reset_ctrl.sv",
+    "dir::../../../rtl/soc/pmu/moon_pmu.sv",
+    "dir::../../../rtl/soc/sysctrl/moon_sysctrl_subsystem.sv"
+  ],
+  "VERILOG_INCLUDE_DIRS": [
+    "dir::../../../rtl/soc/interconnect",
+    "dir::../../../rtl/soc/clock",
+    "dir::../../../rtl/soc/pmu",
+    "dir::../../../rtl/soc/sysctrl"
+  ],
+  "CLOCK_PORT": "ref_clk_i",
+  "CLOCK_NET": "ref_clk_i",
+  "CLOCK_PERIOD": 20.0,
+  "FP_SIZING": "relative",
+  "FP_CORE_UTIL": 35,
+  "DESIGN_IS_CORE": 0,
+  "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout"
+}

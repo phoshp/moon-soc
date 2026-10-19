@@ -31,8 +31,8 @@ module tb_moon_soc (
   import axi_pkg::*;
 
   // Core debug signals
-  assign debug_pc    = dut.u_core.u_if_stage.pc_q;
-  assign debug_instr = dut.u_core.if_id_instr;
+  assign debug_pc    = dut.u_cpu_tile.u_core.u_if_stage.pc_q;
+  assign debug_instr = dut.u_cpu_tile.u_core.if_id_instr;
 
   // External RAM AXI4 signals
   axi_ar_t ext_ar;
@@ -103,7 +103,7 @@ module tb_moon_soc (
       ram_mem[i] = 8'h00;
     end
     for (int i = 0; i < 8192; i++) begin
-      dut.u_bootrom.rom_mem[i] = 32'h0000_0013;
+      dut.u_mem_subsystem.u_bootrom.rom_mem[i] = 32'h0000_0013;
     end
 
     void'($value$plusargs("hex_file=%s", hex_file));
@@ -114,7 +114,7 @@ module tb_moon_soc (
         r = $fscanf(fd, "%h\n", word);
         if (r == 1) begin
           if (rom_idx < 8192) begin
-            dut.u_bootrom.rom_mem[rom_idx] = word;
+            dut.u_mem_subsystem.u_bootrom.rom_mem[rom_idx] = word;
           end
           if (4*rom_idx + 16'h1000 + 3 < RAM_BYTES) begin
             ram_mem[4*rom_idx + 16'h1000 + 0] = word[7:0];

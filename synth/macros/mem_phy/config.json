@@ -1,0 +1,20 @@
+{
+  "DESIGN_NAME": "moon_mem_phy",
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "VERILOG_FILES": [
+    "dir::../../../rtl/soc/interconnect/axi_pkg.sv",
+    "dir::../../../rtl/soc/phy/moon_mem_phy.sv"
+  ],
+  "VERILOG_INCLUDE_DIRS": [
+    "dir::../../../rtl/soc/interconnect",
+    "dir::../../../rtl/soc/phy"
+  ],
+  "CLOCK_PORT": "clk_i",
+  "CLOCK_NET": "clk_i",
+  "CLOCK_PERIOD": 20.0,
+  "FP_SIZING": "relative",
+  "FP_CORE_UTIL": 30,
+  "DESIGN_IS_CORE": 0,
+  "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout"
+}

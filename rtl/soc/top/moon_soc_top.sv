@@ -1,8 +1,9 @@
 // ============================================================================
 // File: rtl/soc/top/moon_soc_top.sv
-// Description: Moon-SoC Top-Level System-on-Chip module integrating moon_core,
-//              64-bit AXI4 crossbar, AXI-to-APB bridge, Boot ROM, On-Chip SRAM,
-//              CLINT, PLIC, UART 16550, and external memory AXI interface.
+// Description: Moon-SoC Top-Level System-on-Chip module organized into modern,
+//              hierarchical macro partitions (Compute Tile, Cache Tile,
+//              Memory Subsystem, System Fabric, Peripheral Subsystem, System
+//              Control, and PHY Blocks) matching industry SoC architectures.
 // ============================================================================
 
 `ifndef MOON_SOC_TOP_SV
@@ -10,33 +11,26 @@
 
 `include "moon_pkg.sv"
 `include "axi_pkg.sv"
-`include "moon_core.sv"
-`include "moon_l1_cache_subsystem.sv"
-`include "axi_crossbar.sv"
-`include "axi_to_apb_bridge.sv"
-`include "apb_crossbar.sv"
-`include "moon_bootrom.sv"
-`include "moon_sram_ctrl.sv"
-`include "moon_clint.sv"
-`include "moon_plic.sv"
-`include "moon_uart.sv"
-`include "moon_crg.sv"
-`include "moon_reset_ctrl.sv"
-`include "moon_pmu.sv"
-`include "moon_spi.sv"
-`include "moon_i2c.sv"
+`include "moon_sysctrl_subsystem.sv"
+`include "moon_cpu_tile.sv"
+`include "moon_cache_tile.sv"
+`include "moon_mem_subsystem.sv"
+`include "moon_sys_fabric.sv"
+`include "moon_periph_subsystem.sv"
+`include "moon_mem_phy.sv"
+`include "moon_io_phy.sv"
 
 module moon_soc_top
   import moon_pkg::*;
   import axi_pkg::*;
 #(
-  parameter int HART_ID = 0,
-  parameter int ROM_SIZE_BYTES  = 4096,  // 4 KB Boot ROM
-  parameter int SRAM_SIZE_BYTES = 4096,  // 4 KB On-Chip SRAM (Sky130 OpenRAM macro target)
-  parameter int ICACHE_SETS     = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-I Cache
-  parameter int DCACHE_SETS     = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-D Cache
-  parameter int ICACHE_WAYS     = 2,
-  parameter int DCACHE_WAYS     = 2,
+  parameter int HART_ID          = 0,
+  parameter int ROM_SIZE_BYTES   = 4096,  // 4 KB Boot ROM
+  parameter int SRAM_SIZE_BYTES  = 4096,  // 4 KB On-Chip SRAM (Sky130 OpenRAM macro target)
+  parameter int ICACHE_SETS      = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-I Cache
+  parameter int DCACHE_SETS      = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-D Cache
+  parameter int ICACHE_WAYS      = 2,
+  parameter int DCACHE_WAYS      = 2,
   parameter bit ENABLE_FPU       = 1'b0,
   parameter bit ENABLE_VECTOR    = 1'b0,
   parameter bit ENABLE_VECTOR_FP = 1'b0
@@ -75,17 +69,11 @@ module moon_soc_top
   output logic    m_ext_b_ready_o
 );
 
-  // --------------------------------------------------------------------------
-  // Internal Interrupt Signals
-  // --------------------------------------------------------------------------
-  logic timer_irq;
-  logic software_irq;
-  logic external_irq;
-  logic uart_irq;
+  // ==========================================================================
+  // Inter-Block Interconnect Signals
+  // ==========================================================================
 
-  // --------------------------------------------------------------------------
-  // Domain Clocks & Resets
-  // --------------------------------------------------------------------------
+  // Domain Clocks & Resets (from System Control Macro)
   logic clk_aon;
   logic clk_core;
   logic clk_peri;
@@ -96,55 +84,129 @@ module moon_soc_top
   logic rst_peri_n;
   logic rst_mem_n;
 
-  // --------------------------------------------------------------------------
-  // PMU & CRG Signals
-  // --------------------------------------------------------------------------
-  logic core_clk_gate_req;
-  logic peri_clk_gate_req;
-  logic pll_pwr_down_req;
-  logic sw_rst_req;
+  // CPU <-> Cache Memory Bus
+  logic            imem_req;
+  logic [XLEN-1:0] imem_addr;
+  logic            imem_valid;
+  logic [ILEN-1:0] imem_rdata;
+
+  logic            dmem_req;
+  logic            dmem_we;
+  logic [XLEN-1:0] dmem_addr;
+  logic [XLEN-1:0] dmem_wdata;
+  logic [7:0]      dmem_wstrb;
+  logic            dmem_valid;
+  logic [XLEN-1:0] dmem_rdata;
+
+  // Cache <-> System Fabric AXI4 Masters
+  axi_ar_t cache_m0_ar;
+  logic    cache_m0_ar_ready;
+  axi_r_t  cache_m0_r;
+  logic    cache_m0_r_ready;
+
+  axi_ar_t cache_m1_ar;
+  logic    cache_m1_ar_ready;
+  axi_r_t  cache_m1_r;
+  logic    cache_m1_r_ready;
+
+  axi_aw_t cache_m1_aw;
+  logic    cache_m1_aw_ready;
+  axi_w_t  cache_m1_w;
+  logic    cache_m1_w_ready;
+  axi_b_t  cache_m1_b;
+  logic    cache_m1_b_ready;
+
+  // System Fabric <-> Memory Subsystem AXI4 Slaves
+  axi_ar_t fabric_s_rom_ar;
+  logic    fabric_s_rom_ar_ready;
+  axi_r_t  fabric_s_rom_r;
+  logic    fabric_s_rom_r_ready;
+  axi_aw_t fabric_s_rom_aw;
+  logic    fabric_s_rom_aw_ready;
+  axi_w_t  fabric_s_rom_w;
+  logic    fabric_s_rom_w_ready;
+  axi_b_t  fabric_s_rom_b;
+  logic    fabric_s_rom_b_ready;
+
+  axi_ar_t fabric_s_sram_ar;
+  logic    fabric_s_sram_ar_ready;
+  axi_r_t  fabric_s_sram_r;
+  logic    fabric_s_sram_r_ready;
+  axi_aw_t fabric_s_sram_aw;
+  logic    fabric_s_sram_aw_ready;
+  axi_w_t  fabric_s_sram_w;
+  logic    fabric_s_sram_w_ready;
+  axi_b_t  fabric_s_sram_b;
+  logic    fabric_s_sram_b_ready;
+
+  // System Fabric <-> Memory PHY AXI4 Slave S3
+  axi_ar_t fabric_s_ext_ar;
+  logic    fabric_s_ext_ar_ready;
+  axi_r_t  fabric_s_ext_r;
+  logic    fabric_s_ext_r_ready;
+  axi_aw_t fabric_s_ext_aw;
+  logic    fabric_s_ext_aw_ready;
+  axi_w_t  fabric_s_ext_w;
+  logic    fabric_s_ext_w_ready;
+  axi_b_t  fabric_s_ext_b;
+  logic    fabric_s_ext_b_ready;
+
+  // System Fabric <-> APB Peripherals & System Control
+  apb_req_t  [6:0] p_req;
+  apb_resp_t [6:0] p_resp;
+
+  // Core Interrupts & Power Handshake
+  logic timer_irq;
+  logic software_irq;
+  logic external_irq;
+  logic uart_irq;
   logic wfi_core;
   logic irq_pending_core;
 
-  // --------------------------------------------------------------------------
-  // Core Memory Signals
-  // --------------------------------------------------------------------------
-  logic             imem_req;
-  logic [XLEN-1:0]  imem_addr;
-  logic             imem_valid;
-  logic [ILEN-1:0]  imem_rdata;
+  // PHY <-> Peripheral Subsystem Core Lines
+  logic        core_uart_rx;
+  logic        core_uart_tx;
+  logic        core_spi_miso;
+  logic        core_spi_mosi;
+  logic        core_spi_sck;
+  logic        core_spi_cs_n;
+  logic        core_i2c_sda_in;
+  logic        core_i2c_scl;
+  logic        core_i2c_sda_out;
+  logic        core_i2c_sda_oe;
+  logic [30:0] core_ext_irq;
 
-  logic             dmem_req;
-  logic             dmem_we;
-  logic [XLEN-1:0]  dmem_addr;
-  logic [XLEN-1:0]  dmem_wdata;
-  logic [7:0]       dmem_wstrb;
-  logic             dmem_valid;
-  logic [XLEN-1:0]  dmem_rdata;
-
-  // --------------------------------------------------------------------------
-  // 0. Reset Controller & Sequencer
-  // --------------------------------------------------------------------------
-  moon_reset_ctrl u_reset_ctrl (
-    .clk_aon_i     (clk_aon),
+  // ==========================================================================
+  // SECTION 1: System Control Macro (AON, CRG, PMU, Reset Sequencer)
+  // ==========================================================================
+  moon_sysctrl_subsystem u_sysctrl_subsystem (
+    .ref_clk_i     (clk_i),
     .raw_rst_ni    (rst_ni),
-    .sw_rst_req_i  (sw_rst_req),
-    .wdt_rst_req_i (1'b0),
+    .crg_req_i     (p_req[3]),
+    .crg_resp_o    (p_resp[3]),
+    .pmu_req_i     (p_req[4]),
+    .pmu_resp_o    (p_resp[4]),
+    .wfi_i         (wfi_core),
+    .irq_pending_i (irq_pending_core || timer_irq || software_irq || external_irq),
+    .clk_aon_o     (clk_aon),
+    .clk_core_o    (clk_core),
+    .clk_peri_o    (clk_peri),
+    .clk_mem_o     (clk_mem),
     .rst_aon_no    (rst_aon_n),
     .rst_core_no   (rst_core_n),
     .rst_peri_no   (rst_peri_n),
     .rst_mem_no    (rst_mem_n)
   );
 
-  // --------------------------------------------------------------------------
-  // 1. CPU Core Instantiation
-  // --------------------------------------------------------------------------
-  moon_core #(
-    .HART_ID(HART_ID),
-    .ENABLE_FPU(ENABLE_FPU),
-    .ENABLE_VECTOR(ENABLE_VECTOR),
-    .ENABLE_VECTOR_FP(ENABLE_VECTOR_FP)
-  ) u_core (
+  // ==========================================================================
+  // SECTION 2: CPU Compute Tile (CPU Core Block)
+  // ==========================================================================
+  moon_cpu_tile #(
+    .HART_ID          (HART_ID),
+    .ENABLE_FPU       (ENABLE_FPU),
+    .ENABLE_VECTOR    (ENABLE_VECTOR),
+    .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
+  ) u_cpu_tile (
     .clk_i               (clk_core),
     .rst_ni              (rst_core_n),
     .imem_req_o          (imem_req),
@@ -167,27 +229,15 @@ module moon_soc_top
     .interrupt_pending_o (irq_pending_core)
   );
 
-  // --------------------------------------------------------------------------
-  // 2. L1 Cache Subsystem (32 KB L1-I & 32 KB L1-D) with AXI4 Masters
-  // --------------------------------------------------------------------------
-  axi_ar_t [1:0] core_ar;
-  logic    [1:0] core_ar_ready;
-  axi_r_t  [1:0] core_r;
-  logic    [1:0] core_r_ready;
-
-  axi_aw_t [1:0] core_aw;
-  logic    [1:0] core_aw_ready;
-  axi_w_t  [1:0] core_w;
-  logic    [1:0] core_w_ready;
-  axi_b_t  [1:0] core_b;
-  logic    [1:0] core_b_ready;
-
-  moon_l1_cache_subsystem #(
+  // ==========================================================================
+  // SECTION 3: Cache Subsystem Tile (L1 Cache Block)
+  // ==========================================================================
+  moon_cache_tile #(
     .ICACHE_WAYS (ICACHE_WAYS),
     .DCACHE_WAYS (DCACHE_WAYS),
     .ICACHE_SETS (ICACHE_SETS),
     .DCACHE_SETS (DCACHE_SETS)
-  ) u_l1_cache (
+  ) u_cache_tile (
     .clk_i         (clk_core),
     .rst_ni        (rst_core_n),
     .imem_req_i    (imem_req),
@@ -206,240 +256,201 @@ module moon_soc_top
     .cbo_clean_i   (1'b0),
     .cbo_flush_i   (1'b0),
     .cbo_zero_i    (1'b0),
-    .m0_ar_o       (core_ar[0]),
-    .m0_ar_ready_i (core_ar_ready[0]),
-    .m0_r_i        (core_r[0]),
-    .m0_r_ready_o  (core_r_ready[0]),
-    .m1_ar_o       (core_ar[1]),
-    .m1_ar_ready_i (core_ar_ready[1]),
-    .m1_r_i        (core_r[1]),
-    .m1_r_ready_o  (core_r_ready[1]),
-    .m1_aw_o       (core_aw[1]),
-    .m1_aw_ready_i (core_aw_ready[1]),
-    .m1_w_o        (core_w[1]),
-    .m1_w_ready_i  (core_w_ready[1]),
-    .m1_b_i        (core_b[1]),
-    .m1_b_ready_o  (core_b_ready[1])
+    .m0_ar_o       (cache_m0_ar),
+    .m0_ar_ready_i (cache_m0_ar_ready),
+    .m0_r_i        (cache_m0_r),
+    .m0_r_ready_o  (cache_m0_r_ready),
+    .m1_ar_o       (cache_m1_ar),
+    .m1_ar_ready_i (cache_m1_ar_ready),
+    .m1_r_i        (cache_m1_r),
+    .m1_r_ready_o  (cache_m1_r_ready),
+    .m1_aw_o       (cache_m1_aw),
+    .m1_aw_ready_i (cache_m1_aw_ready),
+    .m1_w_o        (cache_m1_w),
+    .m1_w_ready_i  (cache_m1_w_ready),
+    .m1_b_i        (cache_m1_b),
+    .m1_b_ready_o  (cache_m1_b_ready)
   );
 
-  always_comb begin
-    core_aw[0] = '0;
-    core_w[0]  = '0;
-  end
-
-  // --------------------------------------------------------------------------
-  // 3. AXI4 System Crossbar
-  // --------------------------------------------------------------------------
-  // S0: Boot ROM, S1: SRAM, S2: APB Bridge, S3: External Main Memory
-  axi_ar_t [3:0] s_ar;
-  logic    [3:0] s_ar_ready;
-  axi_r_t  [3:0] s_r;
-  logic    [3:0] s_r_ready;
-
-  axi_aw_t [3:0] s_aw;
-  logic    [3:0] s_aw_ready;
-  axi_w_t  [3:0] s_w;
-  logic    [3:0] s_w_ready;
-  axi_b_t  [3:0] s_b;
-  logic    [3:0] s_b_ready;
-
-  axi_crossbar #(
-    .NUM_MASTERS(2),
-    .NUM_SLAVES(4)
-  ) u_axi_crossbar (
-    .clk_i        (clk_core),
-    .rst_ni       (rst_core_n),
-    .m_ar_i       (core_ar),
-    .m_ar_ready_o (core_ar_ready),
-    .m_r_o        (core_r),
-    .m_r_ready_i  (core_r_ready),
-    .m_aw_i       (core_aw),
-    .m_aw_ready_o (core_aw_ready),
-    .m_w_i        (core_w),
-    .m_w_ready_o  (core_w_ready),
-    .m_b_o        (core_b),
-    .m_b_ready_i  (core_b_ready),
-    .s_ar_o       (s_ar),
-    .s_ar_ready_i (s_ar_ready),
-    .s_r_i        (s_r),
-    .s_r_ready_o  (s_r_ready),
-    .s_aw_o       (s_aw),
-    .s_aw_ready_i (s_aw_ready),
-    .s_w_o        (s_w),
-    .s_w_ready_i  (s_w_ready),
-    .s_b_i        (s_b),
-    .s_b_ready_o  (s_b_ready)
+  // ==========================================================================
+  // SECTION 4: Memory Subsystem (Boot ROM & SRAM Block)
+  // ==========================================================================
+  moon_mem_subsystem #(
+    .ROM_SIZE_BYTES  (ROM_SIZE_BYTES),
+    .SRAM_SIZE_BYTES (SRAM_SIZE_BYTES),
+    .ROM_BASE        (64'h0000_1000),
+    .SRAM_BASE       (64'h7000_0000)
+  ) u_mem_subsystem (
+    .clk_i            (clk_mem),
+    .rst_ni           (rst_mem_n),
+    .s_rom_ar_i       (fabric_s_rom_ar),
+    .s_rom_ar_ready_o (fabric_s_rom_ar_ready),
+    .s_rom_r_o        (fabric_s_rom_r),
+    .s_rom_r_ready_i  (fabric_s_rom_r_ready),
+    .s_rom_aw_i       (fabric_s_rom_aw),
+    .s_rom_aw_ready_o (fabric_s_rom_aw_ready),
+    .s_rom_w_i        (fabric_s_rom_w),
+    .s_rom_w_ready_o  (fabric_s_rom_w_ready),
+    .s_rom_b_o        (fabric_s_rom_b),
+    .s_rom_b_ready_i  (fabric_s_rom_b_ready),
+    .s_sram_ar_i      (fabric_s_sram_ar),
+    .s_sram_ar_ready_o(fabric_s_sram_ar_ready),
+    .s_sram_r_o       (fabric_s_sram_r),
+    .s_sram_r_ready_i (fabric_s_sram_r_ready),
+    .s_sram_aw_i      (fabric_s_sram_aw),
+    .s_sram_aw_ready_o(fabric_s_sram_aw_ready),
+    .s_sram_w_i       (fabric_s_sram_w),
+    .s_sram_w_ready_o (fabric_s_sram_w_ready),
+    .s_sram_b_o       (fabric_s_sram_b),
+    .s_sram_b_ready_i (fabric_s_sram_b_ready)
   );
 
-  // --------------------------------------------------------------------------
-  // 4. S0: Boot ROM (0x0000_1000 - 0x0000_8FFF)
-  // --------------------------------------------------------------------------
-  moon_bootrom #(
-    .ROM_SIZE_BYTES(ROM_SIZE_BYTES),
-    .BASE_ADDR(64'h0000_1000)
-  ) u_bootrom (
-    .clk_i        (clk_mem),
-    .rst_ni       (rst_mem_n),
-    .s_ar_i       (s_ar[0]),
-    .s_ar_ready_o (s_ar_ready[0]),
-    .s_r_o        (s_r[0]),
-    .s_r_ready_i  (s_r_ready[0]),
-    .s_aw_i       (s_aw[0]),
-    .s_aw_ready_o (s_aw_ready[0]),
-    .s_w_i        (s_w[0]),
-    .s_w_ready_o  (s_w_ready[0]),
-    .s_b_o        (s_b[0]),
-    .s_b_ready_i  (s_b_ready[0])
+  // ==========================================================================
+  // SECTION 5: System Interconnect Fabric (Uncore / Bus Crossbar Block)
+  // ==========================================================================
+  moon_sys_fabric u_sys_fabric (
+    .clk_i            (clk_core),
+    .rst_ni           (rst_core_n),
+    .m0_ar_i          (cache_m0_ar),
+    .m0_ar_ready_o    (cache_m0_ar_ready),
+    .m0_r_o           (cache_m0_r),
+    .m0_r_ready_i     (cache_m0_r_ready),
+    .m1_ar_i          (cache_m1_ar),
+    .m1_ar_ready_o    (cache_m1_ar_ready),
+    .m1_r_o           (cache_m1_r),
+    .m1_r_ready_i     (cache_m1_r_ready),
+    .m1_aw_i          (cache_m1_aw),
+    .m1_aw_ready_o    (cache_m1_aw_ready),
+    .m1_w_i           (cache_m1_w),
+    .m1_w_ready_o     (cache_m1_w_ready),
+    .m1_b_o           (cache_m1_b),
+    .m1_b_ready_i     (cache_m1_b_ready),
+    .s_rom_ar_o       (fabric_s_rom_ar),
+    .s_rom_ar_ready_i (fabric_s_rom_ar_ready),
+    .s_rom_r_i        (fabric_s_rom_r),
+    .s_rom_r_ready_o  (fabric_s_rom_r_ready),
+    .s_rom_aw_o       (fabric_s_rom_aw),
+    .s_rom_aw_ready_i (fabric_s_rom_aw_ready),
+    .s_rom_w_o        (fabric_s_rom_w),
+    .s_rom_w_ready_i  (fabric_s_rom_w_ready),
+    .s_rom_b_i        (fabric_s_rom_b),
+    .s_rom_b_ready_o  (fabric_s_rom_b_ready),
+    .s_sram_ar_o      (fabric_s_sram_ar),
+    .s_sram_ar_ready_i(fabric_s_sram_ar_ready),
+    .s_sram_r_i       (fabric_s_sram_r),
+    .s_sram_r_ready_o (fabric_s_sram_r_ready),
+    .s_sram_aw_o      (fabric_s_sram_aw),
+    .s_sram_aw_ready_i(fabric_s_sram_aw_ready),
+    .s_sram_w_o       (fabric_s_sram_w),
+    .s_sram_w_ready_i (fabric_s_sram_w_ready),
+    .s_sram_b_i       (fabric_s_sram_b),
+    .s_sram_b_ready_o (fabric_s_sram_b_ready),
+    .s_ext_ar_o       (fabric_s_ext_ar),
+    .s_ext_ar_ready_i (fabric_s_ext_ar_ready),
+    .s_ext_r_i        (fabric_s_ext_r),
+    .s_ext_r_ready_o  (fabric_s_ext_r_ready),
+    .s_ext_aw_o       (fabric_s_ext_aw),
+    .s_ext_aw_ready_i (fabric_s_ext_aw_ready),
+    .s_ext_w_o        (fabric_s_ext_w),
+    .s_ext_w_ready_i  (fabric_s_ext_w_ready),
+    .s_ext_b_i        (fabric_s_ext_b),
+    .s_ext_b_ready_o  (fabric_s_ext_b_ready),
+    .p_req_o          (p_req),
+    .p_resp_i         (p_resp)
   );
 
-  // --------------------------------------------------------------------------
-  // 5. S1: On-Chip SRAM (0x7000_0000 - 0x7001_FFFF)
-  // --------------------------------------------------------------------------
-  moon_sram_ctrl #(
-    .SRAM_SIZE_BYTES(SRAM_SIZE_BYTES),
-    .BASE_ADDR(64'h7000_0000)
-  ) u_sram (
-    .clk_i        (clk_mem),
-    .rst_ni       (rst_mem_n),
-    .s_ar_i       (s_ar[1]),
-    .s_ar_ready_o (s_ar_ready[1]),
-    .s_r_o        (s_r[1]),
-    .s_r_ready_i  (s_r_ready[1]),
-    .s_aw_i       (s_aw[1]),
-    .s_aw_ready_o (s_aw_ready[1]),
-    .s_w_i        (s_w[1]),
-    .s_w_ready_o  (s_w_ready[1]),
-    .s_b_o        (s_b[1]),
-    .s_b_ready_i  (s_b_ready[1])
-  );
-
-  // --------------------------------------------------------------------------
-  // 6. S2: AXI-to-APB Bridge & APB Crossbar
-  // --------------------------------------------------------------------------
-  apb_req_t  bridge_apb_req;
-  apb_resp_t bridge_apb_resp;
-
-  axi_to_apb_bridge u_axi_to_apb (
-    .clk_i        (clk_peri),
-    .rst_ni       (rst_peri_n),
-    .s_ar_i       (s_ar[2]),
-    .s_ar_ready_o (s_ar_ready[2]),
-    .s_r_o        (s_r[2]),
-    .s_r_ready_i  (s_r_ready[2]),
-    .s_aw_i       (s_aw[2]),
-    .s_aw_ready_o (s_aw_ready[2]),
-    .s_w_i        (s_w[2]),
-    .s_w_ready_o  (s_w_ready[2]),
-    .s_b_o        (s_b[2]),
-    .s_b_ready_i  (s_b_ready[2]),
-    .apb_req_o    (bridge_apb_req),
-    .apb_resp_i   (bridge_apb_resp)
-  );
-
-  // APB Peripherals: CLINT, PLIC, UART, CRG, PMU, SPI, I2C
-  apb_req_t  [6:0] p_req;
-  apb_resp_t [6:0] p_resp;
-
-  apb_crossbar #(
-    .NUM_PERIPHS(7)
-  ) u_apb_crossbar (
-    .m_req_i  (bridge_apb_req),
-    .m_resp_o (bridge_apb_resp),
-    .p_req_o  (p_req),
-    .p_resp_i (p_resp)
-  );
-
-  // P0: CLINT (0x0200_0000)
-  moon_clint u_clint (
+  // ==========================================================================
+  // SECTION 6: Peripheral Subsystem (Southbridge / Low-Speed I/O Block)
+  // ==========================================================================
+  moon_periph_subsystem u_periph_subsystem (
     .clk_i          (clk_peri),
     .rst_ni         (rst_peri_n),
-    .req_i          (p_req[0]),
-    .resp_o         (p_resp[0]),
+    .clint_req_i    (p_req[0]),
+    .clint_resp_o   (p_resp[0]),
+    .plic_req_i     (p_req[1]),
+    .plic_resp_o    (p_resp[1]),
+    .uart_req_i     (p_req[2]),
+    .uart_resp_o    (p_resp[2]),
+    .spi_req_i      (p_req[5]),
+    .spi_resp_o     (p_resp[5]),
+    .i2c_req_i      (p_req[6]),
+    .i2c_resp_o     (p_resp[6]),
+    .uart_rx_i      (core_uart_rx),
+    .uart_tx_o      (core_uart_tx),
+    .spi_miso_i     (core_spi_miso),
+    .spi_mosi_o     (core_spi_mosi),
+    .spi_sck_o      (core_spi_sck),
+    .spi_cs_no      (core_spi_cs_n),
+    .i2c_sda_i      (core_i2c_sda_in),
+    .i2c_scl_o      (core_i2c_scl),
+    .i2c_sda_o      (core_i2c_sda_out),
+    .i2c_sda_oe_o   (core_i2c_sda_oe),
+    .ext_irq_i      (core_ext_irq),
     .timer_irq_o    (timer_irq),
-    .software_irq_o (software_irq)
+    .software_irq_o (software_irq),
+    .external_irq_o (external_irq),
+    .uart_irq_o     (uart_irq)
   );
 
-  // P1: PLIC (0x0C00_0000)
-  wire [31:1] plic_irq_sources = {ext_irq_i, uart_irq};
-
-  moon_plic #(
-    .NUM_SOURCES(31)
-  ) u_plic (
-    .clk_i          (clk_peri),
-    .rst_ni         (rst_peri_n),
-    .req_i          (p_req[1]),
-    .resp_o         (p_resp[1]),
-    .irq_sources_i  (plic_irq_sources),
-    .external_irq_o (external_irq)
+  // ==========================================================================
+  // SECTION 7: External Memory Interface PHY Block
+  // ==========================================================================
+  moon_mem_phy u_mem_phy (
+    .clk_i               (clk_mem),
+    .rst_ni              (rst_mem_n),
+    .s_fabric_ar_i       (fabric_s_ext_ar),
+    .s_fabric_ar_ready_o (fabric_s_ext_ar_ready),
+    .s_fabric_r_o        (fabric_s_ext_r),
+    .s_fabric_r_ready_i  (fabric_s_ext_r_ready),
+    .s_fabric_aw_i       (fabric_s_ext_aw),
+    .s_fabric_aw_ready_o (fabric_s_ext_aw_ready),
+    .s_fabric_w_i        (fabric_s_ext_w),
+    .s_fabric_w_ready_o  (fabric_s_ext_w_ready),
+    .s_fabric_b_o        (fabric_s_ext_b),
+    .s_fabric_b_ready_i  (fabric_s_ext_b_ready),
+    .m_ext_ar_o          (m_ext_ar_o),
+    .m_ext_ar_ready_i    (m_ext_ar_ready_i),
+    .m_ext_r_i           (m_ext_r_i),
+    .m_ext_r_ready_o     (m_ext_r_ready_o),
+    .m_ext_aw_o          (m_ext_aw_o),
+    .m_ext_aw_ready_i    (m_ext_aw_ready_i),
+    .m_ext_w_o           (m_ext_w_o),
+    .m_ext_w_ready_i     (m_ext_w_ready_i),
+    .m_ext_b_i           (m_ext_b_i),
+    .m_ext_b_ready_o     (m_ext_b_ready_o)
   );
 
-  // P2: UART 16550 (0x1000_0000)
-  moon_uart u_uart (
-    .clk_i      (clk_peri),
-    .rst_ni     (rst_peri_n),
-    .req_i      (p_req[2]),
-    .resp_o     (p_resp[2]),
-    .uart_rx_i  (uart_rx_i),
-    .uart_tx_o  (uart_tx_o),
-    .uart_irq_o (uart_irq)
+  // ==========================================================================
+  // SECTION 8: Peripheral I/O PHY & Pad Ring Block
+  // ==========================================================================
+  moon_io_phy #(
+    .ENABLE_INPUT_SYNC   (1'b0)
+  ) u_io_phy (
+    .clk_i               (clk_peri),
+    .rst_ni              (rst_peri_n),
+    .core_uart_rx_o      (core_uart_rx),
+    .core_uart_tx_i      (core_uart_tx),
+    .core_spi_miso_o     (core_spi_miso),
+    .core_spi_mosi_i     (core_spi_mosi),
+    .core_spi_sck_i      (core_spi_sck),
+    .core_spi_cs_ni      (core_spi_cs_n),
+    .core_i2c_sda_o      (core_i2c_sda_in),
+    .core_i2c_scl_i      (core_i2c_scl),
+    .core_i2c_sda_i      (core_i2c_sda_out),
+    .core_i2c_sda_oe_i   (core_i2c_sda_oe),
+    .core_ext_irq_o      (core_ext_irq),
+    .pad_uart_rx_i       (uart_rx_i),
+    .pad_uart_tx_o       (uart_tx_o),
+    .pad_spi_miso_i      (spi_miso_i),
+    .pad_spi_mosi_o      (spi_mosi_o),
+    .pad_spi_sck_o       (spi_sck_o),
+    .pad_spi_cs_no       (spi_cs_no),
+    .pad_i2c_sda_i       (i2c_sda_i),
+    .pad_i2c_scl_o       (i2c_scl_o),
+    .pad_i2c_sda_o       (i2c_sda_o),
+    .pad_i2c_sda_oe_o    (i2c_sda_oe_o),
+    .pad_ext_irq_i       (ext_irq_i)
   );
-
-  // P3: CRG (0x1000_5000)
-  moon_crg u_crg (
-    .ref_clk_i       (clk_i),
-    .rst_aon_ni      (rst_aon_n),
-    .req_i           (p_req[3]),
-    .resp_o          (p_resp[3]),
-    .core_clk_gate_i (core_clk_gate_req),
-    .peri_clk_gate_i (peri_clk_gate_req),
-    .pll_pwr_down_i  (pll_pwr_down_req),
-    .clk_aon_o       (clk_aon),
-    .clk_core_o      (clk_core),
-    .clk_peri_o      (clk_peri),
-    .clk_mem_o       (clk_mem),
-    .sw_rst_req_o    (sw_rst_req)
-  );
-
-  // P4: PMU (0x1000_5080)
-  moon_pmu u_pmu (
-    .clk_aon_i           (clk_aon),
-    .rst_aon_ni          (rst_aon_n),
-    .req_i               (p_req[4]),
-    .resp_o              (p_resp[4]),
-    .wfi_i               (wfi_core),
-    .irq_pending_i       (irq_pending_core || timer_irq || software_irq || external_irq),
-    .core_clk_gate_req_o (core_clk_gate_req),
-    .peri_clk_gate_req_o (peri_clk_gate_req),
-    .pll_pwr_down_req_o  (pll_pwr_down_req),
-    .current_state_o     ()
-  );
-
-  // P5: SPI master (0x1000_6000)
-  moon_spi u_spi (
-    .clk_i(clk_peri), .rst_ni(rst_peri_n), .req_i(p_req[5]), .resp_o(p_resp[5]),
-    .miso_i(spi_miso_i), .mosi_o(spi_mosi_o), .sck_o(spi_sck_o), .cs_no(spi_cs_no)
-  );
-
-  // P6: I2C master (0x1000_7000); sda_oe_o requests open-drain low.
-  moon_i2c u_i2c (
-    .clk_i(clk_peri), .rst_ni(rst_peri_n), .req_i(p_req[6]), .resp_o(p_resp[6]),
-    .sda_i(i2c_sda_i), .scl_o(i2c_scl_o), .sda_o(i2c_sda_o), .sda_oe_o(i2c_sda_oe_o)
-  );
-
-  // --------------------------------------------------------------------------
-  // 7. S3: External Main Memory Port Pass-Through
-  // --------------------------------------------------------------------------
-  assign m_ext_ar_o       = s_ar[3];
-  assign s_ar_ready[3]    = m_ext_ar_ready_i;
-  assign s_r[3]           = m_ext_r_i;
-  assign m_ext_r_ready_o  = s_r_ready[3];
-
-  assign m_ext_aw_o       = s_aw[3];
-  assign s_aw_ready[3]    = m_ext_aw_ready_i;
-  assign m_ext_w_o        = s_w[3];
-  assign s_w_ready[3]     = m_ext_w_ready_i;
-  assign s_b[3]           = m_ext_b_i;
-  assign m_ext_b_ready_o  = s_b_ready[3];
 
 endmodule : moon_soc_top
 
