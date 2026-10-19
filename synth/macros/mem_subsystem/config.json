@@ -2,11 +2,11 @@
   "DESIGN_NAME": "moon_mem_subsystem",
   "PDK": "sky130A",
   "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "USE_SLANG": true,
+  "VERILOG_DEFINES": [
+    "SYNTHESIS=1"
+  ],
   "VERILOG_FILES": [
-    "dir::../../../rtl/soc/interconnect/axi_pkg.sv",
-    "dir::../../../rtl/soc/memory/openram_sram_wrapper.sv",
-    "dir::../../../rtl/soc/memory/moon_bootrom.sv",
-    "dir::../../../rtl/soc/memory/moon_sram_ctrl.sv",
     "dir::../../../rtl/soc/memory/moon_mem_subsystem.sv"
   ],
   "VERILOG_INCLUDE_DIRS": [

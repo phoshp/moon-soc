@@ -11,12 +11,26 @@
 
 `include "moon_pkg.sv"
 `include "axi_pkg.sv"
+
+`ifdef SYNTHESIS
+  `define _MOON_USE_MACRO_BLACKBOX
+`elsif YOSYS
+  `define _MOON_USE_MACRO_BLACKBOX
+`elsif USE_SYNTHESIS_BLACKBOX
+  `define _MOON_USE_MACRO_BLACKBOX
+`endif
+
+`ifdef _MOON_USE_MACRO_BLACKBOX
+`include "moon_soc_macros_bb.sv"
+`else
 `include "moon_sysctrl_subsystem.sv"
 `include "moon_cpu_tile.sv"
 `include "moon_cache_tile.sv"
 `include "moon_mem_subsystem.sv"
 `include "moon_sys_fabric.sv"
 `include "moon_periph_subsystem.sv"
+`endif
+
 `include "moon_mem_phy.sv"
 `include "moon_io_phy.sv"
 

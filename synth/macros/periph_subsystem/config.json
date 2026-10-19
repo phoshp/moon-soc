@@ -2,13 +2,11 @@
   "DESIGN_NAME": "moon_periph_subsystem",
   "PDK": "sky130A",
   "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "USE_SLANG": true,
+  "VERILOG_DEFINES": [
+    "SYNTHESIS=1"
+  ],
   "VERILOG_FILES": [
-    "dir::../../../rtl/soc/interconnect/axi_pkg.sv",
-    "dir::../../../rtl/soc/periph/moon_clint.sv",
-    "dir::../../../rtl/soc/periph/moon_plic.sv",
-    "dir::../../../rtl/soc/periph/moon_uart.sv",
-    "dir::../../../rtl/soc/periph/moon_spi.sv",
-    "dir::../../../rtl/soc/periph/moon_i2c.sv",
     "dir::../../../rtl/soc/periph/moon_periph_subsystem.sv"
   ],
   "VERILOG_INCLUDE_DIRS": [

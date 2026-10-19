@@ -2,11 +2,11 @@
   "DESIGN_NAME": "moon_sys_fabric",
   "PDK": "sky130A",
   "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "USE_SLANG": true,
+  "VERILOG_DEFINES": [
+    "SYNTHESIS=1"
+  ],
   "VERILOG_FILES": [
-    "dir::../../../rtl/soc/interconnect/axi_pkg.sv",
-    "dir::../../../rtl/soc/interconnect/axi_crossbar.sv",
-    "dir::../../../rtl/soc/interconnect/axi_to_apb_bridge.sv",
-    "dir::../../../rtl/soc/interconnect/apb_crossbar.sv",
     "dir::../../../rtl/soc/interconnect/moon_sys_fabric.sv"
   ],
   "VERILOG_INCLUDE_DIRS": [
