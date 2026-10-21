@@ -14,6 +14,16 @@ module cg_cell (
   output logic clk_gated_o
 );
 
+`ifdef SYNTHESIS
+  // Native Sky130 Integrated Clock Gating (ICG) cell
+  // Recognized directly by CTS / OpenSTA as a clock gating element,
+  // ensuring proper clock tree balancing and eliminating hold timing loops.
+  sky130_fd_sc_hd__dlclkp_1 u_icg (
+    .CLK  (clk_i),
+    .GATE (enable_i | test_mode_i),
+    .GCLK (clk_gated_o)
+  );
+`else
   logic latch_en;
 
   // Level-sensitive latch: transparent when clk_i is low (0)
@@ -24,6 +34,7 @@ module cg_cell (
   end
 
   assign clk_gated_o = clk_i & latch_en;
+`endif
 
 endmodule : cg_cell
 

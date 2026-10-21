@@ -70,7 +70,8 @@ module moon_pll_model #(
     end else begin
       // Core clock divider
       if (div_core_i == 4'd0) begin
-        clk_core_div_q <= ref_clk_i;
+        cnt_core_q     <= '0;
+        clk_core_div_q <= 1'b0;
       end else begin
         if (cnt_core_q >= div_core_i) begin
           cnt_core_q     <= '0;
@@ -82,7 +83,8 @@ module moon_pll_model #(
 
       // Peripheral clock divider
       if (div_peri_i == 4'd0) begin
-        clk_peri_div_q <= ref_clk_i;
+        cnt_peri_q     <= '0;
+        clk_peri_div_q <= 1'b0;
       end else begin
         if (cnt_peri_q >= div_peri_i) begin
           cnt_peri_q     <= '0;
@@ -94,7 +96,8 @@ module moon_pll_model #(
 
       // Memory clock divider
       if (div_mem_i == 4'd0) begin
-        clk_mem_div_q <= ref_clk_i;
+        cnt_mem_q     <= '0;
+        clk_mem_div_q <= 1'b0;
       end else begin
         if (cnt_mem_q >= div_mem_i) begin
           cnt_mem_q     <= '0;

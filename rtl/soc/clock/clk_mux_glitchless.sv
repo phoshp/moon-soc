@@ -15,12 +15,12 @@ module clk_mux_glitchless (
   output logic clk_out_o
 );
 
-  // Synchronizer chain for clk_0 domain
-  logic q0_meta, q0_sync;
+  // Synchronizer chain for clk_0 domain (asynchronous CDC crossing)
+  (* async_reg = "true" *) logic q0_meta, q0_sync;
   logic q0_en_neg;
 
-  // Synchronizer chain for clk_1 domain
-  logic q1_meta, q1_sync;
+  // Synchronizer chain for clk_1 domain (asynchronous CDC crossing)
+  (* async_reg = "true" *) logic q1_meta, q1_sync;
   logic q1_en_neg;
 
   // Domain 0: enable only when sel_i == 0 AND domain 1 has turned off
