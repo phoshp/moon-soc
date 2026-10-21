@@ -54,9 +54,7 @@ module tb_moon_soc (
     .HART_ID(0),
     .ROM_SIZE_BYTES(4096),
     .SRAM_SIZE_BYTES(131072),
-    .ENABLE_FPU(1'b1),
-    .ENABLE_VECTOR(1'b1),
-    .ENABLE_VECTOR_FP(1'b1)
+    .ENABLE_FPU(1'b1)
   ) dut (
     .clk_i            (clk),
     .rst_ni           (rst_n),

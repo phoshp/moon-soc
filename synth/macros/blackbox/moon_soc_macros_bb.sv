@@ -19,9 +19,7 @@ module moon_cpu_tile
   import moon_pkg::*;
 #(
   parameter int HART_ID          = 0,
-  parameter bit ENABLE_FPU       = 1'b0,
-  parameter bit ENABLE_VECTOR    = 1'b0,
-  parameter bit ENABLE_VECTOR_FP = 1'b0
+  parameter bit ENABLE_FPU       = 1'b0
 )(
   input  logic             clk_i,
   input  logic             rst_ni,

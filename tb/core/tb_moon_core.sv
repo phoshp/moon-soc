@@ -53,9 +53,7 @@ module tb_moon_core (
   // --------------------------------------------------------------------------
   moon_core #(
     .HART_ID(0),
-    .ENABLE_FPU(1'b1),
-    .ENABLE_VECTOR(1'b1),
-    .ENABLE_VECTOR_FP(1'b1)
+    .ENABLE_FPU(1'b1)
   ) dut (
     .clk_i          (clk),
     .rst_ni         (rst_n),
@@ -74,7 +72,9 @@ module tb_moon_core (
     .software_irq_i (software_irq),
     .external_irq_i (external_irq),
     .inv_valid_i    (1'b0),
-    .inv_addr_i     ('0)
+    .inv_addr_i     ('0),
+    .wfi_o          (),
+    .interrupt_pending_o ()
   );
 
   // --------------------------------------------------------------------------

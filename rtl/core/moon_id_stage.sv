@@ -124,15 +124,12 @@ module moon_id_stage
   assign csr_addr = if_id_instr_i[31:20];
   wire is_fp_fma_opcode = (opcode == 7'b1000011) || (opcode == 7'b1000111) ||
                           (opcode == 7'b1001011) || (opcode == 7'b1001111);
-  wire is_vector_fp_scalar_op = (opcode == 7'b1010111) && (funct3 == 3'b101);
-  wire is_vector_strided_store = (opcode == OPCODE_STORE_FP) &&
-                                 (if_id_instr_i[27:26] == 2'b10);
 
   assign id_rs1_o = rs1;
   assign id_rs2_o = rs2;
   assign id_fp_rs1_o = rs1;
   assign id_fp_rs1_en_o = if_id_valid_i &&
-                          (is_fp_fma_opcode || is_vector_fp_scalar_op ||
+                          (is_fp_fma_opcode ||
                            ((opcode == OPCODE_FP) &&
                             ((((funct7 == 7'b1110000) || (funct7 == 7'b1110001)) &&
                               (rs2 == 5'd0) && (funct3 <= 3'b001)) ||
@@ -151,7 +148,7 @@ module moon_id_stage
   assign id_fp_rs3_o = if_id_instr_i[31:27];
   assign id_fp_rs3_en_o = if_id_valid_i && is_fp_fma_opcode;
   assign id_fp_rs2_en_o = if_id_valid_i &&
-                          (((opcode == OPCODE_STORE_FP) && !is_vector_strided_store &&
+                          (((opcode == OPCODE_STORE_FP) &&
                             ((funct3 == 3'b010) || (funct3 == 3'b011))) ||
                            is_fp_fma_opcode ||
                            ((opcode == OPCODE_FP) &&
@@ -380,56 +377,10 @@ module moon_id_stage
           3'b110: dec_alu_op = ALU_OR;  // ORI
           3'b111: dec_alu_op = ALU_AND; // ANDI
           3'b001: begin
-            if ((funct7 == 7'b0011000) && (rs2 == 5'd0)) begin // Zknd AES inverse mix columns
-              dec_alu_op = ALU_AES64IM;
-            end else if (funct7 == 7'b0011000 && rs2[4] && rs2[3:0] <= 4'd10) begin // AES key schedule
-              dec_alu_op = ALU_AES64KS1I;
-            end else if (funct7 == 7'b0001000) begin // Zknh SHA-256 word operations
-              dec_alu_src_b_imm = 1'b0;
-              case (rs2)
-                5'd0: dec_alu_op = ALU_SHA256SUM0;
-                5'd1: dec_alu_op = ALU_SHA256SUM1;
-                5'd2: dec_alu_op = ALU_SHA256SIG0;
-                5'd3: dec_alu_op = ALU_SHA256SIG1;
-                5'd4: dec_alu_op = ALU_SHA512SUM0;
-                5'd5: dec_alu_op = ALU_SHA512SUM1;
-                5'd6: dec_alu_op = ALU_SHA512SIG0;
-                5'd7: dec_alu_op = ALU_SHA512SIG1;
-                default: dec_regwrite = 1'b0;
-              endcase
-            end else if (funct7 == 7'b0110000) begin
-              case (rs2)
-                5'b00000: dec_alu_op = ALU_CLZ;    // CLZ
-                5'b00001: dec_alu_op = ALU_CTZ;    // CTZ
-                5'b00010: dec_alu_op = ALU_CPOP;   // CPOP
-                5'b00100: dec_alu_op = ALU_SEXT_B; // SEXT.B
-                5'b00101: dec_alu_op = ALU_SEXT_H; // SEXT.H
-                default:  dec_alu_op = ALU_ADD;
-              endcase
-            end else if (funct7[6:1] == 6'b001010) begin
-              dec_alu_op = ALU_BSET; // BSETI
-            end else if (funct7[6:1] == 6'b010010) begin
-              dec_alu_op = ALU_BCLR; // BCLRI
-            end else if (funct7[6:1] == 6'b011010) begin
-              dec_alu_op = ALU_BINV; // BINVI
-            end else begin
-              dec_alu_op = ALU_SLL; // SLLI
-            end
+            dec_alu_op = ALU_SLL; // SLLI
           end
           3'b101: begin
-            if (funct7 == 7'b0010100 && rs2 == 5'b00111) begin
-              dec_alu_op = ALU_ORC_B; // ORC.B
-            end else if (funct7 == 7'b0110101 && rs2 == 5'b11000) begin
-              dec_alu_op = ALU_REV8; // REV8
-            end else if (funct7[6:1] == 6'b011000) begin
-              dec_alu_op = ALU_ROR; // RORI
-            end else if (funct7[6:1] == 6'b010010) begin
-              dec_alu_op = ALU_BEXT; // BEXTI
-            end else if (funct7[6:1] == 6'b010000) begin
-              dec_alu_op = ALU_SRA; // SRAI
-            end else begin
-              dec_alu_op = ALU_SRL; // SRLI
-            end
+            dec_alu_op = (funct7[5]) ? ALU_SRA : ALU_SRL; // SRAI / SRLI
           end
           default: dec_alu_op = ALU_ADD;
         endcase
@@ -442,45 +393,16 @@ module moon_id_stage
         dec_regwrite      = 1'b1;
         case (funct3)
           3'b000: dec_alu_op = ALU_ADDW; // ADDIW
-          3'b001: begin
-            if (funct7[6:1] == 6'b000010) begin
-              dec_alu_op = ALU_SLLI_UW; // SLLI.UW
-            end else if (funct7 == 7'b0110000) begin
-              case (rs2)
-                5'b00000: dec_alu_op = ALU_CLZW;  // CLZW
-                5'b00001: dec_alu_op = ALU_CTZW;  // CTZW
-                5'b00010: dec_alu_op = ALU_CPOPW; // CPOPW
-                default:  dec_alu_op = ALU_ADDW;
-              endcase
-            end else begin
-              dec_alu_op = ALU_SLLW; // SLLIW
-            end
-          end
-          3'b101: begin
-            if (funct7 == 7'b0110000) begin
-              dec_alu_op = ALU_RORW; // RORIW
-            end else begin
-              dec_alu_op = (funct7[5]) ? ALU_SRAW : ALU_SRLW; // SRAIW / SRLIW
-            end
-          end
+          3'b001: dec_alu_op = ALU_SLLW; // SLLIW
+          3'b101: dec_alu_op = (funct7[5]) ? ALU_SRAW : ALU_SRLW; // SRAIW / SRLIW
           default: dec_alu_op = ALU_ADDW;
         endcase
       end
 
-      // OP (64-bit register-register: RV64I, RV64M, Zba, Zbb, Zbs)
+      // OP (64-bit register-register: RV64I, RV64M)
       OPCODE_OP: begin
         dec_regwrite = 1'b1;
-        if (funct7 == 7'b0111111 && funct3 == 3'b000) begin // Zkne/Zknd AES key schedule
-          dec_alu_op = ALU_AES64KS2;
-        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011001)) begin
-          dec_alu_op = ALU_AES64ES;
-        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011011)) begin
-          dec_alu_op = ALU_AES64ESM;
-        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011101)) begin
-          dec_alu_op = ALU_AES64DS;
-        end else if ((funct3 == 3'b000) && (funct7 == 7'b0011111)) begin
-          dec_alu_op = ALU_AES64DSM;
-        end else if (funct7 == 7'b0000001) begin // RV64M extension
+        if (funct7 == 7'b0000001) begin // RV64M extension
           case (funct3)
             3'b000: dec_muldiv_op = MULDIV_MUL;
             3'b001: dec_muldiv_op = MULDIV_MULH;
@@ -492,54 +414,14 @@ module moon_id_stage
             3'b111: dec_muldiv_op = MULDIV_REMU;
             default: ;
           endcase
-        end else if (funct7 == 7'b0010000) begin // Zba
+        end else begin // RV64I Base
           case (funct3)
-            3'b010: dec_alu_op = ALU_SH1ADD;
-            3'b100: dec_alu_op = ALU_SH2ADD;
-            3'b110: dec_alu_op = ALU_SH3ADD;
-            default: dec_alu_op = ALU_ADD;
-          endcase
-        end else if (funct7 == 7'b0000101) begin // Zbb (Min/Max)
-          case (funct3)
-            3'b100: dec_alu_op = ALU_MIN;
-            3'b101: dec_alu_op = ALU_MINU;
-            3'b110: dec_alu_op = ALU_MAX;
-            3'b111: dec_alu_op = ALU_MAXU;
-            default: dec_alu_op = ALU_ADD;
-          endcase
-        end else if (funct7 == 7'b0110000) begin // Zbb (Rotate)
-          case (funct3)
-            3'b001: dec_alu_op = ALU_ROL;
-            3'b101: dec_alu_op = ALU_ROR;
-            default: dec_alu_op = ALU_ADD;
-          endcase
-        end else if (funct7 == 7'b0100000) begin // SUB, SRA, and Zbb Logic with negate
-          case (funct3)
-            3'b000: dec_alu_op = ALU_SUB;
-            3'b100: dec_alu_op = ALU_XNOR;
-            3'b101: dec_alu_op = ALU_SRA;
-            3'b110: dec_alu_op = ALU_ORN;
-            3'b111: dec_alu_op = ALU_ANDN;
-            default: dec_alu_op = ALU_ADD;
-          endcase
-        end else if (funct7 == 7'b0010100) begin // Zbs
-          dec_alu_op = ALU_BSET;
-        end else if (funct7 == 7'b0100100) begin // Zbs
-          case (funct3)
-            3'b001: dec_alu_op = ALU_BCLR;
-            3'b101: dec_alu_op = ALU_BEXT;
-            default: dec_alu_op = ALU_ADD;
-          endcase
-        end else if (funct7 == 7'b0110100) begin // Zbs
-          dec_alu_op = ALU_BINV;
-        end else begin // RV64I Base (funct7 == 7'b0000000)
-          case (funct3)
-            3'b000: dec_alu_op = ALU_ADD;
+            3'b000: dec_alu_op = (funct7[5]) ? ALU_SUB : ALU_ADD;
             3'b001: dec_alu_op = ALU_SLL;
             3'b010: dec_alu_op = ALU_SLT;
             3'b011: dec_alu_op = ALU_SLTU;
             3'b100: dec_alu_op = ALU_XOR;
-            3'b101: dec_alu_op = ALU_SRL;
+            3'b101: dec_alu_op = (funct7[5]) ? ALU_SRA : ALU_SRL;
             3'b110: dec_alu_op = ALU_OR;
             3'b111: dec_alu_op = ALU_AND;
             default: ;
@@ -547,7 +429,7 @@ module moon_id_stage
         end
       end
 
-      // OP-32 (32-bit word register-register: RV64I, RV64M, Zba, Zbb)
+      // OP-32 (32-bit word register-register: RV64I, RV64M)
       OPCODE_OP_32: begin
         dec_regwrite = 1'b1;
         if (funct7 == 7'b0000001) begin // RV64M extension
@@ -559,26 +441,7 @@ module moon_id_stage
             3'b111: dec_muldiv_op = MULDIV_REMUW;
             default: ;
           endcase
-        end else if (funct7 == 7'b0010000) begin // Zba (*.uw)
-          case (funct3)
-            3'b010: dec_alu_op = ALU_SH1ADD_UW;
-            3'b100: dec_alu_op = ALU_SH2ADD_UW;
-            3'b110: dec_alu_op = ALU_SH3ADD_UW;
-            default: dec_alu_op = ALU_ADDW;
-          endcase
-        end else if (funct7 == 7'b0000100) begin // Zba (add.uw) & Zbb (zext.h)
-          case (funct3)
-            3'b000: dec_alu_op = ALU_ADD_UW;
-            3'b100: dec_alu_op = ALU_ZEXT_H;
-            default: dec_alu_op = ALU_ADDW;
-          endcase
-        end else if (funct7 == 7'b0110000) begin // Zbb (rolw/rorw)
-          case (funct3)
-            3'b001: dec_alu_op = ALU_ROLW;
-            3'b101: dec_alu_op = ALU_RORW;
-            default: dec_alu_op = ALU_ADDW;
-          endcase
-        end else begin
+        end else begin // RV64I Base 32-bit Word
           case (funct3)
             3'b000: dec_alu_op = (funct7[5]) ? ALU_SUBW : ALU_ADDW;
             3'b001: dec_alu_op = ALU_SLLW;
@@ -682,16 +545,6 @@ module moon_id_stage
             3'b001: dec_fp_cmp_op = 3'd3;
             default: dec_fp_cmp_op = 3'd4;
           endcase
-        end
-      end
-
-      // RVV configuration, vector-to-scalar moves, and mask queries write an integer result.
-      7'b1010111: begin
-        if (funct3 == 3'b111 ||
-            ((funct3 == 3'b010) && (if_id_instr_i[31:26] == 6'b010000) &&
-             (((if_id_instr_i[25]) && (rs1 == 5'd0)) ||
-              (rs1 == 5'b10000) || (rs1 == 5'b10001)))) begin
-          dec_regwrite = 1'b1;
         end
       end
 
@@ -876,14 +729,14 @@ module moon_id_stage
         id_ex_rs1_data_o <= {{32{fp_rs1_data[31]}}, fp_rs1_data[31:0]};
       end else if (dec_fmv_x_d) begin
         id_ex_rs1_data_o <= fp_rs1_data;
-      end else if (is_vector_fp_scalar_op || dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma || dec_fp_sign || dec_fp_class || dec_fp_cmp ||
+      end else if (dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma || dec_fp_sign || dec_fp_class || dec_fp_cmp ||
                    (dec_fp_cvt && dec_fp_cvt_src_fp)) begin
         id_ex_rs1_data_o <= fp_rs1_data;
       end else begin
         id_ex_rs1_data_o <= rf_rs1_data;
       end
       id_ex_fp_rs3_data_o  <= fp_rs3_data;
-      id_ex_rs2_data_o     <= ((opcode == OPCODE_STORE_FP && !is_vector_strided_store) || dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma ||
+      id_ex_rs2_data_o     <= ((opcode == OPCODE_STORE_FP) || dec_fp_add || dec_fp_mul || dec_fp_div || dec_fp_fma ||
                                dec_fp_sign || dec_fp_cmp) ?
                               fp_rs2_data : rf_rs2_data;
       id_ex_imm_o          <= selected_imm;
