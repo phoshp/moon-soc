@@ -79,7 +79,7 @@ module moon_dtlb
   // Translation Matching
   logic [NUM_ENTRIES-1:0] match_vec;
   logic                   hit_any;
-  int                     hit_idx;
+  logic [$clog2(NUM_ENTRIES)-1:0] hit_idx;
 
   always_comb begin
     hit_any   = 1'b0;
