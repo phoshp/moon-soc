@@ -18,9 +18,23 @@
   "CLOCK_PORT": "clk_i",
   "CLOCK_NET": "clk_i",
   "CLOCK_PERIOD": 20.0,
+  "PNR_SDC_FILE": "dir::pnr.sdc",
+  "PNR_CORNERS": [
+    "nom_tt_025C_1v80"
+  ],
+  "STA_CORNERS": [
+    "nom_tt_025C_1v80"
+  ],
+  "STA_MAX_VIOLATOR_COUNT": 100,
+  "STA_THREADS": 1,
   "FP_SIZING": "relative",
   "FP_CORE_UTIL": 35,
   "PDN_MULTILAYER": false,
   "RT_MAX_LAYER": "met4",
-  "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout"
+  "PRIMARY_GDSII_STREAMOUT_TOOL": "klayout",
+  "SYNTH_STRATEGY": "AREA 0",
+  "SYNTH_ABC_BUFFERING": false,
+  "SYNTH_HIERARCHY_MODE": "keep",
+  "PL_RESIZER_SETUP_GATE_CLONING": false,
+  "ERROR_ON_SYNTH_CHECKS": false
 }

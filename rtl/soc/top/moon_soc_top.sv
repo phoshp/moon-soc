@@ -43,11 +43,9 @@ module moon_soc_top
   parameter int SRAM_SIZE_BYTES  = 4096,  // 4 KB On-Chip SRAM (Sky130 OpenRAM macro target)
   parameter int ICACHE_SETS      = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-I Cache
   parameter int DCACHE_SETS      = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-D Cache
-  parameter int ICACHE_WAYS      = 2,
-  parameter int DCACHE_WAYS      = 2,
-  parameter bit ENABLE_FPU       = 1'b0,
-  parameter bit ENABLE_VECTOR    = 1'b0,
-  parameter bit ENABLE_VECTOR_FP = 1'b0
+  parameter int ICACHE_WAYS      = 4,
+  parameter int DCACHE_WAYS      = 4,
+  parameter bit ENABLE_FPU       = 1'b0
 )(
   input  logic clk_i,
   input  logic rst_ni,
@@ -217,9 +215,7 @@ module moon_soc_top
   // ==========================================================================
   moon_cpu_tile #(
     .HART_ID          (HART_ID),
-    .ENABLE_FPU       (ENABLE_FPU),
-    .ENABLE_VECTOR    (ENABLE_VECTOR),
-    .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
+    .ENABLE_FPU       (ENABLE_FPU)
   ) u_cpu_tile (
     .clk_i               (clk_core),
     .rst_ni              (rst_core_n),
