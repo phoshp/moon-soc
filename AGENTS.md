@@ -1,21 +1,23 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI Agents when working with code in this repository.
 
 ## Overview
 
-Moon-SoC is a 64-bit RISC-V processor and SoC implementation in SystemVerilog. It has a 5-stage in-order pipeline, hardware integer multiply/divide, atomic operations, privileged architecture support, caches, scalar F/D and crypto extensions, and an evolving RVV unit. Simulation uses cocotb and Verilator.
+Moon-SoC is a 64-bit RISC-V processor and SoC implementation in SystemVerilog. It has a 5-stage in-order pipeline, hardware integer multiply/divide, atomic operations, privileged architecture support (M/S/U modes), Sv39 MMU, caches, and scalar F/D support. Simulation uses cocotb and Verilator.
 
-## Current RVA23 Development Status
+## Current RV64GC Compliance Status
 
-Phase 4 (integer, compressed, Supervisor-mode, PMP, and Sv39 work) is complete for the current project scope and has directed SoC test targets. Phase 5 is active:
+The core is structured for synthesizable, legit **RISC-V RV64GC** (RV64IMAFD_Zicsr_Zifencei_C) compliance with Privileged Machine/Supervisor/User modes and Sv39 MMU virtual memory translation:
 
-- Scalar F/D paths cover arithmetic, division, square root, comparisons, conversions, moves/classification, and fused multiply-add. Target: `make soc-fp-test`.
-- Scalar AES64 and SHA-256/SHA-512 integer operations are implemented. Targets: `make soc-crypto-test`, `make soc-crypto-aes-test`, `make soc-crypto-aes-rounds-test`, and `make soc-crypto-sha512-test`.
-- `rtl/core/moon_vector_unit.sv` currently provides a VLEN=128, LMUL=1 integer slice with e8/e16/e32/e64 configuration and execution, including v0-masked arithmetic and mask logical operations. Target: `make soc-rvv-test`.
-- RVV 1.0 is not complete. Vector memory operations, full vector CSR/vstart/vill behavior, complete tail and mask policies, reductions, remaining vector arithmetic families, and vector floating point remain future work. Do not describe the Phase 5 implementation as full RVV compliance.
-
-The user prefers each minimal implementation and its regression to be committed as separate small commits. Keep generated firmware `.s`, `.bin`, and `.hex` changes together in the regression commit. `ROADMAP_RVA23_PLAN.md` is intentionally gitignored and serves as a local progress plan.
+- **RV64I**: 64-bit base integer and 32-bit word operations.
+- **RV64M**: 4-cycle compact 32×32 iterative hardware multiplier (`moon_mul.sv`) and multi-cycle radix-2 divider (`moon_div.sv`). Multi-cycle execution is properly stalled via `busy_mul` and `busy_div` in `moon_hazard_unit.sv`.
+- **RV64A**: Atomic memory operations and LR/SC reservation tracking (`moon_amo.sv`).
+- **RV64F/D**: Scalar single and double-precision floating-point execution. Target: `make soc-fp-test`.
+- **RV64C**: Standard 16-bit compressed instruction decoder (`moon_c_decoder.sv`). Target: `make soc-compressed-test`.
+- **Sv39 MMU**: 3-level page table walker (`moon_ptw.sv`), DTLB, and ITLB. Target: `make soc-mmu-test`.
+- **PMP**: Physical memory protection unit (`moon_pmp.sv`). Target: `make soc-pmp-test`.
+- **Non-standard bloat removed**: Scalar AES and SHA cryptography extensions, bitmanip (Zba/Zbb/Zbs), compressed subwords (Zcb), and experimental vector extensions were stripped to ensure compact ASIC synthesizability and strict RV64GC compliance.
 
 ## Build, Test, and Simulation Commands
 
@@ -25,18 +27,16 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 - **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/core/run_test.py tb/tests/asm/base/test_rv64_all.hex`.
 - **Run full suite (core + SoC)**: `make all`.
 - **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/soc/run_soc_test.py` with `test_rv64_all.hex`).
+- **Run SoC Compressed instructions test**: `make soc-compressed-test`.
+- **Run SoC Supervisor Mode test**: `make soc-smode-test`.
+- **Run SoC Physical Memory Protection test**: `make soc-pmp-test`.
+- **Run SoC Sv39 MMU virtual memory test**: `make soc-mmu-test`.
+- **Run scalar F/D verification**: `make soc-fp-test`.
 - **Run SoC Peripherals verification**: `make soc-periph-test` (verifies UART 16550, SRAM, CLINT, PLIC, CRG, PMU).
 - **Run SoC WFI & PMU clock-gating test**: `make soc-wfi-test` (verifies WFI execution, PMU clock-gating, and timer wake-up).
-- **Run SoC L1 Cache verification**: `make soc-cache-test` (verifies 32KB L1-I and L1-D caches, writeback, eviction, hits).
-- **Run scalar F/D verification**: `make soc-fp-test`.
-- **Run scalar crypto verification**: `make soc-crypto-test`, `make soc-crypto-aes-test`, `make soc-crypto-aes-rounds-test`, and `make soc-crypto-sha512-test`.
-- **Run the implemented RVV integer-slice verification**: `make soc-rvv-test`.
+- **Run SoC L1 Cache verification**: `make soc-cache-test` (verifies 4-way set-associative L1-I and L1-D caches, writeback, eviction, hits).
 - **Run with verbose cycle trace**: `make verbose-test`.
 - **Run via pytest**: `make pytest` (runs both core and SoC regression testbenches).
-- **Run a specific firmware test**:
-  `python3 tb/core/run_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
-  or for SoC top-level:
-  `python3 tb/soc/run_soc_test.py <path_to_hex_file> [-v|--verbose] [--waves]`
 - **Clean build artifacts**: `make clean` (deletes `sim_build/`, `sim_build_soc/`, `obj_dir/`, caches).
 
 ### Test Assembly & Hex Conversion
@@ -99,32 +99,39 @@ The core is structured across five sequential pipeline stages connected through 
 - Supports timer, software (IPI), and external interrupt inputs.
 
 ### SoC Subsystems & Infrastructure (`rtl/soc/`)
-- **L1 Cache Subsystem (`rtl/core/cache/`)**:
-  - `moon_icache.sv`: 32 KB 4-way set-associative L1 instruction cache with 64-byte lines, AXI4 burst refill (M0), and FENCE.I support.
-  - `moon_dcache.sv`: 32 KB 4-way set-associative L1 data cache with write-back, write-allocate, AXI4 burst refill/eviction (M1), uncached I/O bypass, and RVA23 Zicbom/Zicboz operations.
+The SoC is structured into modern macro partitions (matching commercial AMD/Intel/Nvidia floorplans) enabling modular ASIC hardening and fast top-level synthesis:
+- **Compute Tile (`rtl/soc/cpu/moon_cpu_tile.sv`)**: Encapsulates `moon_core` (RV64IMA, CSRs, MMU, PMP, optional FPU and Vector co-processors).
+- **Cache Subsystem Tile (`rtl/soc/cache/moon_cache_tile.sv`)**:
+  - `moon_icache.sv`: 4-way set-associative L1 instruction cache with 64-byte lines, AXI4 burst refill (M0), and FENCE.I support.
+  - `moon_dcache.sv`: 4-way set-associative L1 data cache with write-back, write-allocate, AXI4 burst refill/eviction (M1), uncached I/O bypass, and RVA23 Zicbom/Zicboz operations.
   - `moon_l1_cache_subsystem.sv`: Integrated L1 cache wrapper connecting core IF/MEM interfaces directly to AXI4 masters.
-- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates `moon_core`, `moon_l1_cache_subsystem`, 64-bit AXI4 crossbar, AXI-to-APB bridge, Boot ROM, On-Chip SRAM, CLINT, PLIC, UART 16550, CRG, PMU, and external AXI memory port.
-- **Interconnect (`rtl/soc/interconnect/`)**:
+- **Memory Subsystem (`rtl/soc/memory/moon_mem_subsystem.sv`)**:
+  - `moon_bootrom.sv`: Boot ROM at `0x0000_1000`.
+  - `moon_sram_ctrl.sv`: On-Chip SRAM controller at `0x7000_0000` supporting behavioral SRAM and OpenRAM physical macro arrays (`openram_sram_wrapper.sv`).
+- **System Interconnect Fabric (`rtl/soc/interconnect/moon_sys_fabric.sv`)**:
   - `axi_pkg.sv`: AXI4 and APB4 signal definitions, transaction structs, and burst/response codes.
   - `axi_crossbar.sv`: Multi-master, multi-slave 64-bit crossbar switch (M0: Fetch, M1: Data; S0: Boot ROM, S1: SRAM, S2: APB Bridge, S3: External RAM).
   - `axi_to_apb_bridge.sv`: 64-bit AXI4 to 32-bit APB4 transaction converter.
-  - `apb_crossbar.sv`: Address decoder demultiplexing APB peripheral requests (CLINT, PLIC, UART).
-- **Core AXI Adapter (`rtl/soc/adapter/moon_core_axi_adapter.sv`)**: Converts `moon_core`'s `imem` and `dmem` interfaces to AXI4 master channels with prefetch buffering.
-- **Memory Subsystem (`rtl/soc/memory/`)**:
-  - `moon_bootrom.sv`: 32 KB Boot ROM at `0x0000_1000`.
-  - `moon_sram_ctrl.sv`: 128 KB On-Chip SRAM controller at `0x7000_0000`.
-- **Clock Subsystem (`rtl/soc/clock/`)**:
-  - `moon_pll_model.sv`: Digital behavioral PLL frequency synthesizer with lock detection and programmable dividers.
-  - `clk_mux_glitchless.sv`: Dual-input glitchless clock multiplexer for safe dynamic clock switching between reference and PLL clocks.
-  - `cg_cell.sv`: Integrated Clock Gating (ICG) latch cell for glitch-free dynamic clock gating.
-  - `moon_crg.sv`: Clock & Reset Generator with APB registers (`0x1000_5000`) for PLL control and domain clock gating.
-- **Power Management Subsystem (`rtl/soc/pmu/`)**:
-  - `moon_reset_ctrl.sv`: Central reset sequencer with 2-stage synchronizers and multi-cycle domain reset release (AON -> Memory/Periph -> Core).
-  - `moon_pmu.sv`: Multi-state Power Management Unit (`0x1000_5080`) handling RUN, WFI clock gating, SLEEP, DEEP-SLEEP, and wake-up interrupt routing.
-- **Peripherals Subsystem (`rtl/soc/periph/`)**:
+  - `apb_crossbar.sv`: Address decoder demultiplexing APB peripheral requests (CLINT, PLIC, UART, CRG, PMU, SPI, I2C).
+- **Peripheral Subsystem (`rtl/soc/periph/moon_periph_subsystem.sv`)**:
   - `moon_clint.sv`: Core-Local Interruptor (`mtime`, `mtimecmp`, `msip`) at `0x0200_0000`.
   - `moon_plic.sv`: Platform-Level Interrupt Controller at `0x0C00_0000`.
   - `moon_uart.sv`: 16550 UART console controller at `0x1000_0000`.
+  - `moon_spi.sv`: SPI master controller at `0x1000_6000`.
+  - `moon_i2c.sv`: I2C master controller at `0x1000_7000`.
+- **System Control Subsystem (`rtl/soc/sysctrl/moon_sysctrl_subsystem.sv`)**:
+  - `moon_reset_ctrl.sv`: Central reset sequencer with 2-stage synchronizers and multi-cycle domain reset release (AON -> Memory/Periph -> Core).
+  - `moon_crg.sv`: Clock & Reset Generator with APB registers (`0x1000_5000`), glitchless multiplexers (`clk_mux_glitchless.sv`), clock gating cells (`cg_cell.sv`), and PLL synthesizer (`moon_pll_model.sv`).
+  - `moon_pmu.sv`: Multi-state Power Management Unit (`0x1000_5080`) handling RUN, WFI clock gating, SLEEP, DEEP-SLEEP, and wake-up interrupt routing.
+- **PHY Blocks (`rtl/soc/phy/`)**:
+  - `moon_mem_phy.sv`: External Memory PHY providing timing isolation registers for external DRAM/HyperRAM AXI bus pads.
+  - `moon_io_phy.sv`: Peripheral I/O PHY providing pad drivers, tri-state control, and glitch/metastability synchronizers.
+- **Top-Level Integration (`rtl/soc/top/moon_soc_top.sv`)**: Integrates the 8 macro blocks into the unified SoC die.
+- **Synthesis & Macro Infrastructure (`synth/`)**:
+  - `synth/macros/blackbox/moon_soc_macros_bb.sv`: Macro blackbox stubs for instantaneous Yosys top-level elaboration.
+  - `synth/macros/*/config.json`: Independent LibreLane hardening configs for each block.
+  - `synth/top/config.json` & `synth/top/macro_placement.cfg`: Top-level chip assembly and macro floorplan.
+  - `synth/librelane_hierarchical_soc.ipynb`: Automated Google Colab notebook for hardening macros and assembling the top-level chip.
 
 ### Testbench Hierarchy
 - `tb/core/tb_moon_core.sv`: Standalone core memory harness.
