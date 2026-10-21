@@ -30,6 +30,13 @@ module openram_sram_wrapper #(
 );
 
 `ifdef USE_OPENRAM_MACRO
+  `define _USE_SRAM_MACRO_IMPL
+`endif
+`ifdef SYNTHESIS
+  `define _USE_SRAM_MACRO_IMPL
+`endif
+
+`ifdef _USE_SRAM_MACRO_IMPL
   // Physical Sky130 1RW1R OpenRAM Macro instances (2x 32-bit macros for 64-bit AXI data width)
   // Each macro is 2 KB (512 words x 32 bits, 4 byte masks), combined = 4 KB (512 words x 64 bits)
   sky130_sram_2kbyte_1rw1r_32x512_8 u_sram_lo (
@@ -97,6 +104,7 @@ module openram_sram_wrapper #(
   assign dout0 = dout0_reg;
   assign dout1 = dout1_reg;
 `endif
+`undef _USE_SRAM_MACRO_IMPL
 
 endmodule : openram_sram_wrapper
 

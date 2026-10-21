@@ -4,9 +4,11 @@
   "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
   "USE_SLANG": true,
   "VERILOG_DEFINES": [
-    "SYNTHESIS=1"
+    "SYNTHESIS=1",
+    "USE_OPENRAM_MACRO=1"
   ],
   "VERILOG_FILES": [
+    "dir::../../../rtl/soc/memory/sky130_sram_2kbyte_1rw1r_32x512_8_bb.v",
     "dir::../../../rtl/soc/memory/moon_mem_subsystem.sv"
   ],
   "VERILOG_INCLUDE_DIRS": [

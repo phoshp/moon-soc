@@ -12,7 +12,7 @@
 module moon_bootrom
   import axi_pkg::*;
 #(
-  parameter int ROM_SIZE_BYTES = 32768, // 32 KB
+  parameter int ROM_SIZE_BYTES = 4096, // 4 KB Boot ROM
   parameter logic [AXI_ADDR_WIDTH-1:0] BASE_ADDR = 64'h0000_1000
 )(
   input  logic clk_i,
