@@ -128,60 +128,7 @@ _start:
     bne  a0, a1, fail_sdsp_ldsp
 
     # -------------------------------------------------------------------------
-    # 3. Zcb: Byte & Halfword Memory, Extensions, Multiply
-    # -------------------------------------------------------------------------
-    li   a1, 0x5A
-    li   a2, 0x1234
-    c.sb a1, 0(s0)
-    c.lbu a0, 0(s0)
-    bne  a0, a1, fail_zcb_byte
-
-    c.sh a2, 2(s0)
-    c.lhu a0, 2(s0)
-    bne  a0, a2, fail_zcb_half
-
-    # c.zext.b, c.sext.b
-    li   a0, 0x123485
-    c.zext.b a0
-    li   a1, 0x85
-    bne  a0, a1, fail_zcb_zext_b
-
-    li   a0, 0x123485
-    c.sext.b a0
-    li   a1, -123
-    bne  a0, a1, fail_zcb_sext_b
-
-    # c.zext.h, c.sext.h
-    li   a0, 0x12348005
-    c.zext.h a0
-    li   a1, 0x8005
-    bne  a0, a1, fail_zcb_zext_h
-
-    li   a0, 0x12348005
-    c.sext.h a0
-    li   t0, 0xFFFFFFFFFFFF8005
-    bne  a0, t0, fail_zcb_sext_h
-
-    # c.zext.w, c.not
-    li   a0, 0xFFFFFFFF80000000
-    c.zext.w a0
-    li   t0, 0x0000000080000000
-    bne  a0, t0, fail_zcb_zext_w
-
-    li   a0, 0x0F
-    c.not a0
-    li   t0, -16
-    bne  a0, t0, fail_zcb_not
-
-    # c.mul: a0 * a1 = 7 * 6 = 42
-    c.li a0, 7
-    c.li a1, 6
-    c.mul a0, a1
-    li   a2, 42
-    bne  a0, a2, fail_zcb_mul
-
-    # -------------------------------------------------------------------------
-    # 4. Control Flow & Unaligned Cross-Boundary Execution
+    # 3. Control Flow & Unaligned Cross-Boundary Execution
     # -------------------------------------------------------------------------
     # c.beqz / c.bnez
     c.li   a0, 0
@@ -245,15 +192,6 @@ fail_sw_lw:     li gp, 17; j fail_loop
 fail_sd_ld:     li gp, 18; j fail_loop
 fail_swsp_lwsp: li gp, 19; j fail_loop
 fail_sdsp_ldsp: li gp, 20; j fail_loop
-fail_zcb_byte:  li gp, 21; j fail_loop
-fail_zcb_half:  li gp, 22; j fail_loop
-fail_zcb_zext_b:li gp, 23; j fail_loop
-fail_zcb_sext_b:li gp, 24; j fail_loop
-fail_zcb_zext_h:li gp, 25; j fail_loop
-fail_zcb_sext_h:li gp, 26; j fail_loop
-fail_zcb_zext_w:li gp, 27; j fail_loop
-fail_zcb_not:   li gp, 28; j fail_loop
-fail_zcb_mul:   li gp, 29; j fail_loop
 fail_beqz:      li gp, 30; j fail_loop
 fail_bnez:      li gp, 31; j fail_loop
 fail_j:         li gp, 32; j fail_loop

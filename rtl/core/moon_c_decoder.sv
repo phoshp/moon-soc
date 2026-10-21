@@ -77,26 +77,8 @@ module moon_c_decoder
           instr_32_o = {4'b0000, uimm_ld_sd, rs1_prime, 3'b011, rd_prime, 7'b0000011};
         end
 
-        3'b100: begin // Zcb: c.lbu, c.lhu, c.lh, c.sb, c.sh
-          case (instr_16_i[12:10])
-            3'b000: begin // c.lbu
-              instr_32_o = {10'b0, bit5, bit6, rs1_prime, 3'b100, rd_prime, 7'b0000011};
-            end
-            3'b001: begin
-              if (!bit6) begin // c.lhu
-                instr_32_o = {10'b0, bit5, 1'b0, rs1_prime, 3'b101, rd_prime, 7'b0000011};
-              end else begin   // c.lh
-                instr_32_o = {10'b0, bit5, 1'b0, rs1_prime, 3'b001, rd_prime, 7'b0000011};
-              end
-            end
-            3'b010: begin // c.sb
-              instr_32_o = {7'b0, rs2_prime, rs1_prime, 3'b000, 3'b0, bit5, bit6, 7'b0100011};
-            end
-            3'b011: begin // c.sh
-              instr_32_o = {7'b0, rs2_prime, rs1_prime, 3'b001, 3'b0, bit5, 1'b0, 7'b0100011};
-            end
-            default: illegal_instr_o = 1'b1;
-          endcase
+        3'b100: begin // Reserved in standard RV64C
+          illegal_instr_o = 1'b1;
         end
 
         3'b110: begin // c.sw
@@ -176,18 +158,7 @@ module moon_c_decoder
                 case (instr_16_i[6:5])
                   2'b00: instr_32_o = {7'b0100000, rs2_prime, rs1_prime, 3'b000, rs1_prime, 7'b0111011}; // subw
                   2'b01: instr_32_o = {7'b0000000, rs2_prime, rs1_prime, 3'b000, rs1_prime, 7'b0111011}; // addw
-                  2'b10: instr_32_o = {7'b0000001, rs2_prime, rs1_prime, 3'b000, rs1_prime, 7'b0110011}; // mul (Zcb)
-                  2'b11: begin // Zcb unary ops
-                    case (instr_16_i[4:2])
-                      3'b000: instr_32_o = {12'h0FF, rs1_prime, 3'b111, rs1_prime, 7'b0010011};          // c.zext.b (andi rd, rd, 255)
-                      3'b001: instr_32_o = {7'b0110000, 5'b00100, rs1_prime, 3'b001, rs1_prime, 7'b0010011}; // c.sext.b
-                      3'b010: instr_32_o = {7'b0000100, 5'b00000, rs1_prime, 3'b100, rs1_prime, 7'b0111011}; // c.zext.h
-                      3'b011: instr_32_o = {7'b0110000, 5'b00101, rs1_prime, 3'b001, rs1_prime, 7'b0010011}; // c.sext.h
-                      3'b100: instr_32_o = {7'b0000100, 5'b00000, rs1_prime, 3'b000, rs1_prime, 7'b0111011}; // c.zext.w (add.uw rd, rd, x0)
-                      3'b101: instr_32_o = {12'hFFF, rs1_prime, 3'b100, rs1_prime, 7'b0010011};          // c.not (xori rd, rd, -1)
-                      default: illegal_instr_o = 1'b1;
-                    endcase
-                  end
+                  default: illegal_instr_o = 1'b1;
                 endcase
               end
             end
