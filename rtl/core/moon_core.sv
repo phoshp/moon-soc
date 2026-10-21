@@ -17,7 +17,6 @@
 `include "moon_fpu_intcvt.sv"
 `include "moon_fpu_sqrt.sv"
 `include "moon_fpu_fma.sv"
-`include "moon_vector_unit.sv"
 `include "moon_if_stage.sv"
 `include "moon_id_stage.sv"
 `include "moon_ex_stage.sv"
@@ -31,10 +30,10 @@
 module moon_core
   import moon_pkg::*;
 #(
-  parameter int HART_ID = 0,
-  parameter bit ENABLE_FPU = 1'b0,
-  parameter bit ENABLE_VECTOR = 1'b0,
-  parameter bit ENABLE_VECTOR_FP = 1'b0
+  parameter int HART_ID     = 0,
+  parameter bit ENABLE_FPU  = 1'b0,
+  parameter int TLB_ENTRIES = 8,
+  parameter int PMP_ENTRIES = 8
 )(
   input  logic             clk_i,
   input  logic             rst_ni,
@@ -196,23 +195,7 @@ module moon_core
   logic [XLEN-1:0]  dmem_vaddr;
   logic [XLEN-1:0]  core_dmem_wdata;
   logic [7:0]       core_dmem_wstrb;
-  logic             vector_mem_req;
-  logic             vector_mem_we;
-  logic [XLEN-1:0]  vector_mem_addr;
-  logic [XLEN-1:0]  vector_mem_wdata;
-  logic [7:0]       vector_mem_wstrb;
-  logic             vector_mem_busy;
-  logic [XLEN-1:0]  vector_vl;
-  logic [XLEN-1:0]  vector_vtype;
-  logic [XLEN-1:0]  vector_vstart;
-  logic             vector_vstart_clear;
-  logic             vector_vxsat_set;
-  logic             vector_mem_fault;
-  logic [XLEN-1:0]  vector_mem_vstart;
-  logic             vector_vxsat;
-  logic [1:0]       vector_vxrm;
-  logic             vector_state_enabled;
-  logic             id_ex_uses_vector_state;
+  logic             busy_mul;
   logic             data_translation_req;
   logic             data_translation_we;
   logic [XLEN-1:0]  data_translation_vaddr;
@@ -279,8 +262,8 @@ module moon_core
   logic [XLEN-1:0]  satp;
   logic             sum;
   logic             mxr;
-  logic [7:0]       pmpcfg [0:15];
-  logic [XLEN-1:0]  pmpaddr [0:15];
+  logic [7:0]       pmpcfg [0:PMP_ENTRIES-1];
+  logic [XLEN-1:0]  pmpaddr [0:PMP_ENTRIES-1];
   logic             pmp_fetch_fault;
   logic             pmp_load_fault;
   logic             pmp_store_fault;
@@ -309,38 +292,12 @@ module moon_core
     end
   end
 
-  assign vector_mem_fault = vector_mem_req && trap_enter && !is_interrupt &&
-                            ((trap_cause == CAUSE_PAGE_FAULT_LOAD) ||
-                             (trap_cause == CAUSE_PAGE_FAULT_STORE) ||
-                             (trap_cause == CAUSE_LOAD_ACCESS_FAULT) ||
-                             (trap_cause == CAUSE_STORE_ACCESS_FAULT));
-
   assign wb_fp_wdata = mem_wb_fp_word ? {32'hffff_ffff, wb_wdata[31:0]} : wb_wdata;
 
   // --------------------------------------------------------------------------
   // Trap Controller Logic
   // --------------------------------------------------------------------------
   logic [XLEN-1:0] trap_pc;
-
-  always_comb begin
-    id_ex_uses_vector_state = 1'b0;
-    if (id_ex_instr[6:0] == 7'b1010111) begin
-      id_ex_uses_vector_state = 1'b1;
-    end else if (((id_ex_instr[6:0] == 7'b0000111) ||
-                  (id_ex_instr[6:0] == 7'b0100111)) &&
-                 (id_ex_instr[14:12] != 3'b010)) begin
-      id_ex_uses_vector_state = 1'b1;
-    end else if ((id_ex_instr[6:0] == 7'b1110011) &&
-                 ((id_ex_instr[31:20] == 12'h008) ||
-                  (id_ex_instr[31:20] == 12'h009) ||
-                  (id_ex_instr[31:20] == 12'h00a) ||
-                  (id_ex_instr[31:20] == 12'h00f) ||
-                  (id_ex_instr[31:20] == 12'hc20) ||
-                  (id_ex_instr[31:20] == 12'hc21) ||
-                  (id_ex_instr[31:20] == 12'hc22))) begin
-      id_ex_uses_vector_state = 1'b1;
-    end
-  end
 
   always_comb begin
     trap_enter   = 1'b0;
@@ -371,12 +328,6 @@ module moon_core
         trap_pc = imem_addr_o;
       end
       trap_val     = trap_pc;
-    end else if (id_ex_valid && id_ex_uses_vector_state && !vector_state_enabled) begin
-      trap_enter   = 1'b1;
-      is_interrupt = 1'b0;
-      trap_cause   = CAUSE_ILLEGAL_INSTRUCTION;
-      trap_val     = {{(XLEN-ILEN){1'b0}}, id_ex_instr};
-      trap_pc      = id_ex_pc;
     end else if (ex_mem_valid && ex_mem_is_ecall) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -400,13 +351,13 @@ module moon_core
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_PAGE_FAULT_LOAD;
       trap_val     = data_translation_vaddr;
-      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
+      trap_pc      = ex_mem_pc;
     end else if (data_translation_req && data_translation_we && mmu_store_page_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_PAGE_FAULT_STORE;
       trap_val     = data_translation_vaddr;
-      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
+      trap_pc      = ex_mem_pc;
     end else if (imem_req_o && mmu_fetch_page_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -418,13 +369,13 @@ module moon_core
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_LOAD_ACCESS_FAULT;
       trap_val     = dmem_addr_o;
-      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
+      trap_pc      = ex_mem_pc;
     end else if (pmp_store_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_STORE_ACCESS_FAULT;
       trap_val     = dmem_addr_o;
-      trap_pc      = vector_mem_req ? id_ex_pc : ex_mem_pc;
+      trap_pc      = ex_mem_pc;
     end else if (pmp_fetch_fault) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -548,9 +499,7 @@ module moon_core
   // 3. EX Stage Instantiation
   // --------------------------------------------------------------------------
   moon_ex_stage #(
-    .ENABLE_FPU       (ENABLE_FPU),
-    .ENABLE_VECTOR    (ENABLE_VECTOR),
-    .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
+    .ENABLE_FPU       (ENABLE_FPU)
   ) u_ex_stage (
     .clk_i                (clk_i),
     .rst_ni               (rst_ni),
@@ -613,24 +562,10 @@ module moon_core
     .fwd_b_i              (fwd_b),
     .fwd_ex_data_i        (ex_fwd_val),
     .fwd_mem_data_i       (wb_wdata),
-    .vector_mem_valid_i   (dmem_valid_i && mmu_data_hit && !mmu_busy && !core_dmem_req),
-    .vector_mem_rdata_i   (dmem_rdata_i),
-    .vector_vstart_i      (vector_vstart),
-    .vector_mem_fault_i   (vector_mem_fault),
     .branch_taken_o       (branch_taken),
     .branch_target_o      (branch_target),
+    .busy_mul_o           (busy_mul),
     .busy_div_o           (busy_div),
-    .vector_mem_req_o     (vector_mem_req),
-    .vector_mem_we_o      (vector_mem_we),
-    .vector_mem_addr_o    (vector_mem_addr),
-    .vector_mem_wdata_o   (vector_mem_wdata),
-    .vector_mem_wstrb_o   (vector_mem_wstrb),
-    .vector_mem_busy_o    (vector_mem_busy),
-    .vector_vl_o          (vector_vl),
-    .vector_vtype_o       (vector_vtype),
-    .vector_vstart_clear_o(vector_vstart_clear),
-    .vector_vxsat_set_o  (vector_vxsat_set),
-    .vector_mem_vstart_o  (vector_mem_vstart),
     .ex_mem_valid_o       (ex_mem_valid),
     .ex_mem_pc_o          (ex_mem_pc),
     .ex_mem_link_pc_o     (ex_mem_link_pc),
@@ -806,8 +741,8 @@ module moon_core
     .mem_wb_regwrite_i  (mem_wb_regwrite),
     .branch_taken_i     (branch_taken),
     .trap_flush_i       (trap_enter || ex_mem_is_mret || ex_mem_is_sret),
+    .busy_mul_i         (busy_mul),
     .busy_div_i         (busy_div),
-    .busy_vector_i      (vector_mem_busy),
     .busy_mem_i         ((imem_req_o && !imem_valid_i) || (dmem_req_o && !dmem_valid_i)),
     .busy_mmu_i         (mmu_busy || (!mmu_fetch_hit && imem_req_o) || (!mmu_data_hit && data_translation_req)),
     .fwd_a_o            (fwd_a),
@@ -825,7 +760,8 @@ module moon_core
   // 7. CSR Unit Instantiation
   // --------------------------------------------------------------------------
   moon_csr #(
-    .HART_ID (HART_ID)
+    .HART_ID     (HART_ID),
+    .PMP_ENTRIES (PMP_ENTRIES)
   ) u_csr (
     .clk_i               (clk_i),
     .rst_ni              (rst_ni),
@@ -858,24 +794,14 @@ module moon_core
     .interrupt_cause_o   (interrupt_cause),
     .fpu_flags_i         (mem_wb_fp_flags),
     .fpu_flags_we_i      (mem_wb_fp_flags_we),
-    .frm_o               (frm),
-    .vector_vl_i         (vector_vl),
-    .vector_vtype_i      (vector_vtype),
-    .vector_vstart_clear_i(vector_vstart_clear),
-    .vector_vxsat_set_i  (vector_vxsat_set),
-    .vector_vstart_fault_i(vector_mem_fault),
-    .vector_vstart_fault_value_i(vector_mem_vstart),
-    .vector_vstart_o     (vector_vstart),
-    .vector_vxsat_o      (vector_vxsat),
-    .vector_vxrm_o       (vector_vxrm),
-    .vector_state_enabled_o(vector_state_enabled)
+    .frm_o               (frm)
   );
 
   // --------------------------------------------------------------------------
   // 8. Physical Memory Protection (PMP) Unit
   // --------------------------------------------------------------------------
   moon_pmp #(
-    .NUM_ENTRIES (16)
+    .NUM_ENTRIES (PMP_ENTRIES)
   ) u_pmp (
     .priv_lvl_i    (priv_lvl),
     .pmpcfg_i      (pmpcfg),
@@ -894,7 +820,7 @@ module moon_core
   // 9. Memory Management Unit (Sv39 MMU, ITLB, DTLB, PTW)
   // --------------------------------------------------------------------------
   moon_mmu #(
-    .TLB_ENTRIES (16)
+    .TLB_ENTRIES (TLB_ENTRIES)
   ) u_mmu (
     .clk_i               (clk_i),
     .rst_ni              (rst_ni),
@@ -924,12 +850,12 @@ module moon_core
     .ptw_mem_rdata_i     (ptw_mem_rdata)
   );
 
-  // Memory Bus Multiplexing (PTW, scalar LSU, and serialized vector LSU)
-  assign data_translation_req = core_dmem_req || (!core_dmem_req && vector_mem_req);
-  assign data_translation_we = core_dmem_req ? core_dmem_we : vector_mem_we;
-  assign data_translation_vaddr = core_dmem_req ? dmem_vaddr : vector_mem_addr;
-  assign data_translation_wdata = core_dmem_req ? core_dmem_wdata : vector_mem_wdata;
-  assign data_translation_wstrb = core_dmem_req ? core_dmem_wstrb : vector_mem_wstrb;
+  // Memory Bus Multiplexing (PTW and scalar LSU)
+  assign data_translation_req   = core_dmem_req;
+  assign data_translation_we    = core_dmem_we;
+  assign data_translation_vaddr = dmem_vaddr;
+  assign data_translation_wdata = core_dmem_wdata;
+  assign data_translation_wstrb = core_dmem_wstrb;
   assign dmem_req_o   = mmu_busy ? ptw_mem_req   : (data_translation_req && mmu_data_hit);
   assign dmem_we_o    = mmu_busy ? 1'b0          : data_translation_we;
   assign dmem_addr_o  = mmu_busy ? ptw_mem_addr  : mmu_data_paddr;

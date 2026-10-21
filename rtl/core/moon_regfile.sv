@@ -32,16 +32,21 @@ module moon_regfile
   // 31 registers (x1 through x31); x0 is constant 0
   logic [XLEN-1:0] regs [1:31];
 
-  // Synchronous Write with Reset Initialization
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      for (int i = 1; i < 32; i++) begin
-        regs[i] <= '0;
-      end
-    end else if (rd_we_i && (rd_addr_i != 5'd0)) begin
+  // Synchronous Write (x0 hardwired to 0; x1..x31 do not require hardware reset)
+  always_ff @(posedge clk_i) begin
+    if (rd_we_i && (rd_addr_i != 5'd0)) begin
       regs[rd_addr_i] <= rd_data_i;
     end
   end
+
+`ifndef SYNTHESIS
+  // Zero-initialization for deterministic simulation without hardware reset overhead
+  initial begin
+    for (int i = 1; i < 32; i++) begin
+      regs[i] = '0;
+    end
+  end
+`endif
 
   // Asynchronous Read with transparent write-during-read forwarding
   always_comb begin

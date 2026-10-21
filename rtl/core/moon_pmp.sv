@@ -13,7 +13,7 @@
 module moon_pmp
   import moon_pkg::*;
 #(
-  parameter int NUM_ENTRIES = 16
+  parameter int NUM_ENTRIES = 8
 )(
   input  priv_lvl_e        priv_lvl_i,
 

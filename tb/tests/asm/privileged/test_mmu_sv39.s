@@ -22,9 +22,9 @@ _start:
     # -------------------------------------------------------------------------
     li   s0, 0x80004000         # Root Table base
 
-    # Clear 4KB Root Table (512 x 8-byte entries)
+    # Clear root table header
     li   t0, 0
-    li   t1, 512
+    li   t1, 16
 clear_root:
     sd   zero, 0(s0)
     addi s0, s0, 8
@@ -60,7 +60,7 @@ clear_root:
     # Setup Level 1 Page Table at 0x8000_5000
     li   s1, 0x80005000
     li   t0, 0
-    li   t1, 512
+    li   t1, 16
 clear_l1:
     sd   zero, 0(s1)
     addi s1, s1, 8

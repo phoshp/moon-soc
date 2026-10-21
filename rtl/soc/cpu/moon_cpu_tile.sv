@@ -16,8 +16,8 @@ module moon_cpu_tile
 #(
   parameter int HART_ID          = 0,
   parameter bit ENABLE_FPU       = 1'b0,
-  parameter bit ENABLE_VECTOR    = 1'b0,
-  parameter bit ENABLE_VECTOR_FP = 1'b0
+  parameter int TLB_ENTRIES      = 8,
+  parameter int PMP_ENTRIES      = 8
 )(
   input  logic             clk_i,
   input  logic             rst_ni,
@@ -54,8 +54,8 @@ module moon_cpu_tile
   moon_core #(
     .HART_ID(HART_ID),
     .ENABLE_FPU(ENABLE_FPU),
-    .ENABLE_VECTOR(ENABLE_VECTOR),
-    .ENABLE_VECTOR_FP(ENABLE_VECTOR_FP)
+    .TLB_ENTRIES(TLB_ENTRIES),
+    .PMP_ENTRIES(PMP_ENTRIES)
   ) u_core (
     .clk_i               (clk_i),
     .rst_ni              (rst_ni),

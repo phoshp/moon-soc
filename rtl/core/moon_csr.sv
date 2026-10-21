@@ -14,7 +14,8 @@
 module moon_csr
   import moon_pkg::*;
 #(
-  parameter int HART_ID = 0
+  parameter int HART_ID     = 0,
+  parameter int PMP_ENTRIES = 8
 )(
   input  logic             clk_i,
   input  logic             rst_ni,
@@ -55,25 +56,13 @@ module moon_csr
   output logic [XLEN-1:0]  satp_o,
   output logic             sum_o,
   output logic             mxr_o,
-  output logic [7:0]       pmpcfg_o [0:15],
-  output logic [XLEN-1:0]  pmpaddr_o [0:15],
+  output logic [7:0]       pmpcfg_o [0:PMP_ENTRIES-1],
+  output logic [XLEN-1:0]  pmpaddr_o [0:PMP_ENTRIES-1],
 
   // Floating-Point Unit Status
   input  logic [4:0]       fpu_flags_i,
   input  logic             fpu_flags_we_i,
-  output logic [2:0]       frm_o,
-
-  // Vector architectural state
-  input  logic [XLEN-1:0]  vector_vl_i,
-  input  logic [XLEN-1:0]  vector_vtype_i,
-  input  logic             vector_vstart_clear_i,
-  input  logic             vector_vxsat_set_i,
-  input  logic             vector_vstart_fault_i,
-  input  logic [XLEN-1:0]  vector_vstart_fault_value_i,
-  output logic [XLEN-1:0]  vector_vstart_o,
-  output logic             vector_vxsat_o,
-  output logic [1:0]       vector_vxrm_o,
-  output logic             vector_state_enabled_o
+  output logic [2:0]       frm_o
 );
 
   // --------------------------------------------------------------------------
@@ -93,7 +82,6 @@ module moon_csr
   logic        mstatus_spp;
   logic [1:0]  mstatus_mpp;
   logic [1:0]  mstatus_fs;
-  logic [1:0]  mstatus_vs;
   logic        mstatus_sum;
   logic        mstatus_mxr;
   logic        mstatus_tvm;
@@ -101,7 +89,7 @@ module moon_csr
   logic        mstatus_tsr;
   wire  [1:0]  mstatus_uxl = 2'b10; // 64-bit
   wire  [1:0]  mstatus_sxl = 2'b10; // 64-bit
-  wire         mstatus_sd  = (mstatus_fs == 2'b11) || (mstatus_vs == 2'b11);
+  wire         mstatus_sd  = (mstatus_fs == 2'b11);
 
   assign sum_o = mstatus_sum;
   assign mxr_o = mstatus_mxr;
@@ -140,9 +128,9 @@ module moon_csr
   assign sepc_o = sepc_q;
 
   // Physical Memory Protection Registers
-  logic [7:0]      pmpcfg_q [0:15];
-  logic [XLEN-1:0] pmpaddr_q [0:15];
-  for (genvar pmp_i = 0; pmp_i < 16; pmp_i++) begin : gen_pmp_out
+  logic [7:0]      pmpcfg_q [0:PMP_ENTRIES-1];
+  logic [XLEN-1:0] pmpaddr_q [0:PMP_ENTRIES-1];
+  for (genvar pmp_i = 0; pmp_i < PMP_ENTRIES; pmp_i++) begin : gen_pmp_out
     assign pmpcfg_o[pmp_i]  = pmpcfg_q[pmp_i];
     assign pmpaddr_o[pmp_i] = pmpaddr_q[pmp_i];
   end
@@ -152,19 +140,11 @@ module moon_csr
   logic [4:0]  fcsr_fflags;
   assign frm_o = fcsr_frm;
 
-  logic [XLEN-1:0] vstart_q;
-  logic            vxsat_q;
-  logic [1:0]      vxrm_q;
-  assign vector_vstart_o = vstart_q;
-  assign vector_vxsat_o = vxsat_q;
-  assign vector_vxrm_o = vxrm_q;
-  assign vector_state_enabled_o = (mstatus_vs != 2'b00);
-
-  // MISA: 64-bit (MXL=2), Extensions: A, B, C, D, F, I, M, S, U, V
-  // bit 0=A, 1=B, 2=C, 3=D, 5=F, 8=I, 12=M, 18=S, 20=U, 21=V
+  // MISA: 64-bit (MXL=2), Standard Extensions: A, C, D, F, I, M, S, U
+  // bit 0=A, 2=C, 3=D, 5=F, 8=I, 12=M, 18=S, 20=U
   localparam logic [XLEN-1:0] MISA_VAL =
-    (2'b10 << 62) | (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) |
-    (1 << 5) | (1 << 8) | (1 << 12) | (1 << 18) | (1 << 20) | (1 << 21);
+    (2'b10 << 62) | (1 << 0) | (1 << 2) | (1 << 3) |
+    (1 << 5) | (1 << 8) | (1 << 12) | (1 << 18) | (1 << 20);
 
   // Map hardware interrupt inputs
   assign mip_msip = software_irq_i;
@@ -229,7 +209,7 @@ module moon_csr
       // Machine Mode CSRs
       CSR_MSTATUS:  csr_rdata_o = {mstatus_sd, 27'b0, mstatus_sxl, mstatus_uxl,
                                    9'b0, mstatus_tsr, mstatus_tw, mstatus_tvm, mstatus_mxr, mstatus_sum, 1'b0,
-                                   mstatus_fs, mstatus_mpp, mstatus_vs, mstatus_spp, mstatus_mpie, 1'b0,
+                                   mstatus_fs, mstatus_mpp, 2'b00, mstatus_spp, mstatus_mpie, 1'b0,
                                    mstatus_spie, 1'b0, mstatus_mie, 1'b0, mstatus_sie, 1'b0};
       CSR_MISA:     csr_rdata_o = MISA_VAL;
       CSR_MEDELEG:  csr_rdata_o = medeleg_q;
@@ -246,7 +226,7 @@ module moon_csr
 
       // Supervisor Mode CSRs
       CSR_SSTATUS:  csr_rdata_o = {mstatus_sd, 29'b0, mstatus_uxl, 12'b0, mstatus_mxr, mstatus_sum, 1'b0,
-                                   2'b0, mstatus_fs, 2'b0, mstatus_vs, mstatus_spp, 2'b0, mstatus_spie, 3'b0, mstatus_sie, 1'b0};
+                                   2'b0, mstatus_fs, 2'b0, 2'b00, mstatus_spp, 2'b0, mstatus_spie, 3'b0, mstatus_sie, 1'b0};
       CSR_SIE:      csr_rdata_o = {54'b0, mie_seie, 3'b0, mie_stie, 3'b0, mie_ssie, 1'b0} & mideleg_q;
       CSR_SIP:      csr_rdata_o = {54'b0, mip_seip, 3'b0, eff_stip, 3'b0, mip_ssip, 1'b0} & mideleg_q;
       CSR_STVEC:    csr_rdata_o = stvec_q;
@@ -257,39 +237,25 @@ module moon_csr
       CSR_SATP:     csr_rdata_o = satp_q;
       CSR_STIMECMP: csr_rdata_o = stimecmp_q;
 
-      // PMP Registers
+      // PMP Registers (Entries 0..7 implemented; 8..15 hardwired to 0 per spec)
       CSR_PMPCFG0:  csr_rdata_o = {pmpcfg_q[7], pmpcfg_q[6], pmpcfg_q[5], pmpcfg_q[4],
                                    pmpcfg_q[3], pmpcfg_q[2], pmpcfg_q[1], pmpcfg_q[0]};
-      CSR_PMPCFG2:  csr_rdata_o = {pmpcfg_q[15], pmpcfg_q[14], pmpcfg_q[13], pmpcfg_q[12],
-                                   pmpcfg_q[11], pmpcfg_q[10], pmpcfg_q[9],  pmpcfg_q[8]};
-      CSR_PMPADDR0:  csr_rdata_o = pmpaddr_q[0];
-      CSR_PMPADDR1:  csr_rdata_o = pmpaddr_q[1];
-      CSR_PMPADDR2:  csr_rdata_o = pmpaddr_q[2];
-      CSR_PMPADDR3:  csr_rdata_o = pmpaddr_q[3];
-      CSR_PMPADDR4:  csr_rdata_o = pmpaddr_q[4];
-      CSR_PMPADDR5:  csr_rdata_o = pmpaddr_q[5];
-      CSR_PMPADDR6:  csr_rdata_o = pmpaddr_q[6];
-      CSR_PMPADDR7:  csr_rdata_o = pmpaddr_q[7];
-      CSR_PMPADDR8:  csr_rdata_o = pmpaddr_q[8];
-      CSR_PMPADDR9:  csr_rdata_o = pmpaddr_q[9];
-      CSR_PMPADDR10: csr_rdata_o = pmpaddr_q[10];
-      CSR_PMPADDR11: csr_rdata_o = pmpaddr_q[11];
-      CSR_PMPADDR12: csr_rdata_o = pmpaddr_q[12];
-      CSR_PMPADDR13: csr_rdata_o = pmpaddr_q[13];
-      CSR_PMPADDR14: csr_rdata_o = pmpaddr_q[14];
-      CSR_PMPADDR15: csr_rdata_o = pmpaddr_q[15];
+      CSR_PMPCFG2:  csr_rdata_o = '0;
+      CSR_PMPADDR0: csr_rdata_o = pmpaddr_q[0];
+      CSR_PMPADDR1: csr_rdata_o = pmpaddr_q[1];
+      CSR_PMPADDR2: csr_rdata_o = pmpaddr_q[2];
+      CSR_PMPADDR3: csr_rdata_o = pmpaddr_q[3];
+      CSR_PMPADDR4: csr_rdata_o = pmpaddr_q[4];
+      CSR_PMPADDR5: csr_rdata_o = pmpaddr_q[5];
+      CSR_PMPADDR6: csr_rdata_o = pmpaddr_q[6];
+      CSR_PMPADDR7: csr_rdata_o = pmpaddr_q[7];
+      CSR_PMPADDR8, CSR_PMPADDR9, CSR_PMPADDR10, CSR_PMPADDR11,
+      CSR_PMPADDR12, CSR_PMPADDR13, CSR_PMPADDR14, CSR_PMPADDR15: csr_rdata_o = '0;
 
       // Floating-Point CSRs
       CSR_FFLAGS:   csr_rdata_o = {59'b0, fcsr_fflags};
       CSR_FRM:      csr_rdata_o = {61'b0, fcsr_frm};
       CSR_FCSR:     csr_rdata_o = {56'b0, fcsr_frm, fcsr_fflags};
-      12'h008:      csr_rdata_o = vstart_q;
-      12'h009:      csr_rdata_o = {63'd0, vxsat_q};
-      12'h00A:      csr_rdata_o = {62'd0, vxrm_q};
-      12'h00F:      csr_rdata_o = {60'd0, vxsat_q, 1'b0, vxrm_q};
-      12'hC20:      csr_rdata_o = vector_vl_i;
-      12'hC21:      csr_rdata_o = vector_vtype_i;
-      12'hC22:      csr_rdata_o = 64'd16;
       default:      csr_rdata_o = '0;
     endcase
   end
@@ -318,7 +284,6 @@ module moon_csr
       mstatus_mpp  <= 2'b11; // M-mode
       mstatus_spp  <= 1'b0;
       mstatus_fs   <= 2'b01; // FP Initial
-      mstatus_vs   <= 2'b01; // Vector Initial
       mstatus_sum  <= 1'b0;
       mstatus_mxr  <= 1'b0;
       mstatus_tvm  <= 1'b0;
@@ -346,7 +311,7 @@ module moon_csr
       stval_q      <= '0;
       satp_q       <= '0;
       stimecmp_q   <= '0;
-      for (int i = 0; i < 16; i++) begin
+      for (int i = 0; i < PMP_ENTRIES; i++) begin
         pmpcfg_q[i]  <= 8'd0;
         pmpaddr_q[i] <= '0;
       end
@@ -354,9 +319,6 @@ module moon_csr
       minstret_q   <= '0;
       fcsr_frm     <= 3'b000;
       fcsr_fflags  <= 5'b00000;
-      vstart_q     <= '0;
-      vxsat_q      <= 1'b0;
-      vxrm_q       <= 2'b00;
     end else begin
       // Cycle and Instruction Counters
       mcycle_q <= mcycle_q + 1'b1;
@@ -414,7 +376,6 @@ module moon_csr
             mstatus_spp  <= next_csr_val[8];
             mstatus_mpp  <= next_csr_val[12:11];
             mstatus_fs   <= next_csr_val[14:13];
-            mstatus_vs   <= next_csr_val[10:9];
             mstatus_sum  <= next_csr_val[18];
             mstatus_mxr  <= next_csr_val[19];
             mstatus_tvm  <= next_csr_val[20];
@@ -447,7 +408,6 @@ module moon_csr
             mstatus_spie <= next_csr_val[5];
             mstatus_spp  <= next_csr_val[8];
             mstatus_fs   <= next_csr_val[14:13];
-            mstatus_vs   <= next_csr_val[10:9];
             mstatus_sum  <= next_csr_val[18];
             mstatus_mxr  <= next_csr_val[19];
           end
@@ -467,33 +427,23 @@ module moon_csr
           CSR_SATP:     satp_q     <= next_csr_val;
           CSR_STIMECMP: stimecmp_q <= next_csr_val;
 
-          // PMP Configuration and Address writes
+          // PMP Configuration and Address writes (Entries 0..7 implemented)
           CSR_PMPCFG0: begin
             for (int i = 0; i < 8; i++) begin
               if (!pmpcfg_q[i][7]) pmpcfg_q[i] <= next_csr_val[i*8 +: 8];
             end
           end
-          CSR_PMPCFG2: begin
-            for (int i = 0; i < 8; i++) begin
-              if (!pmpcfg_q[i+8][7]) pmpcfg_q[i+8] <= next_csr_val[i*8 +: 8];
-            end
-          end
-          CSR_PMPADDR0:  if (!pmpcfg_q[0][7])  pmpaddr_q[0]  <= next_csr_val;
-          CSR_PMPADDR1:  if (!pmpcfg_q[1][7])  pmpaddr_q[1]  <= next_csr_val;
-          CSR_PMPADDR2:  if (!pmpcfg_q[2][7])  pmpaddr_q[2]  <= next_csr_val;
-          CSR_PMPADDR3:  if (!pmpcfg_q[3][7])  pmpaddr_q[3]  <= next_csr_val;
-          CSR_PMPADDR4:  if (!pmpcfg_q[4][7])  pmpaddr_q[4]  <= next_csr_val;
-          CSR_PMPADDR5:  if (!pmpcfg_q[5][7])  pmpaddr_q[5]  <= next_csr_val;
-          CSR_PMPADDR6:  if (!pmpcfg_q[6][7])  pmpaddr_q[6]  <= next_csr_val;
-          CSR_PMPADDR7:  if (!pmpcfg_q[7][7])  pmpaddr_q[7]  <= next_csr_val;
-          CSR_PMPADDR8:  if (!pmpcfg_q[8][7])  pmpaddr_q[8]  <= next_csr_val;
-          CSR_PMPADDR9:  if (!pmpcfg_q[9][7])  pmpaddr_q[9]  <= next_csr_val;
-          CSR_PMPADDR10: if (!pmpcfg_q[10][7]) pmpaddr_q[10] <= next_csr_val;
-          CSR_PMPADDR11: if (!pmpcfg_q[11][7]) pmpaddr_q[11] <= next_csr_val;
-          CSR_PMPADDR12: if (!pmpcfg_q[12][7]) pmpaddr_q[12] <= next_csr_val;
-          CSR_PMPADDR13: if (!pmpcfg_q[13][7]) pmpaddr_q[13] <= next_csr_val;
-          CSR_PMPADDR14: if (!pmpcfg_q[14][7]) pmpaddr_q[14] <= next_csr_val;
-          CSR_PMPADDR15: if (!pmpcfg_q[15][7]) pmpaddr_q[15] <= next_csr_val;
+          CSR_PMPCFG2: ; // Unimplemented entries 8..15 ignore writes
+          CSR_PMPADDR0: if (!pmpcfg_q[0][7]) pmpaddr_q[0] <= next_csr_val;
+          CSR_PMPADDR1: if (!pmpcfg_q[1][7]) pmpaddr_q[1] <= next_csr_val;
+          CSR_PMPADDR2: if (!pmpcfg_q[2][7]) pmpaddr_q[2] <= next_csr_val;
+          CSR_PMPADDR3: if (!pmpcfg_q[3][7]) pmpaddr_q[3] <= next_csr_val;
+          CSR_PMPADDR4: if (!pmpcfg_q[4][7]) pmpaddr_q[4] <= next_csr_val;
+          CSR_PMPADDR5: if (!pmpcfg_q[5][7]) pmpaddr_q[5] <= next_csr_val;
+          CSR_PMPADDR6: if (!pmpcfg_q[6][7]) pmpaddr_q[6] <= next_csr_val;
+          CSR_PMPADDR7: if (!pmpcfg_q[7][7]) pmpaddr_q[7] <= next_csr_val;
+          CSR_PMPADDR8, CSR_PMPADDR9, CSR_PMPADDR10, CSR_PMPADDR11,
+          CSR_PMPADDR12, CSR_PMPADDR13, CSR_PMPADDR14, CSR_PMPADDR15: ; // Ignore writes
 
           // FP CSRs
           CSR_FFLAGS: begin
@@ -509,26 +459,9 @@ module moon_csr
             fcsr_frm    <= next_csr_val[7:5];
             mstatus_fs  <= 2'b11;
           end
-          12'h008: vstart_q <= next_csr_val;
-          12'h009: vxsat_q <= next_csr_val[0];
-          12'h00A: vxrm_q <= next_csr_val[1:0];
-          12'h00F: begin
-            vxrm_q <= next_csr_val[1:0];
-            vxsat_q <= next_csr_val[3];
-          end
           default: ;
         endcase
       end
-
-      if (vector_vstart_clear_i || vector_vstart_fault_i ||
-          (csr_we_i && ((csr_addr_i == 12'h008) || (csr_addr_i == 12'h009) ||
-                        (csr_addr_i == 12'h00A) || (csr_addr_i == 12'h00F))))
-        mstatus_vs <= 2'b11;
-
-      if (vector_vxsat_set_i) vxsat_q <= 1'b1;
-
-      if (vector_vstart_fault_i) vstart_q <= vector_vstart_fault_value_i;
-      else if (vector_vstart_clear_i) vstart_q <= '0;
     end
   end
 
