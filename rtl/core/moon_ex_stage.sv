@@ -19,14 +19,11 @@
 `include "moon_fpu_intcvt.sv"
 `include "moon_fpu_sqrt.sv"
 `include "moon_fpu_fma.sv"
-`include "moon_vector_unit.sv"
 
 module moon_ex_stage
   import moon_pkg::*;
 #(
-  parameter bit ENABLE_FPU = 1'b0,
-  parameter bit ENABLE_VECTOR = 1'b0,
-  parameter bit ENABLE_VECTOR_FP = 1'b0
+  parameter bit ENABLE_FPU = 1'b0
 )(
   input  logic             clk_i,
   input  logic             rst_ni,
@@ -97,28 +94,14 @@ module moon_ex_stage
   input  fwd_sel_e         fwd_b_i,
   input  logic [XLEN-1:0]  fwd_ex_data_i,  // Data from EX/MEM stage
   input  logic [XLEN-1:0]  fwd_mem_data_i, // Data from MEM/WB stage
-  input  logic             vector_mem_valid_i,
-  input  logic [XLEN-1:0]  vector_mem_rdata_i,
-  input  logic [XLEN-1:0]  vector_vstart_i,
-  input  logic             vector_mem_fault_i,
 
   // Redirection Outputs to IF Stage
   output logic             branch_taken_o,
   output logic [XLEN-1:0]  branch_target_o,
 
   // Multi-cycle Busy Status to Hazard Unit
+  output logic             busy_mul_o,
   output logic             busy_div_o,
-  output logic             vector_mem_req_o,
-  output logic             vector_mem_we_o,
-  output logic [XLEN-1:0]  vector_mem_addr_o,
-  output logic [XLEN-1:0]  vector_mem_wdata_o,
-  output logic [7:0]       vector_mem_wstrb_o,
-  output logic             vector_mem_busy_o,
-  output logic [XLEN-1:0]  vector_vl_o,
-  output logic [XLEN-1:0]  vector_vtype_o,
-  output logic             vector_vstart_clear_o,
-  output logic             vector_vxsat_set_o,
-  output logic [XLEN-1:0]  vector_mem_vstart_o,
 
   // Outputs to MEM Stage (EX/MEM Pipeline Register)
   output logic             ex_mem_valid_o,
@@ -186,15 +169,6 @@ module moon_ex_stage
   logic [XLEN-1:0] alu_in_a;
   logic [XLEN-1:0] alu_in_b;
   logic [XLEN-1:0] alu_result;
-  logic [XLEN-1:0] vector_scalar_result;
-  logic            vector_scalar_result_valid;
-  logic [4:0]      vector_fp_flags;
-  logic            vector_fp_flags_we;
-  logic            vector_unit_mem_req;
-  logic            vector_unit_mem_we;
-  logic [XLEN-1:0] vector_unit_mem_addr;
-  logic [XLEN-1:0] vector_unit_mem_wdata;
-  logic [7:0]      vector_unit_mem_wstrb;
   logic            alu_zero;
   logic [FLEN-1:0] fp_add_result;
   logic [4:0]      fp_add_flags;
@@ -382,11 +356,9 @@ module moon_ex_stage
     else if (ENABLE_FPU && id_ex_fp_cmp_i) fp_result_selected = fp_cmp_result;
     else if (ENABLE_FPU && id_ex_fp_sign_i) fp_result_selected = fp_sign_result;
     else if (ENABLE_FPU && id_ex_fp_class_i) fp_result_selected = fp_class_result;
-    else if (ENABLE_VECTOR && vector_scalar_result_valid) fp_result_selected = vector_scalar_result;
     else fp_result_selected = alu_result;
 
-    if (ENABLE_VECTOR && vector_fp_flags_we) fp_flags_selected = vector_fp_flags;
-    else if (ENABLE_FPU && fp_fma_instruction) fp_flags_selected = fp_fma_flags;
+    if (ENABLE_FPU && fp_fma_instruction) fp_flags_selected = fp_fma_flags;
     else if (ENABLE_FPU && id_ex_fp_cvt_i)
       fp_flags_selected = fp_int_cvt_instruction ? fp_int_cvt_flags : fp_cvt_flags;
     else if (ENABLE_FPU && id_ex_fp_div_i)
@@ -408,64 +380,6 @@ module moon_ex_stage
     .zero_o      (alu_zero)
   );
 
-  if (ENABLE_VECTOR) begin : gen_vector_unit
-    moon_vector_unit #(
-      .ENABLE_VECTOR_FP (ENABLE_VECTOR_FP)
-    ) u_vector_unit (
-      .clk_i                  (clk_i),
-      .rst_ni                 (rst_ni),
-      .valid_i                (id_ex_valid_i),
-      .advance_i              (!stall_mem_i && !flush_mem_i),
-      .instr_i                (id_ex_instr_i),
-      .scalar_rs1_i           (((id_ex_instr_i[6:0] == 7'b1010111) &&
-                                (id_ex_instr_i[14:12] == 3'b101)) ?
-                               id_ex_rs1_data_i : operand_a_fwd),
-      .scalar_rs2_i           (operand_b_fwd),
-      .frm_i                  (frm_i),
-      .vector_vstart_i        (vector_vstart_i),
-      .vector_mem_fault_i     (vector_mem_fault_i),
-      .vector_vstart_clear_o  (vector_vstart_clear_o),
-      .vector_vxsat_set_o     (vector_vxsat_set_o),
-      .vector_fp_flags_o      (vector_fp_flags),
-      .vector_fp_flags_we_o   (vector_fp_flags_we),
-      .vector_mem_vstart_o    (vector_mem_vstart_o),
-      .vector_vl_o            (vector_vl_o),
-      .vector_vtype_o         (vector_vtype_o),
-      .scalar_result_valid_o  (vector_scalar_result_valid),
-      .scalar_result_o        (vector_scalar_result),
-      .mem_req_o              (vector_unit_mem_req),
-      .mem_we_o               (vector_unit_mem_we),
-      .mem_addr_o             (vector_unit_mem_addr),
-      .mem_wdata_o            (vector_unit_mem_wdata),
-      .mem_wstrb_o            (vector_unit_mem_wstrb),
-      .mem_valid_i            (vector_mem_valid_i),
-      .mem_rdata_i            (vector_mem_rdata_i),
-      .mem_busy_o             (vector_mem_busy_o)
-    );
-  end else begin : gen_no_vector_unit
-    assign vector_vstart_clear_o = 1'b0;
-    assign vector_vxsat_set_o = 1'b0;
-    assign vector_fp_flags = 5'd0;
-    assign vector_fp_flags_we = 1'b0;
-    assign vector_mem_vstart_o = 64'd0;
-    assign vector_vl_o = 64'd0;
-    assign vector_vtype_o = 64'd0;
-    assign vector_scalar_result_valid = 1'b0;
-    assign vector_scalar_result = 64'd0;
-    assign vector_unit_mem_req = 1'b0;
-    assign vector_unit_mem_we = 1'b0;
-    assign vector_unit_mem_addr = 64'd0;
-    assign vector_unit_mem_wdata = 64'd0;
-    assign vector_unit_mem_wstrb = 8'd0;
-    assign vector_mem_busy_o = 1'b0;
-  end
-
-  assign vector_mem_req_o = vector_unit_mem_req;
-  assign vector_mem_we_o = vector_unit_mem_we;
-  assign vector_mem_addr_o = vector_unit_mem_addr;
-  assign vector_mem_wdata_o = vector_unit_mem_wdata;
-  assign vector_mem_wstrb_o = vector_unit_mem_wstrb;
-
   // --------------------------------------------------------------------------
   // Hardware Multiplier Instantiation (RV64M)
   // --------------------------------------------------------------------------
@@ -482,12 +396,15 @@ module moon_ex_stage
     .clk_i       (clk_i),
     .rst_ni      (rst_ni),
     .valid_i     (id_ex_valid_i && is_mul_op),
+    .advance_i   (!stall_mem_i && !flush_mem_i),
     .op_i        (id_ex_muldiv_op_i),
     .operand_a_i (operand_a_fwd),
     .operand_b_i (operand_b_fwd),
     .ready_o     (mul_ready),
     .result_o    (mul_result)
   );
+
+  assign busy_mul_o = id_ex_valid_i && is_mul_op && !mul_ready;
 
   // --------------------------------------------------------------------------
   // Hardware Divider Instantiation (RV64M)
@@ -508,6 +425,7 @@ module moon_ex_stage
     .clk_i       (clk_i),
     .rst_ni      (rst_ni),
     .valid_i     (id_ex_valid_i && is_div_op),
+    .advance_i   (!stall_mem_i && !flush_mem_i),
     .op_i        (id_ex_muldiv_op_i),
     .operand_a_i (operand_a_fwd),
     .operand_b_i (operand_b_fwd),
@@ -658,7 +576,7 @@ module moon_ex_stage
       ex_mem_fp_flags_o  <= fp_flags_selected;
       ex_mem_fp_flags_we_o <= id_ex_fp_add_i || id_ex_fp_mul_i ||
                               id_ex_fp_div_i || id_ex_fp_cvt_i || id_ex_fp_cmp_i ||
-                              fp_fma_instruction || vector_fp_flags_we;
+                              fp_fma_instruction;
       ex_mem_is_csr_o    <= id_ex_is_csr_i;
       ex_mem_csr_op_o    <= id_ex_csr_op_i;
       ex_mem_csr_addr_o  <= id_ex_csr_addr_i;

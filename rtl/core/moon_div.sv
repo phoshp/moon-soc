@@ -15,6 +15,7 @@ module moon_div
   input  logic             clk_i,
   input  logic             rst_ni,
   input  logic             valid_i,
+  input  logic             advance_i,
   input  muldiv_op_e       op_i,
   input  logic [XLEN-1:0]  operand_a_i,
   input  logic [XLEN-1:0]  operand_b_i,
@@ -145,7 +146,7 @@ module moon_div
       end
 
       DIV_DONE: begin
-        if (!valid_i) begin
+        if (advance_i || !valid_i) begin
           state_d = DIV_IDLE;
         end
       end

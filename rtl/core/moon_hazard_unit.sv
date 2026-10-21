@@ -41,8 +41,8 @@ module moon_hazard_unit
   // Execution redirect and multi-cycle busy signals
   input  logic        branch_taken_i,
   input  logic        trap_flush_i,
+  input  logic        busy_mul_i,
   input  logic        busy_div_i,
-  input  logic        busy_vector_i,
   input  logic        busy_mem_i,
   input  logic        busy_mmu_i,
 
@@ -104,7 +104,7 @@ module moon_hazard_unit
   // --------------------------------------------------------------------------
   // Stall and Flush Control
   // --------------------------------------------------------------------------
-  wire global_busy = busy_div_i || busy_mem_i || busy_mmu_i;
+  wire global_busy = busy_mul_i || busy_div_i || busy_mem_i || busy_mmu_i;
 
   always_comb begin
     stall_if_o  = 1'b0;
@@ -126,11 +126,6 @@ module moon_hazard_unit
       stall_id_o  = 1'b1;
       stall_ex_o  = 1'b1;
       stall_mem_o = 1'b1;
-    end else if (busy_vector_i) begin
-      // Vector memory executes from EX while older MEM work drains.
-      stall_if_o = 1'b1;
-      stall_id_o = 1'b1;
-      stall_ex_o = 1'b1;
     end else if (branch_taken_i) begin
       // Hold the redirect until older memory and MMU operations complete.
       flush_id_o  = 1'b1;
