@@ -120,6 +120,10 @@ module moon_dcache
   assign victim_way = int'(lru_cnt[miss_set]);
   wire victim_is_dirty = valid_mem[miss_set][victim_way] && dirty_mem[miss_set][victim_way];
 
+  int  req_victim_way;
+  assign req_victim_way = int'(lru_cnt[req_set]);
+  wire req_victim_is_dirty = valid_mem[req_set][req_victim_way] && dirty_mem[req_set][req_victim_way];
+
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       state_q      <= ST_IDLE;
@@ -280,17 +284,17 @@ module moon_dcache
             miss_we_d    = we_i;
             beat_cnt_d   = '0;
 
-            if (victim_is_dirty) begin
+            if (req_victim_is_dirty) begin
               // Evict dirty line via AXI4 write burst
               m_aw_o.valid = 1'b1;
               m_aw_o.id    = 4'd1;
-              m_aw_o.addr  = {tag_mem[req_set][victim_way], req_set, {OFFSET_BITS{1'b0}}};
+              m_aw_o.addr  = {tag_mem[req_set][req_victim_way], req_set, {OFFSET_BITS{1'b0}}};
               m_aw_o.len   = 8'd7;   // 8 beats
               m_aw_o.size  = 3'b011; // 64 bits
               m_aw_o.burst = AXI_BURST_INCR;
 
               m_w_o.valid  = 1'b1;
-              m_w_o.data   = data_mem[req_set][victim_way][0];
+              m_w_o.data   = data_mem[req_set][req_victim_way][0];
               m_w_o.strb   = 8'hFF;
               m_w_o.last   = 1'b0;
 
