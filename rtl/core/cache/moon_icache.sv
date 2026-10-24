@@ -43,11 +43,13 @@ module moon_icache
   wire [TAG_BITS-1:0]    req_tag    = addr_i[XLEN-1 : SET_BITS+OFFSET_BITS];
   wire [OFFSET_BITS-1:2] req_word   = addr_i[OFFSET_BITS-1 : 2]; // 16 words (32b each)
 
+  localparam int WAY_BITS    = (NUM_WAYS > 1) ? $clog2(NUM_WAYS) : 1;
+
   // Cache Storage Arrays
   logic [TAG_BITS-1:0] tag_mem  [0:NUM_SETS-1][0:NUM_WAYS-1];
   logic                valid_mem[0:NUM_SETS-1][0:NUM_WAYS-1];
   logic [31:0]         data_mem [0:NUM_SETS-1][0:NUM_WAYS-1][0:15]; // 16 x 32b words per line
-  logic [1:0]          lru_cnt  [0:NUM_SETS-1]; // Replacement pointer
+  logic [WAY_BITS-1:0] lru_cnt  [0:NUM_SETS-1]; // Replacement pointer
 
   // Hit Detection
   logic [NUM_WAYS-1:0] way_hit;
@@ -113,7 +115,10 @@ module moon_icache
         for (int i = 0; i < 16; i++) begin
           data_mem[miss_set][rep_way][i] <= refill_line_d[i];
         end
-        lru_cnt[miss_set] <= lru_cnt[miss_set] + 2'd1; // Round-robin update
+        if (NUM_WAYS > 1) begin
+          lru_cnt[miss_set] <= (lru_cnt[miss_set] == WAY_BITS'(NUM_WAYS - 1)) ?
+                               '0 : (lru_cnt[miss_set] + 1'b1);
+        end
       end
     end
   end
