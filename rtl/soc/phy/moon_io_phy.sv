@@ -32,7 +32,7 @@ module moon_io_phy #(
   input  logic        core_i2c_sda_i,
   input  logic        core_i2c_sda_oe_i,
 
-  output logic [30:0] core_ext_irq_o,
+  output logic [29:0] core_ext_irq_o,
 
   // --------------------------------------------------------------------------
   // Pad-Side External Chip Pins (to/from Chip Pads / Board)
@@ -50,7 +50,7 @@ module moon_io_phy #(
   output logic        pad_i2c_sda_o,
   output logic        pad_i2c_sda_oe_o,
 
-  input  logic [30:0] pad_ext_irq_i
+  input  logic [29:0] pad_ext_irq_i
 );
 
   // --------------------------------------------------------------------------
@@ -73,7 +73,7 @@ module moon_io_phy #(
       logic [1:0]  uart_rx_q;
       logic [1:0]  spi_miso_q;
       logic [1:0]  i2c_sda_q;
-      logic [30:0] ext_irq_q1, ext_irq_q2;
+      logic [29:0] ext_irq_q1, ext_irq_q2;
 
       always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin

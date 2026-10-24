@@ -63,7 +63,7 @@ module moon_soc_top
   output logic i2c_sda_oe_o,
 
   // External Interrupt Inputs (from external board pins)
-  input  logic [30:0] ext_irq_i,
+  input  logic [29:0] ext_irq_i,
 
   // --------------------------------------------------------------------------
   // External Main Memory AXI4 Interface (to DRAM / HyperRAM controller)
@@ -186,7 +186,7 @@ module moon_soc_top
   logic        core_i2c_scl;
   logic        core_i2c_sda_out;
   logic        core_i2c_sda_oe;
-  logic [30:0] core_ext_irq;
+  logic [29:0] core_ext_irq;
 
   // ==========================================================================
   // SECTION 1: System Control Macro (AON, CRG, PMU, Reset Sequencer)

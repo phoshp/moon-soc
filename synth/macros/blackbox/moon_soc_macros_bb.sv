@@ -251,7 +251,7 @@ module moon_periph_subsystem
   output logic        i2c_sda_o,
   output logic        i2c_sda_oe_o,
 
-  input  logic [30:0] ext_irq_i,
+  input  logic [29:0] ext_irq_i,
 
   output logic        timer_irq_o,
   output logic        software_irq_o,
