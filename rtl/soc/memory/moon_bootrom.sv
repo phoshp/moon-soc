@@ -141,13 +141,91 @@ module moon_bootrom
     endcase
   end
 
-  // ROM is read-only: reject writes with SLVERR
+  // ROM is read-only: reject writes with SLVERR in compliant AXI4 handshake sequence
+  typedef enum logic [1:0] {
+    WR_IDLE = 2'd0,
+    WR_WAIT = 2'd1,
+    WR_RESP = 2'd2
+  } wr_state_e;
+
+  wr_state_e               wr_state_q, wr_state_d;
+  logic [AXI_ID_WIDTH-1:0] wr_id_q,    wr_id_d;
+  logic                    aw_done_q,  aw_done_d;
+  logic                    w_done_q,   w_done_d;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      wr_state_q <= WR_IDLE;
+      wr_id_q    <= '0;
+      aw_done_q  <= 1'b0;
+      w_done_q   <= 1'b0;
+    end else begin
+      wr_state_q <= wr_state_d;
+      wr_id_q    <= wr_id_d;
+      aw_done_q  <= aw_done_d;
+      w_done_q   <= w_done_d;
+    end
+  end
+
   always_comb begin
-    s_aw_ready_o = s_aw_i.valid;
-    s_w_ready_o  = s_w_i.valid;
-    s_b_o.valid  = s_aw_i.valid && s_w_i.valid;
-    s_b_o.id     = s_aw_i.id;
+    wr_state_d   = wr_state_q;
+    wr_id_d      = wr_id_q;
+    aw_done_d    = aw_done_q;
+    w_done_d     = w_done_q;
+    s_aw_ready_o = 1'b0;
+    s_w_ready_o  = 1'b0;
+    s_b_o        = '0;
     s_b_o.resp   = AXI_RESP_SLVERR;
+    s_b_o.id     = wr_id_q;
+
+    case (wr_state_q)
+      WR_IDLE: begin
+        s_aw_ready_o = 1'b1;
+        s_w_ready_o  = 1'b1;
+
+        if (s_aw_i.valid && s_w_i.valid && s_w_i.last) begin
+          wr_id_d    = s_aw_i.id;
+          wr_state_d = WR_RESP;
+        end else if (s_aw_i.valid || (s_w_i.valid && s_w_i.last)) begin
+          if (s_aw_i.valid) begin
+            wr_id_d   = s_aw_i.id;
+            aw_done_d = 1'b1;
+          end
+          if (s_w_i.valid && s_w_i.last) begin
+            w_done_d  = 1'b1;
+          end
+          wr_state_d = WR_WAIT;
+        end
+      end
+
+      WR_WAIT: begin
+        s_aw_ready_o = !aw_done_q;
+        s_w_ready_o  = !w_done_q;
+
+        if (!aw_done_q && s_aw_i.valid) begin
+          wr_id_d   = s_aw_i.id;
+          aw_done_d = 1'b1;
+        end
+        if (!w_done_q && s_w_i.valid && s_w_i.last) begin
+          w_done_d  = 1'b1;
+        end
+
+        if ((aw_done_q || s_aw_i.valid) && (w_done_q || (s_w_i.valid && s_w_i.last))) begin
+          wr_state_d = WR_RESP;
+        end
+      end
+
+      WR_RESP: begin
+        s_b_o.valid = 1'b1;
+        if (s_b_ready_i) begin
+          aw_done_d  = 1'b0;
+          w_done_d   = 1'b0;
+          wr_state_d = WR_IDLE;
+        end
+      end
+
+      default: wr_state_d = WR_IDLE;
+    endcase
   end
 
 endmodule : moon_bootrom
