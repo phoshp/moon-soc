@@ -43,8 +43,8 @@ module moon_soc_top
   parameter int SRAM_SIZE_BYTES  = 4096,  // 4 KB On-Chip SRAM (Sky130 OpenRAM macro target)
   parameter int ICACHE_SETS      = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-I Cache
   parameter int DCACHE_SETS      = 32,    // 32 sets x 2 ways x 64 B = 4 KB L1-D Cache
-  parameter int ICACHE_WAYS      = 4,
-  parameter int DCACHE_WAYS      = 4,
+  parameter int ICACHE_WAYS      = 2,
+  parameter int DCACHE_WAYS      = 2,
   parameter bit ENABLE_FPU       = 1'b0
 )(
   input  logic clk_i,
