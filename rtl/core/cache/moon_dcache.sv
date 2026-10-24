@@ -63,12 +63,14 @@ module moon_dcache
   wire [TAG_BITS-1:0]    req_tag  = addr_i[XLEN-1 : SET_BITS+OFFSET_BITS];
   wire [OFFSET_BITS-1:3] req_word = addr_i[OFFSET_BITS-1 : 3]; // 8 doublewords (64b each)
 
+  localparam int WAY_BITS    = (NUM_WAYS > 1) ? $clog2(NUM_WAYS) : 1;
+
   // Cache Storage Arrays
   logic [TAG_BITS-1:0] tag_mem   [0:NUM_SETS-1][0:NUM_WAYS-1];
   logic                valid_mem [0:NUM_SETS-1][0:NUM_WAYS-1];
   logic                dirty_mem [0:NUM_SETS-1][0:NUM_WAYS-1];
   logic [63:0]         data_mem  [0:NUM_SETS-1][0:NUM_WAYS-1][0:7]; // 8 x 64b words per line
-  logic [1:0]          lru_cnt   [0:NUM_SETS-1];
+  logic [WAY_BITS-1:0] lru_cnt   [0:NUM_SETS-1];
 
   // Hit Detection
   logic [NUM_WAYS-1:0] way_hit;
@@ -171,11 +173,14 @@ module moon_dcache
           dirty_mem[req_set][hit_way] <= 1'b1;
           for (int i = 0; i < 8; i++) data_mem[req_set][hit_way][i] <= '0;
         end else begin
-          valid_mem[req_set][victim_way] <= 1'b1;
-          dirty_mem[req_set][victim_way] <= 1'b1;
-          tag_mem[req_set][victim_way]   <= req_tag;
-          for (int i = 0; i < 8; i++) data_mem[req_set][victim_way][i] <= '0;
-          lru_cnt[req_set] <= lru_cnt[req_set] + 2'd1;
+          valid_mem[req_set][req_victim_way] <= 1'b1;
+          dirty_mem[req_set][req_victim_way] <= 1'b1;
+          tag_mem[req_set][req_victim_way]   <= req_tag;
+          for (int i = 0; i < 8; i++) data_mem[req_set][req_victim_way][i] <= '0;
+          if (NUM_WAYS > 1) begin
+            lru_cnt[req_set] <= (lru_cnt[req_set] == WAY_BITS'(NUM_WAYS - 1)) ?
+                                 '0 : (lru_cnt[req_set] + 1'b1);
+          end
         end
       end
 
@@ -201,7 +206,10 @@ module moon_dcache
             data_mem[miss_set][victim_way][i] <= refill_line_d[i];
           end
         end
-        lru_cnt[miss_set] <= lru_cnt[miss_set] + 2'd1;
+        if (NUM_WAYS > 1) begin
+          lru_cnt[miss_set] <= (lru_cnt[miss_set] == WAY_BITS'(NUM_WAYS - 1)) ?
+                               '0 : (lru_cnt[miss_set] + 1'b1);
+        end
       end
     end
   end
@@ -292,11 +300,6 @@ module moon_dcache
               m_aw_o.len   = 8'd7;   // 8 beats
               m_aw_o.size  = 3'b011; // 64 bits
               m_aw_o.burst = AXI_BURST_INCR;
-
-              m_w_o.valid  = 1'b1;
-              m_w_o.data   = data_mem[req_set][req_victim_way][0];
-              m_w_o.strb   = 8'hFF;
-              m_w_o.last   = 1'b0;
 
               if (m_aw_ready_i) state_d = ST_EVICT_W;
               else state_d = ST_EVICT_AW;
