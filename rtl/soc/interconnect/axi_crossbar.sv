@@ -146,16 +146,23 @@ module axi_crossbar
     end
   end
 
-  // Drive Master R channels (Read Data Return)
+  // Drive Master R channels (Read Data Return) with per-master slave arbitration
   always_comb begin
     for (int m = 0; m < NUM_MASTERS; m++) begin
       m_r_o[m] = '0;
     end
     for (int s = 0; s < NUM_SLAVES; s++) begin
       s_r_ready_o[s] = 1'b0;
-      if (s_r_i[s].valid) begin
-        m_r_o[r_route_m[s]] = s_r_i[s];
-        s_r_ready_o[s]      = m_r_ready_i[r_route_m[s]];
+    end
+
+    for (int m = 0; m < NUM_MASTERS; m++) begin
+      for (int s = 0; s < NUM_SLAVES; s++) begin
+        if (s_r_i[s].valid && (r_route_m[s] == m)) begin
+          if (!m_r_o[m].valid) begin
+            m_r_o[m]       = s_r_i[s];
+            s_r_ready_o[s] = m_r_ready_i[m];
+          end
+        end
       end
     end
   end
@@ -179,17 +186,38 @@ module axi_crossbar
     end
   end
 
-  // When AW is active, W routes to the new aw_target_s; on subsequent beats, it routes to b_target_s
-  int cur_w_target_s;
-  assign cur_w_target_s = m_aw_i[1].valid ? aw_target_s : b_target_s;
+  // Track active multi-beat write burst destination
+  logic w_burst_busy_q;
+  int   w_burst_target_s_q;
 
-  // Write Address routing
+  wire aw_fire     = m_aw_i[1].valid && m_aw_ready_o[1];
+  wire w_last_fire = m_w_i[1].valid && m_w_ready_o[1] && m_w_i[1].last;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      w_burst_busy_q     <= 1'b0;
+      w_burst_target_s_q <= 0;
+    end else begin
+      if (aw_fire && !w_last_fire) begin
+        w_burst_busy_q     <= 1'b1;
+        w_burst_target_s_q <= aw_target_s;
+      end else if (w_last_fire) begin
+        w_burst_busy_q     <= 1'b0;
+      end
+    end
+  end
+
+  // Lock W channel routing to the active burst target until burst completes
+  int cur_w_target_s;
+  assign cur_w_target_s = w_burst_busy_q ? w_burst_target_s_q : (m_aw_i[1].valid ? aw_target_s : b_target_s);
+
+  // Write Address routing (block new AW while previous burst is still transmitting beats)
   always_comb begin
     m_aw_ready_o[0] = 1'b0; // M0 never writes
-    m_aw_ready_o[1] = s_aw_ready_i[aw_target_s];
+    m_aw_ready_o[1] = !w_burst_busy_q ? s_aw_ready_i[aw_target_s] : 1'b0;
     for (int s = 0; s < NUM_SLAVES; s++) begin
       s_aw_o[s] = '0;
-      if (m_aw_i[1].valid && (aw_target_s == s)) begin
+      if (!w_burst_busy_q && m_aw_i[1].valid && (aw_target_s == s)) begin
         s_aw_o[s]       = m_aw_i[1];
         s_aw_o[s].valid = 1'b1;
       end
