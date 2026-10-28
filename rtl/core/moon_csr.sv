@@ -250,22 +250,13 @@ module moon_csr
           if (i < PMP_ENTRIES) csr_rdata_o[(i-8)*8 +: 8] = pmpcfg_q[i];
         end
       end
-      CSR_PMPADDR0:  csr_rdata_o = (0 < PMP_ENTRIES)  ? pmpaddr_q[0]  : '0;
-      CSR_PMPADDR1:  csr_rdata_o = (1 < PMP_ENTRIES)  ? pmpaddr_q[1]  : '0;
-      CSR_PMPADDR2:  csr_rdata_o = (2 < PMP_ENTRIES)  ? pmpaddr_q[2]  : '0;
-      CSR_PMPADDR3:  csr_rdata_o = (3 < PMP_ENTRIES)  ? pmpaddr_q[3]  : '0;
-      CSR_PMPADDR4:  csr_rdata_o = (4 < PMP_ENTRIES)  ? pmpaddr_q[4]  : '0;
-      CSR_PMPADDR5:  csr_rdata_o = (5 < PMP_ENTRIES)  ? pmpaddr_q[5]  : '0;
-      CSR_PMPADDR6:  csr_rdata_o = (6 < PMP_ENTRIES)  ? pmpaddr_q[6]  : '0;
-      CSR_PMPADDR7:  csr_rdata_o = (7 < PMP_ENTRIES)  ? pmpaddr_q[7]  : '0;
-      CSR_PMPADDR8:  csr_rdata_o = (8 < PMP_ENTRIES)  ? pmpaddr_q[8]  : '0;
-      CSR_PMPADDR9:  csr_rdata_o = (9 < PMP_ENTRIES)  ? pmpaddr_q[9]  : '0;
-      CSR_PMPADDR10: csr_rdata_o = (10 < PMP_ENTRIES) ? pmpaddr_q[10] : '0;
-      CSR_PMPADDR11: csr_rdata_o = (11 < PMP_ENTRIES) ? pmpaddr_q[11] : '0;
-      CSR_PMPADDR12: csr_rdata_o = (12 < PMP_ENTRIES) ? pmpaddr_q[12] : '0;
-      CSR_PMPADDR13: csr_rdata_o = (13 < PMP_ENTRIES) ? pmpaddr_q[13] : '0;
-      CSR_PMPADDR14: csr_rdata_o = (14 < PMP_ENTRIES) ? pmpaddr_q[14] : '0;
-      CSR_PMPADDR15: csr_rdata_o = (15 < PMP_ENTRIES) ? pmpaddr_q[15] : '0;
+      CSR_PMPADDR0,  CSR_PMPADDR1,  CSR_PMPADDR2,  CSR_PMPADDR3,
+      CSR_PMPADDR4,  CSR_PMPADDR5,  CSR_PMPADDR6,  CSR_PMPADDR7,
+      CSR_PMPADDR8,  CSR_PMPADDR9,  CSR_PMPADDR10, CSR_PMPADDR11,
+      CSR_PMPADDR12, CSR_PMPADDR13, CSR_PMPADDR14, CSR_PMPADDR15: begin
+        automatic int pmp_idx = csr_addr_i[3:0];
+        csr_rdata_o = (pmp_idx < PMP_ENTRIES) ? pmpaddr_q[pmp_idx] : '0;
+      end
 
       // Floating-Point CSRs
       CSR_FFLAGS:   csr_rdata_o = {59'b0, fcsr_fflags};
@@ -453,22 +444,15 @@ module moon_csr
               if (i < PMP_ENTRIES && !pmpcfg_q[i][7]) pmpcfg_q[i] <= next_csr_val[(i-8)*8 +: 8];
             end
           end
-          CSR_PMPADDR0:  if (0 < PMP_ENTRIES  && !pmpcfg_q[0][7])  pmpaddr_q[0]  <= next_csr_val;
-          CSR_PMPADDR1:  if (1 < PMP_ENTRIES  && !pmpcfg_q[1][7])  pmpaddr_q[1]  <= next_csr_val;
-          CSR_PMPADDR2:  if (2 < PMP_ENTRIES  && !pmpcfg_q[2][7])  pmpaddr_q[2]  <= next_csr_val;
-          CSR_PMPADDR3:  if (3 < PMP_ENTRIES  && !pmpcfg_q[3][7])  pmpaddr_q[3]  <= next_csr_val;
-          CSR_PMPADDR4:  if (4 < PMP_ENTRIES  && !pmpcfg_q[4][7])  pmpaddr_q[4]  <= next_csr_val;
-          CSR_PMPADDR5:  if (5 < PMP_ENTRIES  && !pmpcfg_q[5][7])  pmpaddr_q[5]  <= next_csr_val;
-          CSR_PMPADDR6:  if (6 < PMP_ENTRIES  && !pmpcfg_q[6][7])  pmpaddr_q[6]  <= next_csr_val;
-          CSR_PMPADDR7:  if (7 < PMP_ENTRIES  && !pmpcfg_q[7][7])  pmpaddr_q[7]  <= next_csr_val;
-          CSR_PMPADDR8:  if (8 < PMP_ENTRIES  && !pmpcfg_q[8][7])  pmpaddr_q[8]  <= next_csr_val;
-          CSR_PMPADDR9:  if (9 < PMP_ENTRIES  && !pmpcfg_q[9][7])  pmpaddr_q[9]  <= next_csr_val;
-          CSR_PMPADDR10: if (10 < PMP_ENTRIES && !pmpcfg_q[10][7]) pmpaddr_q[10] <= next_csr_val;
-          CSR_PMPADDR11: if (11 < PMP_ENTRIES && !pmpcfg_q[11][7]) pmpaddr_q[11] <= next_csr_val;
-          CSR_PMPADDR12: if (12 < PMP_ENTRIES && !pmpcfg_q[12][7]) pmpaddr_q[12] <= next_csr_val;
-          CSR_PMPADDR13: if (13 < PMP_ENTRIES && !pmpcfg_q[13][7]) pmpaddr_q[13] <= next_csr_val;
-          CSR_PMPADDR14: if (14 < PMP_ENTRIES && !pmpcfg_q[14][7]) pmpaddr_q[14] <= next_csr_val;
-          CSR_PMPADDR15: if (15 < PMP_ENTRIES && !pmpcfg_q[15][7]) pmpaddr_q[15] <= next_csr_val;
+          CSR_PMPADDR0,  CSR_PMPADDR1,  CSR_PMPADDR2,  CSR_PMPADDR3,
+          CSR_PMPADDR4,  CSR_PMPADDR5,  CSR_PMPADDR6,  CSR_PMPADDR7,
+          CSR_PMPADDR8,  CSR_PMPADDR9,  CSR_PMPADDR10, CSR_PMPADDR11,
+          CSR_PMPADDR12, CSR_PMPADDR13, CSR_PMPADDR14, CSR_PMPADDR15: begin
+            automatic int pmp_idx = csr_addr_i[3:0];
+            if ((pmp_idx < PMP_ENTRIES) && !pmpcfg_q[pmp_idx][7]) begin
+              pmpaddr_q[pmp_idx] <= next_csr_val;
+            end
+          end
 
           // FP CSRs
           CSR_FFLAGS: begin
