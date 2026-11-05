@@ -126,6 +126,7 @@ make all
 | :--- | :--- |
 | `make all` | Runs whole test suite |
 | `make test` | Runs core tests |
+| `make compliance-test` | Runs official RISC-V architectural compliance suite (131 tests across RV64GC) |
 | `make soc-compressed-test` | RV64C 16-bit compressed instruction verification |
 | `make soc-smode-test` | Supervisor mode privilege transitions and trap delegation |
 | `make soc-pmp-test` | Physical Memory Protection (PMP) access enforcement |

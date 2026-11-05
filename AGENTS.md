@@ -25,6 +25,7 @@ The project uses `cocotb`, Python, and Verilator for RTL simulation and verifica
 
 ### Cocotb Simulation
 - **Run default test suite**: `make test` (or `make sim`). Runs `python3 tb/core/run_test.py tb/tests/asm/base/test_rv64_all.hex`.
+- **Run official architectural compliance suite**: `make compliance-test` (runs 131 official tests across RV64I, RV64M, RV64A, RV64C, RV64F, RV64D, Privileged Machine, and Privileged Supervisor modes).
 - **Run full suite (core + SoC)**: `make all`.
 - **Run SoC Top-Level test suite**: `make soc-test` (runs `tb/soc/run_soc_test.py` with `test_rv64_all.hex`).
 - **Run SoC Compressed instructions test**: `make soc-compressed-test`.
