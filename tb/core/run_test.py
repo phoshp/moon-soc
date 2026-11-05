@@ -48,13 +48,30 @@ def run_test(test_hex=None, waves=False, verbose=False):
     if cocotb_dir not in sys.path:
         sys.path.insert(0, cocotb_dir)
 
+    plusargs = [f"+hex_file={test_hex}"]
+    tohost_addr = os.environ.get("TOHOST_ADDR")
+    if not tohost_addr:
+        elf_path = Path(test_hex).with_suffix(".elf")
+        if elf_path.exists():
+            import subprocess
+            try:
+                out = subprocess.check_output(["riscv64-linux-gnu-nm", str(elf_path)], stderr=subprocess.DEVNULL).decode()
+                for line in out.splitlines():
+                    if " tohost" in line:
+                        tohost_addr = line.split()[0]
+                        break
+            except Exception:
+                pass
+    if tohost_addr:
+        plusargs.append(f"+tohost_addr={tohost_addr}")
+
     results_file = runner.test(
         hdl_toplevel="tb_moon_core",
         hdl_toplevel_lang="verilog",
         test_module="test_moon_core",
         build_dir=build_dir,
         test_dir=build_dir,
-        plusargs=[f"+hex_file={test_hex}"],
+        plusargs=plusargs,
         extra_env={
             "VERBOSE": "1" if verbose else "0",
             "MAX_CYCLES": os.environ.get("MAX_CYCLES", "10000"),

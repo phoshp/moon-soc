@@ -103,13 +103,15 @@ module tb_moon_core (
   end
 
   // Data Memory Write with Byte Strobes
+  logic [31:0] tohost_addr = 32'h8000_1000;
+
   always_ff @(posedge clk) begin
     if (dmem_req && dmem_we) begin
-      // Test pass/fail indicator address: 0x8000_1000
-      if (dmem_addr[31:0] == 32'h8000_1000) begin
-        if (dmem_wdata[31:0] == 32'hCAFE_BABE) begin
+      // Test pass/fail indicator address: 0x8000_1000 or tohost
+      if (dmem_addr[31:0] == 32'h8000_1000 || (tohost_addr != 32'h0 && dmem_addr[31:0] == tohost_addr)) begin
+        if (dmem_wdata[31:0] == 32'hCAFE_BABE || dmem_wdata[31:0] == 32'h1) begin
           test_passed <= 1'b1;
-        end else begin
+        end else if (dmem_wdata[31:0] != 32'h0) begin
           test_failed      <= 1'b1;
           test_error_code  <= dmem_wdata[31:0];
         end
@@ -155,6 +157,7 @@ module tb_moon_core (
     end
 
     void'($value$plusargs("hex_file=%s", hex_file));
+    void'($value$plusargs("tohost_addr=%h", tohost_addr));
     fd = $fopen(hex_file, "r");
     if (fd != 0) begin
       addr = 32'h0000_1000;
