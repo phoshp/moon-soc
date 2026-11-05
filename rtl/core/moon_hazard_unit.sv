@@ -35,6 +35,7 @@ module moon_hazard_unit
   input  logic        id_ex_is_load_i,
   input  logic        id_ex_is_csr_i,
   input  logic        ex_mem_is_csr_i,
+  input  logic        mem_wb_is_csr_i,
   input  logic        ex_mem_regwrite_i,
   input  logic        mem_wb_regwrite_i,
 
@@ -89,7 +90,7 @@ module moon_hazard_unit
   wire load_use_hazard = id_ex_is_load_i && (id_ex_rd_i != 5'd0) &&
                          ((id_ex_rd_i == if_id_rs1_i) || (id_ex_rd_i == if_id_rs2_i));
 
-  wire csr_hazard = id_ex_is_csr_i || ex_mem_is_csr_i;
+  wire csr_hazard = id_ex_is_csr_i || ex_mem_is_csr_i || mem_wb_is_csr_i;
   wire fp_rs1_hazard = if_id_fp_rs1_en_i &&
                        ((id_ex_fp_we_i && (id_ex_fp_rd_i == if_id_fp_rs1_i)) ||
                         (ex_mem_fp_we_i && (ex_mem_fp_rd_i == if_id_fp_rs1_i)));

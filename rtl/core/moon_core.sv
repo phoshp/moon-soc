@@ -137,6 +137,7 @@ module moon_core
   logic             id_ex_is_ebreak;
   logic             id_ex_is_wfi;
   logic             id_ex_is_sfence;
+  logic             id_ex_is_illegal;
 
   // EX to IF, Hazard, MEM
   logic             branch_taken;
@@ -146,6 +147,7 @@ module moon_core
   logic [XLEN-1:0]  ex_mem_pc;
   logic [XLEN-1:0]  ex_mem_link_pc;
   logic [ILEN-1:0]  ex_mem_instr;
+  logic             ex_mem_is_illegal;
   logic [4:0]       ex_mem_rd;
   logic [4:0]       ex_mem_rs2;
   logic [XLEN-1:0]  ex_mem_alu_res;
@@ -275,6 +277,9 @@ module moon_core
   logic [62:0]      interrupt_cause;
   logic [XLEN-1:0]  csr_rdata;
   logic [2:0]       frm;
+  logic [1:0]       mstatus_fs;
+  logic             mstatus_tvm;
+  logic             mstatus_tsr;
 
   always_comb begin
     if (ex_mem_is_jal || ex_mem_is_jalr) begin
@@ -328,6 +333,12 @@ module moon_core
         trap_pc = imem_addr_o;
       end
       trap_val     = trap_pc;
+    end else if (ex_mem_valid && ex_mem_is_illegal) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_ILLEGAL_INSTRUCTION;
+      trap_val     = {32'b0, ex_mem_instr};
+      trap_pc      = ex_mem_pc;
     end else if (ex_mem_valid && ex_mem_is_ecall) begin
       trap_enter   = 1'b1;
       is_interrupt = 1'b0;
@@ -426,6 +437,10 @@ module moon_core
     .if_id_instr_i        (if_id_instr),
     .if_id_is_c_i         (if_id_is_c),
     .if_id_valid_i        (if_id_valid),
+    .priv_lvl_i           (priv_lvl),
+    .mstatus_fs_i         (mstatus_fs),
+    .mstatus_tvm_i        (mstatus_tvm),
+    .mstatus_tsr_i        (mstatus_tsr),
     .wb_regwrite_i        (wb_regwrite),
     .wb_rd_i              (wb_rd),
     .wb_wdata_i           (wb_wdata),
@@ -492,6 +507,7 @@ module moon_core
     .id_ex_is_ebreak_o    (id_ex_is_ebreak),
     .id_ex_is_wfi_o       (id_ex_is_wfi),
     .id_ex_is_sfence_o    (id_ex_is_sfence),
+    .id_ex_is_illegal_o   (id_ex_is_illegal),
     .wfi_o                ()
   );
 
@@ -558,6 +574,7 @@ module moon_core
     .id_ex_is_ebreak_i    (id_ex_is_ebreak),
     .id_ex_is_wfi_i       (id_ex_is_wfi),
     .id_ex_is_sfence_i    (id_ex_is_sfence),
+    .id_ex_is_illegal_i   (id_ex_is_illegal),
     .fwd_a_i              (fwd_a),
     .fwd_b_i              (fwd_b),
     .fwd_ex_data_i        (ex_fwd_val),
@@ -602,7 +619,8 @@ module moon_core
     .ex_mem_is_ecall_o    (ex_mem_is_ecall),
     .ex_mem_is_ebreak_o   (ex_mem_is_ebreak),
     .ex_mem_is_wfi_o      (ex_mem_is_wfi),
-    .ex_mem_is_sfence_o   (ex_mem_is_sfence)
+    .ex_mem_is_sfence_o   (ex_mem_is_sfence),
+    .ex_mem_is_illegal_o  (ex_mem_is_illegal)
   );
 
   // --------------------------------------------------------------------------
@@ -737,6 +755,7 @@ module moon_core
     .id_ex_is_load_i    (id_ex_is_load),
     .id_ex_is_csr_i     (id_ex_is_csr),
     .ex_mem_is_csr_i    (ex_mem_is_csr),
+    .mem_wb_is_csr_i    (mem_wb_is_csr),
     .ex_mem_regwrite_i  (ex_mem_regwrite),
     .mem_wb_regwrite_i  (mem_wb_regwrite),
     .branch_taken_i     (branch_taken),
@@ -794,7 +813,10 @@ module moon_core
     .interrupt_cause_o   (interrupt_cause),
     .fpu_flags_i         (mem_wb_fp_flags),
     .fpu_flags_we_i      (mem_wb_fp_flags_we),
-    .frm_o               (frm)
+    .frm_o               (frm),
+    .mstatus_fs_o        (mstatus_fs),
+    .mstatus_tvm_o       (mstatus_tvm),
+    .mstatus_tsr_o       (mstatus_tsr)
   );
 
   // --------------------------------------------------------------------------

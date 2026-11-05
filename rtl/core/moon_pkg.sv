@@ -160,6 +160,8 @@ package moon_pkg;
   localparam logic [11:0] CSR_MIDELEG   = 12'h303;
   localparam logic [11:0] CSR_MIE       = 12'h304;
   localparam logic [11:0] CSR_MTVEC     = 12'h305;
+  localparam logic [11:0] CSR_MCOUNTEREN= 12'h306;
+  localparam logic [11:0] CSR_MSCRATCH  = 12'h340;
   localparam logic [11:0] CSR_MEPC      = 12'h341;
   localparam logic [11:0] CSR_MCAUSE    = 12'h342;
   localparam logic [11:0] CSR_MTVAL     = 12'h343;
@@ -167,6 +169,11 @@ package moon_pkg;
   localparam logic [11:0] CSR_MHARTID   = 12'hF14;
   localparam logic [11:0] CSR_MCYCLE    = 12'hB00;
   localparam logic [11:0] CSR_MINSTRET  = 12'hB02;
+
+  // User Mode / Read-Only Counters
+  localparam logic [11:0] CSR_CYCLE     = 12'hC00;
+  localparam logic [11:0] CSR_TIME      = 12'hC01;
+  localparam logic [11:0] CSR_INSTRET   = 12'hC02;
 
   // Supervisor Mode Control and Status Registers (CSR Addresses)
   localparam logic [11:0] CSR_SSTATUS   = 12'h100;

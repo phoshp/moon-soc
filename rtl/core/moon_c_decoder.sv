@@ -241,6 +241,10 @@ module moon_c_decoder
         default: illegal_instr_o = 1'b1;
       endcase
     end
+
+    if (illegal_instr_o) begin
+      instr_32_o = {16'h0000, instr_16_i};
+    end
   end
 
 endmodule : moon_c_decoder

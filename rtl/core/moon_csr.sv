@@ -62,8 +62,15 @@ module moon_csr
   // Floating-Point Unit Status
   input  logic [4:0]       fpu_flags_i,
   input  logic             fpu_flags_we_i,
-  output logic [2:0]       frm_o
+  output logic [2:0]       frm_o,
+  output logic [1:0]       mstatus_fs_o,
+  output logic             mstatus_tvm_o,
+  output logic             mstatus_tsr_o
 );
+
+  assign mstatus_fs_o  = mstatus_fs;
+  assign mstatus_tvm_o = mstatus_tvm;
+  assign mstatus_tsr_o = mstatus_tsr;
 
   // --------------------------------------------------------------------------
   // Privilege Level Register
@@ -114,10 +121,13 @@ module moon_csr
   logic [XLEN-1:0] mtval_q;
   logic [63:0]     mcycle_q;
   logic [63:0]     minstret_q;
+  logic [XLEN-1:0] mscratch_q;
+  logic [31:0]     mcounteren_q;
 
   // Supervisor Mode Trap Registers
   logic [XLEN-1:0] stvec_q;
   logic [XLEN-1:0] sscratch_q;
+  logic [31:0]     scounteren_q;
   logic [XLEN-1:0] sepc_q;
   logic [XLEN-1:0] scause_q;
   logic [XLEN-1:0] stval_q;
@@ -161,13 +171,13 @@ module moon_csr
   wire m_enabled = (priv_lvl_q < PRV_M) || ((priv_lvl_q == PRV_M) && mstatus_mie);
   wire s_enabled = (priv_lvl_q < PRV_S) || ((priv_lvl_q == PRV_S) && mstatus_sie);
 
-  wire irq_meip_active = mie_meie && mip_meip && !mideleg_q[11] && m_enabled;
-  wire irq_msip_active = mie_msie && mip_msip && !mideleg_q[3]  && m_enabled;
-  wire irq_mtip_active = mie_mtie && mip_mtip && !mideleg_q[7]  && m_enabled;
+  wire irq_meip_active = mie_meie && mip_meip && m_enabled;
+  wire irq_msip_active = mie_msie && mip_msip && m_enabled;
+  wire irq_mtip_active = mie_mtie && mip_mtip && m_enabled;
 
-  wire irq_seip_active = mie_seie && mip_seip && mideleg_q[9]   && s_enabled;
-  wire irq_ssip_active = mie_ssie && mip_ssip && mideleg_q[1]   && s_enabled;
-  wire irq_stip_active = mie_stie && eff_stip && mideleg_q[5]   && s_enabled;
+  wire irq_seip_active = mie_seie && mip_seip && (mideleg_q[9] ? s_enabled : m_enabled);
+  wire irq_ssip_active = mie_ssie && mip_ssip && (mideleg_q[1] ? s_enabled : m_enabled);
+  wire irq_stip_active = mie_stie && eff_stip && (mideleg_q[5] ? s_enabled : m_enabled);
 
   always_comb begin
     interrupt_pending_o = irq_meip_active || irq_msip_active || irq_mtip_active ||
@@ -217,12 +227,14 @@ module moon_csr
       CSR_MIE:      csr_rdata_o = {52'b0, mie_meie, 1'b0, mie_seie, 1'b0, mie_mtie, 1'b0, mie_stie, 1'b0, mie_msie, 1'b0, mie_ssie, 1'b0};
       CSR_MIP:      csr_rdata_o = {52'b0, mip_meip, 1'b0, mip_seip, 1'b0, mip_mtip, 1'b0, eff_stip, 1'b0, mip_msip, 1'b0, mip_ssip, 1'b0};
       CSR_MTVEC:    csr_rdata_o = mtvec_q;
+      CSR_MCOUNTEREN: csr_rdata_o = {32'b0, mcounteren_q};
+      CSR_MSCRATCH: csr_rdata_o = mscratch_q;
       CSR_MEPC:     csr_rdata_o = mepc_q;
       CSR_MCAUSE:   csr_rdata_o = mcause_q;
       CSR_MTVAL:    csr_rdata_o = mtval_q;
       CSR_MHARTID:  csr_rdata_o = 64'(HART_ID);
-      CSR_MCYCLE:   csr_rdata_o = mcycle_q;
-      CSR_MINSTRET: csr_rdata_o = minstret_q;
+      CSR_MCYCLE, CSR_CYCLE, CSR_TIME: csr_rdata_o = mcycle_q;
+      CSR_MINSTRET, CSR_INSTRET:       csr_rdata_o = minstret_q;
 
       // Supervisor Mode CSRs
       CSR_SSTATUS:  csr_rdata_o = {mstatus_sd, 29'b0, mstatus_uxl, 12'b0, mstatus_mxr, mstatus_sum, 1'b0,
@@ -230,6 +242,7 @@ module moon_csr
       CSR_SIE:      csr_rdata_o = {54'b0, mie_seie, 3'b0, mie_stie, 3'b0, mie_ssie, 1'b0} & mideleg_q;
       CSR_SIP:      csr_rdata_o = {54'b0, mip_seip, 3'b0, eff_stip, 3'b0, mip_ssip, 1'b0} & mideleg_q;
       CSR_STVEC:    csr_rdata_o = stvec_q;
+      CSR_SCOUNTEREN: csr_rdata_o = {32'b0, scounteren_q};
       CSR_SSCRATCH: csr_rdata_o = sscratch_q;
       CSR_SEPC:     csr_rdata_o = sepc_q;
       CSR_SCAUSE:   csr_rdata_o = scause_q;
@@ -310,6 +323,9 @@ module moon_csr
       mepc_q       <= '0;
       mcause_q     <= '0;
       mtval_q      <= '0;
+      mscratch_q   <= '0;
+      mcounteren_q <= '0;
+      scounteren_q <= '0;
       stvec_q      <= 64'h0000_1000;
       sscratch_q   <= '0;
       sepc_q       <= '0;
@@ -327,8 +343,15 @@ module moon_csr
       fcsr_fflags  <= 5'b00000;
     end else begin
       // Cycle and Instruction Counters
-      mcycle_q <= mcycle_q + 1'b1;
-      if (instret_i) begin
+      if (csr_we_i && csr_addr_i == CSR_MCYCLE) begin
+        mcycle_q <= next_csr_val;
+      end else begin
+        mcycle_q <= mcycle_q + 1'b1;
+      end
+
+      if (csr_we_i && csr_addr_i == CSR_MINSTRET) begin
+        minstret_q <= next_csr_val;
+      end else if (instret_i) begin
         minstret_q <= minstret_q + 1'b1;
       end
 
@@ -403,10 +426,12 @@ module moon_csr
             mip_stip <= next_csr_val[5];
             mip_seip <= next_csr_val[9];
           end
-          CSR_MTVEC:    mtvec_q    <= next_csr_val;
-          CSR_MEPC:     mepc_q     <= next_csr_val;
-          CSR_MCAUSE:   mcause_q   <= next_csr_val;
-          CSR_MTVAL:    mtval_q    <= next_csr_val;
+          CSR_MTVEC:      mtvec_q      <= next_csr_val;
+          CSR_MCOUNTEREN: mcounteren_q <= next_csr_val[31:0];
+          CSR_MSCRATCH:   mscratch_q   <= next_csr_val;
+          CSR_MEPC:       mepc_q       <= next_csr_val;
+          CSR_MCAUSE:     mcause_q     <= next_csr_val;
+          CSR_MTVAL:      mtval_q      <= next_csr_val;
 
           // Supervisor Mode CSR writes
           CSR_SSTATUS: begin
@@ -425,8 +450,9 @@ module moon_csr
           CSR_SIP: begin
             if (mideleg_q[1]) mip_ssip <= next_csr_val[1];
           end
-          CSR_STVEC:    stvec_q    <= next_csr_val;
-          CSR_SSCRATCH: sscratch_q <= next_csr_val;
+          CSR_STVEC:      stvec_q      <= next_csr_val;
+          CSR_SCOUNTEREN: scounteren_q <= next_csr_val[31:0];
+          CSR_SSCRATCH:   sscratch_q   <= next_csr_val;
           CSR_SEPC:     sepc_q     <= next_csr_val;
           CSR_SCAUSE:   scause_q   <= next_csr_val;
           CSR_STVAL:    stval_q    <= next_csr_val;

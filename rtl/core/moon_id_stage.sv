@@ -28,6 +28,12 @@ module moon_id_stage
   input  logic             if_id_is_c_i,
   input  logic             if_id_valid_i,
 
+  // Privilege Level and Control Flags from CSR
+  input  priv_lvl_e        priv_lvl_i,
+  input  logic [1:0]       mstatus_fs_i,
+  input  logic             mstatus_tvm_i,
+  input  logic             mstatus_tsr_i,
+
   // Register File Writeback Interface from WB Stage
   input  logic             wb_regwrite_i,
   input  logic [4:0]       wb_rd_i,
@@ -101,6 +107,7 @@ module moon_id_stage
   output logic             id_ex_is_ebreak_o,
   output logic             id_ex_is_wfi_o,
   output logic             id_ex_is_sfence_o,
+  output logic             id_ex_is_illegal_o,
   output logic             wfi_o
 );
 
@@ -256,6 +263,28 @@ module moon_id_stage
   logic         dec_is_ebreak;
   logic         dec_is_wfi;
   logic         dec_is_sfence;
+  logic         dec_illegal_instr;
+
+  function automatic logic is_valid_csr(input logic [11:0] addr);
+    case (addr)
+      CSR_MSTATUS, CSR_MISA, CSR_MEDELEG, CSR_MIDELEG,
+      CSR_MIE, CSR_MTVEC, CSR_MCOUNTEREN, CSR_MSCRATCH,
+      CSR_MEPC, CSR_MCAUSE, CSR_MTVAL, CSR_MIP,
+      CSR_MHARTID, CSR_MCYCLE, CSR_MINSTRET,
+      CSR_PMPCFG0, CSR_PMPCFG2,
+      CSR_PMPADDR0, CSR_PMPADDR1, CSR_PMPADDR2, CSR_PMPADDR3,
+      CSR_PMPADDR4, CSR_PMPADDR5, CSR_PMPADDR6, CSR_PMPADDR7,
+      CSR_PMPADDR8, CSR_PMPADDR9, CSR_PMPADDR10, CSR_PMPADDR11,
+      CSR_PMPADDR12, CSR_PMPADDR13, CSR_PMPADDR14, CSR_PMPADDR15,
+      CSR_SSTATUS, CSR_SIE, CSR_STVEC, CSR_SCOUNTEREN,
+      CSR_SSCRATCH, CSR_SEPC, CSR_SCAUSE, CSR_STVAL,
+      CSR_SIP, CSR_SATP, CSR_STIMECMP,
+      CSR_FFLAGS, CSR_FRM, CSR_FCSR,
+      CSR_CYCLE, CSR_TIME, CSR_INSTRET:
+        return 1'b1;
+      default: return 1'b0;
+    endcase
+  endfunction
 
   always_comb begin
     // Defaults
@@ -298,6 +327,7 @@ module moon_id_stage
     dec_is_ebreak      = 1'b0;
     dec_is_wfi         = 1'b0;
     dec_is_sfence      = 1'b0;
+    dec_illegal_instr  = 1'b0;
     selected_imm       = imm_i;
 
     case (opcode)
@@ -582,28 +612,86 @@ module moon_id_stage
       OPCODE_SYSTEM: begin
         if (funct3 == 3'b000) begin
           if (funct7 == 7'b0001001) begin
-            dec_is_sfence = 1'b1;
+            if ((priv_lvl_i == PRV_U) || ((priv_lvl_i == PRV_S) && mstatus_tvm_i)) begin
+              dec_illegal_instr = 1'b1;
+            end else begin
+              dec_is_sfence = 1'b1;
+            end
           end else begin
             case (if_id_instr_i[31:20])
               12'h000: dec_is_ecall  = 1'b1;
               12'h001: dec_is_ebreak = 1'b1;
-              12'h302: dec_is_mret   = 1'b1;
-              12'h102: dec_is_sret   = 1'b1; // SRET (Supervisor Return)
-              12'h105: dec_is_wfi    = 1'b1; // WFI (Wait For Interrupt)
-              default: ;
+              12'h302: begin
+                if (priv_lvl_i < PRV_M) dec_illegal_instr = 1'b1;
+                else dec_is_mret = 1'b1;
+              end
+              12'h102: begin
+                if ((priv_lvl_i < PRV_S) || ((priv_lvl_i == PRV_S) && mstatus_tsr_i)) dec_illegal_instr = 1'b1;
+                else dec_is_sret = 1'b1;
+              end
+              12'h105: begin
+                if (priv_lvl_i == PRV_U) dec_illegal_instr = 1'b1;
+                else dec_is_wfi = 1'b1;
+              end
+              default: dec_illegal_instr = 1'b1;
             endcase
           end
+        end else if (funct3 == 3'b100) begin
+          dec_illegal_instr = 1'b1;
         end else begin
-          dec_is_csr   = 1'b1;
-          dec_regwrite = 1'b1;
-          if (funct3[2]) begin // Immediate CSR (CSRRWI, CSRRSI, CSRRCI)
-            selected_imm = imm_csr;
+          automatic logic is_fp_csr = (csr_addr == CSR_FFLAGS) || (csr_addr == CSR_FRM) || (csr_addr == CSR_FCSR);
+          automatic logic csr_write_attempted = (funct3 == 3'b001) || (funct3 == 3'b101) ||
+                                                ((funct3[1:0] != 2'b00) && (rs1 != 5'd0));
+          if (!is_valid_csr(csr_addr)) begin
+            dec_illegal_instr = 1'b1;
+          end else if (priv_lvl_i < priv_lvl_e'(csr_addr[9:8])) begin
+            dec_illegal_instr = 1'b1;
+          end else if (csr_write_attempted && (csr_addr[11:10] == 2'b11)) begin
+            dec_illegal_instr = 1'b1;
+          end else if (is_fp_csr && (mstatus_fs_i == 2'b00)) begin
+            dec_illegal_instr = 1'b1;
+          end else if ((csr_addr == CSR_SATP) && (priv_lvl_i == PRV_S) && mstatus_tvm_i) begin
+            dec_illegal_instr = 1'b1;
+          end else begin
+            dec_is_csr   = 1'b1;
+            dec_regwrite = 1'b1;
+            if (funct3[2]) begin // Immediate CSR (CSRRWI, CSRRSI, CSRRCI)
+              selected_imm = imm_csr;
+            end
           end
         end
       end
 
-      default: ;
+      default: dec_illegal_instr = 1'b1;
     endcase
+
+    if (ENABLE_FPU && (mstatus_fs_i == 2'b00)) begin
+      if ((opcode == OPCODE_FP) || (opcode == OPCODE_LOAD_FP) ||
+          (opcode == OPCODE_STORE_FP) || is_fp_fma_opcode) begin
+        dec_illegal_instr = 1'b1;
+      end
+    end
+
+    if (dec_illegal_instr) begin
+      dec_regwrite      = 1'b0;
+      dec_fp_we         = 1'b0;
+      dec_is_load       = 1'b0;
+      dec_is_store      = 1'b0;
+      dec_is_branch     = 1'b0;
+      dec_is_jal        = 1'b0;
+      dec_is_jalr       = 1'b0;
+      dec_is_csr        = 1'b0;
+      dec_is_mret       = 1'b0;
+      dec_is_sret       = 1'b0;
+      dec_is_ecall      = 1'b0;
+      dec_is_ebreak     = 1'b0;
+      dec_is_wfi        = 1'b0;
+      dec_is_sfence     = 1'b0;
+      dec_is_amo        = 1'b0;
+      dec_is_lr         = 1'b0;
+      dec_is_sc         = 1'b0;
+      dec_muldiv_op     = MULDIV_NONE;
+    end
   end
 
   assign wfi_o = if_id_valid_i && dec_is_wfi;
@@ -665,6 +753,7 @@ module moon_id_stage
       id_ex_is_ebreak_o    <= 1'b0;
       id_ex_is_wfi_o       <= 1'b0;
       id_ex_is_sfence_o    <= 1'b0;
+      id_ex_is_illegal_o   <= 1'b0;
     end else if (flush_ex_i) begin
       id_ex_valid_o        <= 1'b0;
       id_ex_pc_o           <= '0;
@@ -718,6 +807,7 @@ module moon_id_stage
       id_ex_is_ebreak_o    <= 1'b0;
       id_ex_is_wfi_o       <= 1'b0;
       id_ex_is_sfence_o    <= 1'b0;
+      id_ex_is_illegal_o   <= 1'b0;
     end else if (!stall_ex_i) begin
       id_ex_valid_o        <= if_id_valid_i;
       id_ex_pc_o           <= if_id_pc_i;
@@ -793,6 +883,7 @@ module moon_id_stage
       id_ex_is_ebreak_o    <= dec_is_ebreak;
       id_ex_is_wfi_o       <= dec_is_wfi;
       id_ex_is_sfence_o    <= dec_is_sfence;
+      id_ex_is_illegal_o   <= if_id_valid_i && dec_illegal_instr;
     end
   end
 
