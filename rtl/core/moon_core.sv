@@ -299,6 +299,16 @@ module moon_core
 
   assign wb_fp_wdata = mem_wb_fp_word ? {32'hffff_ffff, wb_wdata[31:0]} : wb_wdata;
 
+  wire load_misaligned = ex_mem_valid && ex_mem_is_load &&
+    (((ex_mem_mem_width == MEM_HALF || ex_mem_mem_width == MEM_HALF_U) && ex_mem_alu_res[0]) ||
+     ((ex_mem_mem_width == MEM_WORD || ex_mem_mem_width == MEM_WORD_U) && (ex_mem_alu_res[1:0] != 2'b00)) ||
+     ((ex_mem_mem_width == MEM_DWORD) && (ex_mem_alu_res[2:0] != 3'b000)));
+
+  wire store_misaligned = ex_mem_valid && ex_mem_is_store &&
+    (((ex_mem_mem_width == MEM_HALF || ex_mem_mem_width == MEM_HALF_U) && ex_mem_alu_res[0]) ||
+     ((ex_mem_mem_width == MEM_WORD || ex_mem_mem_width == MEM_WORD_U) && (ex_mem_alu_res[1:0] != 2'b00)) ||
+     ((ex_mem_mem_width == MEM_DWORD) && (ex_mem_alu_res[2:0] != 3'b000)));
+
   // --------------------------------------------------------------------------
   // Trap Controller Logic
   // --------------------------------------------------------------------------
@@ -356,6 +366,18 @@ module moon_core
       is_interrupt = 1'b0;
       trap_cause   = CAUSE_BREAKPOINT;
       trap_val     = ex_mem_pc;
+      trap_pc      = ex_mem_pc;
+    end else if (load_misaligned) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_MISALIGNED_LOAD;
+      trap_val     = ex_mem_alu_res;
+      trap_pc      = ex_mem_pc;
+    end else if (store_misaligned) begin
+      trap_enter   = 1'b1;
+      is_interrupt = 1'b0;
+      trap_cause   = CAUSE_MISALIGNED_STORE;
+      trap_val     = ex_mem_alu_res;
       trap_pc      = ex_mem_pc;
     end else if (data_translation_req && !data_translation_we && mmu_load_page_fault) begin
       trap_enter   = 1'b1;
@@ -630,6 +652,7 @@ module moon_core
     .clk_i               (clk_i),
     .rst_ni              (rst_ni),
     .stall_mem_i         (stall_mem),
+    .flush_mem_i         (flush_mem),
     .ex_mem_valid_i      (ex_mem_valid),
     .ex_mem_pc_i         (ex_mem_pc),
     .ex_mem_link_pc_i    (ex_mem_link_pc),
@@ -873,7 +896,7 @@ module moon_core
   );
 
   // Memory Bus Multiplexing (PTW and scalar LSU)
-  assign data_translation_req   = core_dmem_req;
+  assign data_translation_req   = core_dmem_req && !load_misaligned && !store_misaligned;
   assign data_translation_we    = core_dmem_we;
   assign data_translation_vaddr = dmem_vaddr;
   assign data_translation_wdata = core_dmem_wdata;

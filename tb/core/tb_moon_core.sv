@@ -124,11 +124,6 @@ module tb_moon_core (
       end
     end
 
-    if (dut.trap_enter) begin
-      $display("[%0t ns] [TRAP] cause=%0d val=0x%0x pc=0x%0x instr=0x%0x",
-               $time, dut.trap_cause, dut.trap_val, dut.trap_pc, dut.ex_mem_instr);
-    end
-
     if (debug_pc == 64'h10ce) begin
       $display("[%0t ns] [DEBUG at 0x10ce] rs1(a3)=0x%0x rs2(a1)=0x%0x (rf a3=0x%0x, a1=0x%0x)",
                $time, dut.id_ex_rs1_data, dut.id_ex_rs2_data,

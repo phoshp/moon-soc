@@ -18,6 +18,7 @@ module moon_mem_stage
 
   // Pipeline Flow Control
   input  logic             stall_mem_i,
+  input  logic             flush_mem_i,
 
   // Inputs from EX Stage (EX/MEM Register)
   input  logic             ex_mem_valid_i,
@@ -210,6 +211,35 @@ module moon_mem_stage
   // --------------------------------------------------------------------------
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
+      mem_wb_valid_o      <= 1'b0;
+      mem_wb_pc_o         <= '0;
+      mem_wb_rd_o         <= '0;
+      mem_wb_alu_res_o    <= '0;
+      mem_wb_mul_res_o    <= '0;
+      mem_wb_div_res_o    <= '0;
+      mem_wb_is_mul_o     <= 1'b0;
+      mem_wb_is_div_o     <= 1'b0;
+      mem_wb_mem_data_o   <= '0;
+      mem_wb_link_pc_o    <= '0;
+      mem_wb_is_load_o    <= 1'b0;
+      mem_wb_is_jal_o     <= 1'b0;
+      mem_wb_is_jalr_o    <= 1'b0;
+      mem_wb_regwrite_o   <= 1'b0;
+      mem_wb_fp_we_o      <= 1'b0;
+      mem_wb_fp_rd_o      <= '0;
+      mem_wb_fp_word_o    <= 1'b0;
+      mem_wb_fp_flags_o   <= '0;
+      mem_wb_fp_flags_we_o <= 1'b0;
+      mem_wb_is_csr_o     <= 1'b0;
+      mem_wb_csr_op_o     <= '0;
+      mem_wb_csr_addr_o   <= '0;
+      mem_wb_csr_wdata_o  <= '0;
+      mem_wb_is_mret_o    <= 1'b0;
+      mem_wb_is_ecall_o   <= 1'b0;
+      mem_wb_is_ebreak_o  <= 1'b0;
+      mem_wb_sc_success_o <= 1'b0;
+      mem_wb_is_sc_o      <= 1'b0;
+    end else if (flush_mem_i) begin
       mem_wb_valid_o      <= 1'b0;
       mem_wb_pc_o         <= '0;
       mem_wb_rd_o         <= '0;
