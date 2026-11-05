@@ -93,8 +93,8 @@ module tb_moon_core (
     imem_rdata = {mem[imem_idx + 3], mem[imem_idx + 2], mem[imem_idx + 1], mem[imem_idx]};
   end
 
-  // Data Memory Read (64-bit little-endian)
-  wire [31:0] dmem_idx = {14'b0, dmem_addr[17:0]};
+  // Data Memory Read (64-bit little-endian, 8-byte aligned)
+  wire [31:0] dmem_idx = {14'b0, dmem_addr[17:3], 3'b000};
   always_comb begin
     dmem_rdata = {
       mem[dmem_idx + 7], mem[dmem_idx + 6], mem[dmem_idx + 5], mem[dmem_idx + 4],

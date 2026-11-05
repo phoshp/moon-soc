@@ -188,7 +188,11 @@ module moon_fpu_intcvt
         max_value = is_signed ? ((128'd1 << 31) - 1) : ((128'd1 << 32) - 1);
         min_signed_magnitude = 128'd1 << 31;
       end
-      if (is_nan || is_inf || too_large) begin
+      if (is_nan) begin
+        invalid = 1'b1;
+        sign = 1'b0;
+        magnitude = max_value;
+      end else if (is_inf || too_large) begin
         invalid = 1'b1;
         if (is_signed) magnitude = sign ? min_signed_magnitude : max_value;
         else magnitude = sign ? 128'd0 : max_value;
