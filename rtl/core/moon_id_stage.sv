@@ -498,7 +498,7 @@ module moon_id_stage
           dec_fp_mul  = (funct7 == 7'b0001000) || (funct7 == 7'b0001001);
           dec_fp_div  = (funct7 == 7'b0001100) || (funct7 == 7'b0001101);
         end else if (((funct7 == 7'b0101100) || (funct7 == 7'b0101101)) &&
-                     (rs2 == 5'd0) && (funct3 <= 3'b100)) begin
+                     (rs2 == 5'd0) && (funct3 <= 3'b100 || funct3 == 3'b111)) begin
           dec_fp_we   = 1'b1;
           dec_fp_div  = 1'b1;
           dec_fp_word = (funct7 == 7'b0101100);
