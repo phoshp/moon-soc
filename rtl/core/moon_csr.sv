@@ -232,9 +232,14 @@ module moon_csr
       CSR_MEPC:     csr_rdata_o = mepc_q;
       CSR_MCAUSE:   csr_rdata_o = mcause_q;
       CSR_MTVAL:    csr_rdata_o = mtval_q;
+      CSR_MVENDORID:csr_rdata_o = '0;
+      CSR_MARCHID:  csr_rdata_o = '0;
+      CSR_MIMPID:   csr_rdata_o = '0;
       CSR_MHARTID:  csr_rdata_o = 64'(HART_ID);
       CSR_MCYCLE, CSR_CYCLE, CSR_TIME: csr_rdata_o = mcycle_q;
       CSR_MINSTRET, CSR_INSTRET:       csr_rdata_o = minstret_q;
+      CSR_TSELECT:  csr_rdata_o = '1; // 0 triggers implemented
+      CSR_TDATA1, CSR_TDATA2, CSR_TCONTROL: csr_rdata_o = '0;
 
       // Supervisor Mode CSRs
       CSR_SSTATUS:  csr_rdata_o = {mstatus_sd, 29'b0, mstatus_uxl, 12'b0, mstatus_mxr, mstatus_sum, 1'b0,

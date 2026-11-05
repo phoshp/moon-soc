@@ -166,6 +166,9 @@ package moon_pkg;
   localparam logic [11:0] CSR_MCAUSE    = 12'h342;
   localparam logic [11:0] CSR_MTVAL     = 12'h343;
   localparam logic [11:0] CSR_MIP       = 12'h344;
+  localparam logic [11:0] CSR_MVENDORID = 12'hF11;
+  localparam logic [11:0] CSR_MARCHID   = 12'hF12;
+  localparam logic [11:0] CSR_MIMPID    = 12'hF13;
   localparam logic [11:0] CSR_MHARTID   = 12'hF14;
   localparam logic [11:0] CSR_MCYCLE    = 12'hB00;
   localparam logic [11:0] CSR_MINSTRET  = 12'hB02;
@@ -174,6 +177,12 @@ package moon_pkg;
   localparam logic [11:0] CSR_CYCLE     = 12'hC00;
   localparam logic [11:0] CSR_TIME      = 12'hC01;
   localparam logic [11:0] CSR_INSTRET   = 12'hC02;
+
+  // Debug / Trigger Registers (Sdtrig)
+  localparam logic [11:0] CSR_TSELECT   = 12'h7A0;
+  localparam logic [11:0] CSR_TDATA1    = 12'h7A1;
+  localparam logic [11:0] CSR_TDATA2    = 12'h7A2;
+  localparam logic [11:0] CSR_TCONTROL  = 12'h7A5;
 
   // Supervisor Mode Control and Status Registers (CSR Addresses)
   localparam logic [11:0] CSR_SSTATUS   = 12'h100;

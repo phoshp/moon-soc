@@ -302,6 +302,12 @@ module tb_moon_soc (
         end
       end
     end
+
+    if (debug_pc == 64'h10c2) begin
+      $display("[%0t ns] [AT 10c2] a3=0x%0x a1=0x%0x",
+               $time, dut.u_cpu_tile.u_core.u_id_stage.u_regfile.regs[13],
+                      dut.u_cpu_tile.u_core.u_id_stage.u_regfile.regs[11]);
+    end
   end
 
 endmodule : tb_moon_soc
