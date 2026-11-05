@@ -2,6 +2,7 @@
 obj_dir/
 sim_build/
 sim_build_soc/
+sim_build_compliance/
 results.xml
 tb/core/sim_build/
 tb/core/results.xml

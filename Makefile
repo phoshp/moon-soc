@@ -7,9 +7,13 @@ SIM ?= verilator
 TEST_HEX ?= $(PWD)/tb/tests/asm/base/test_rv64_all.hex
 SIM_BUILD ?= sim_build
 
-.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test soc-cache-test soc-compressed-test soc-smode-test soc-pmp-test soc-mmu-test soc-fp-test clean
+.PHONY: all test sim verbose-test pytest soc-test soc-periph-test soc-wfi-test soc-cache-test soc-compressed-test soc-smode-test soc-pmp-test soc-mmu-test soc-fp-test compliance-test clean
 
 all: test soc-test
+
+# Run official RISC-V architectural compliance test suite
+compliance-test:
+	$(PYTHON) tb/compliance/run_compliance.py
 
 # Run simulation using cocotb runner (core-level)
 test:
@@ -62,5 +66,5 @@ pytest:
 	pytest tb/core/run_test.py tb/soc/run_soc_test.py
 
 clean:
-	rm -rf $(SIM_BUILD) sim_build_soc obj_dir results.xml tb/core/sim_build tb/core/results.xml
-	rm -rf .pytest_cache tb/core/__pycache__ tb/soc/__pycache__
+	rm -rf $(SIM_BUILD) sim_build_soc sim_build_compliance obj_dir results.xml tb/core/sim_build tb/core/results.xml
+	rm -rf .pytest_cache tb/core/__pycache__ tb/soc/__pycache__ tb/compliance/__pycache__
