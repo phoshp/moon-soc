@@ -203,18 +203,18 @@ module moon_ex_stage
       logic [9:0] class_bits;
 
       sign_a = id_ex_fp_word_i ? id_ex_rs1_data_i[31] : id_ex_rs1_data_i[63];
-      sign_b = id_ex_fp_word_i ? id_ex_rs2_data_i[31] : id_ex_rs2_data_i[63];
+      sign_b = id_ex_fp_word_i ?
+                 ((id_ex_rs2_data_i[63:32] != 32'hffff_ffff) ? 1'b0 : id_ex_rs2_data_i[31]) :
+                 id_ex_rs2_data_i[63];
       case (id_ex_fp_sign_op_i)
         2'b00: sign_out = sign_b;
         2'b01: sign_out = ~sign_b;
         default: sign_out = sign_a ^ sign_b;
       endcase
       if (id_ex_fp_word_i) begin
-        if ((id_ex_rs1_data_i[63:32] != 32'hffff_ffff) ||
-            (id_ex_rs2_data_i[63:32] != 32'hffff_ffff))
-          fp_sign_result = 64'hffff_ffff_7fc0_0000;
-        else
-          fp_sign_result = {32'hffff_ffff, sign_out, id_ex_rs1_data_i[30:0]};
+        logic [30:0] payload;
+        payload = (id_ex_rs1_data_i[63:32] != 32'hffff_ffff) ? 31'h7fc0_0000 : id_ex_rs1_data_i[30:0];
+        fp_sign_result = {32'hffff_ffff, sign_out, payload};
       end else begin
         fp_sign_result = {sign_out, id_ex_rs1_data_i[62:0]};
       end
